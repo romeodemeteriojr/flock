@@ -1,6 +1,10 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { AppError } from './errors.js';
+import { silentLogger } from './infra/logger.js';
+import { systemClock } from './infra/clock.js';
+import { secureRandom } from './infra/random.js';
 
 export const BODY_LIMIT = 100 * 1024;
 const WEB_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'web');
@@ -38,6 +42,34 @@ class HttpError extends Error {
   constructor(status, message) { super(message); this.status = status; }
 }
 
+// Turns any thrown error into { status, body, headers, unexpected }.
+// AppError -> its status and message (code only when given explicitly);
+// data-layer DuplicateError / InUseError -> 409; anything else -> generic 500.
+export function mapError(err) {
+  if (err instanceof HttpError) {
+    return { status: err.status, body: { error: err.message }, headers: {}, unexpected: false };
+  }
+  if (err instanceof AppError && Number.isInteger(err.status) && err.status >= 400 && err.status <= 599) {
+    const body = { error: err.message };
+    if (err.exposeCode && err.code) body.code = err.code;
+    const headers = {};
+    if (err.status === 429) headers['Retry-After'] = String(err.retryAfterSec ?? 60);
+    return { status: err.status, body, headers, unexpected: false };
+  }
+  if (err && (err.name === 'DuplicateError' || err.name === 'InUseError') && typeof err.message === 'string') {
+    return { status: 409, body: { error: err.message }, headers: {}, unexpected: false };
+  }
+  return { status: 500, body: { error: 'Something went wrong' }, headers: {}, unexpected: true };
+}
+
+const SAFE_REQUEST_ID = /^[A-Za-z0-9._:-]{8,64}$/;
+
+export function requestIdFrom(header, random) {
+  const v = Array.isArray(header) ? header[0] : header;
+  if (typeof v === 'string' && SAFE_REQUEST_ID.test(v)) return v;
+  return random.token(12);
+}
+
 function readBody(req) {
   return new Promise((resolve, reject) => {
     const chunks = [];
@@ -73,7 +105,10 @@ function compile(pattern) {
   return { parts, names };
 }
 
-export function createRouter() {
+export function createRouter({ logger, clock, random } = {}) {
+  const log = logger ?? silentLogger();
+  const clk = clock ?? systemClock();
+  const rnd = random ?? secureRandom();
   const list = [];
   let guard = null;
 
@@ -112,23 +147,58 @@ export function createRouter() {
   function setGuard(fn) { guard = fn; }
 
   async function handle(req, res, ctx) {
-    const url = new URL(req.url, 'http://localhost');
+    const started = clk.now().getTime();
+    const requestId = requestIdFrom(req.headers['x-request-id'], rnd);
+    const state = { requestId, userId: null, path: '/' };
+    req.id = requestId;
+    res.setHeader('X-Request-Id', requestId);
+    let logged = false;
+    const logRequest = () => {
+      if (logged) return;
+      logged = true;
+      const aborted = !res.writableFinished;
+      log.info('request', {
+        method: req.method,
+        path: state.path,
+        status: res.statusCode,
+        durationMs: Math.max(0, clk.now().getTime() - started),
+        requestId,
+        userId: state.userId ?? undefined,
+        aborted: aborted || undefined,
+      });
+    };
+    res.once('finish', logRequest);
+    res.once('close', logRequest);
+
+    let url;
+    try {
+      url = new URL(req.url, 'http://localhost');
+    } catch {
+      securityHeaders(res, false);
+      return send(res, 404, { error: 'Not found' });
+    }
+    state.path = url.pathname;
     const isApi = url.pathname === '/api' || url.pathname.startsWith('/api/');
     securityHeaders(res, isApi);
     try {
-      if (isApi) return await handleApi(req, res, ctx, url);
+      if (isApi) return await handleApi(req, res, ctx, url, state);
       if (req.method !== 'GET' && req.method !== 'HEAD') {
         return send(res, 405, { error: 'That is not allowed here' });
       }
       return await serveStatic(req, res, req.url);
     } catch (err) {
-      console.error(err);
-      if (err instanceof HttpError) return send(res, err.status, { error: err.message });
-      return send(res, 500, { error: 'Something went wrong' });
+      const m = mapError(err);
+      if (m.unexpected) {
+        if (logger) log.error('Unhandled error', { requestId, method: req.method, path: state.path, err });
+        else console.error(err);
+      }
+      // A handler that already started a response cannot get a clean error now.
+      if (res.headersSent) return res.destroy();
+      return send(res, m.status, m.body, m.headers);
     }
   }
 
-  async function handleApi(req, res, ctx, url) {
+  async function handleApi(req, res, ctx, url, state = {}) {
     const m = match(req.method, url.pathname);
     if (!m.route) {
       if (m.pathMatched) return send(res, 405, { error: 'That is not allowed here' });
@@ -137,6 +207,7 @@ export function createRouter() {
     let user = null;
     if (guard) {
       user = await guard({ req, res, route: m.route, ctx });
+      if (user && user.id !== undefined) state.userId = user.id;
       if (res.headersSent || res.writableEnded) return;
     }
     let body = {};
