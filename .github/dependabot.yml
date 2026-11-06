@@ -1,0 +1,7 @@
+# Flock has no npm dependencies, so only GitHub Actions versions are kept updated.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: ['22.x', '24.x']
+    steps:
+      # Major version tags are used for readability. Pinning to full commit SHAs
+      # is stricter, and Dependabot (see .github/dependabot.yml) keeps them updated.
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+      - name: Node version
+        run: node --version
+      - name: Test suite
+        run: node --test
+      - name: Coverage summary
+        if: matrix.node-version == '24.x'
+        run: |
+          node --test --experimental-test-coverage > coverage.txt 2>&1 || { cat coverage.txt; exit 1; }
+          {
+            echo '## Coverage'
+            echo '```'
+            sed -n '/start of coverage report/,/end of coverage report/p' coverage.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Check config
+        run: node scripts/check-config.js
+      - name: Check version
+        run: node scripts/check-version.js

@@ -152,3 +152,33 @@ About **$2.34 a month** for one small machine plus a 1 GB volume. Prices change,
 - **Lost the temporary password**: run `create-admin` again with a new username, or ask a technical friend to reset it.
 - **Data looks different after a while**: run `fly machine list` and make sure there is only one machine.
 - **`fly` not found**: reinstall flyctl and open a new terminal window.
+
+## Automatic checks and releases
+
+GitHub Actions runs the checks for you and, when you press a button, deploys.
+
+### One-time setup
+
+1. Create a **PRIVATE** repository on the church's GitHub account and push this code to it.
+2. Create a Fly deploy token: `flyctl tokens create deploy -a <app>` (use your app name from `fly.toml`).
+3. In GitHub open Settings, Secrets and variables, Actions, and add a repository secret named `FLY_API_TOKEN` with that token. Never put the token anywhere else (not in files, chats or emails).
+
+### How to release
+
+1. Raise the version in `package.json` and add a matching `## X.Y.Z` heading to `CHANGELOG.md`.
+2. Merge that change to `main` and wait for the checks to go green.
+3. Tag it: `git tag vX.Y.Z` and push the tag: `git push origin vX.Y.Z`.
+4. Open the Actions tab, choose **Deploy**, press **Run workflow** and type the tag (for example `v0.2.0`).
+
+The free GitHub plan has no approval gate, so pressing the manual Run workflow button IS the gate. Nothing deploys by itself.
+
+### What CI checks on every push
+
+On every push to `main` and every pull request, on Node 22 and 24: the whole test suite (including the architecture and security tests), a coverage summary, `scripts/check-config.js` and `scripts/check-version.js`.
+
+### If a deploy fails, or you need to roll back
+
+- The Deploy workflow makes a volume snapshot first and stops if it cannot. It then deploys and checks `/api/health` for 2 minutes.
+- If the check fails it prints ROLLBACK instructions. Run `flyctl releases -a <app>` to find the previous image, then `flyctl deploy -a <app> --image <previous image>`.
+- If data looks wrong, list snapshots with `flyctl volumes snapshots list <volume id>` and restore as described in the backup section above.
+- Check `flyctl status` and `flyctl logs` as well.
