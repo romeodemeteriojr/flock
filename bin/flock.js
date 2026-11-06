@@ -1,36 +1,27 @@
 #!/usr/bin/env node
-import { existsSync, mkdirSync } from 'node:fs';
-import path from 'node:path';
-import { pathToFileURL, fileURLToPath } from 'node:url';
-import { loadConfig, VERSION } from '../src/config.js';
+import { VERSION } from '../src/config.js';
+import { createContainer } from '../src/container.js';
 import { createApp } from '../src/server.js';
 import { createLogger, LEVELS } from '../src/infra/logger.js';
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const commands = {
   async version() {
     console.log(`flock ${VERSION}`);
     return 0;
   },
   async serve() {
-    let config;
+    const level = Object.hasOwn(LEVELS, process.env.FLOCK_LOG_LEVEL ?? '') ? process.env.FLOCK_LOG_LEVEL : 'info';
+    // The server's own log goes to stdout (one JSON line per event).
+    const logger = createLogger({ level });
+    let container;
     try {
-      config = loadConfig();
+      container = createContainer({ logger });
     } catch (err) {
       console.error(err.message);
       return 1;
     }
-    const level = Object.hasOwn(LEVELS, process.env.FLOCK_LOG_LEVEL ?? '') ? process.env.FLOCK_LOG_LEVEL : 'info';
-    const logger = createLogger({ level });
-    const dbFile = path.join(root, 'src', 'db.js');
-    if (!existsSync(dbFile)) {
-      console.error('The database part of flock is not merged yet (src/db.js is missing), so the server cannot start.');
-      return 1;
-    }
-    const { openDb } = await import(pathToFileURL(dbFile).href);
-    if (config.dbPath !== ':memory:') mkdirSync(path.dirname(path.resolve(config.dbPath)), { recursive: true });
-    const db = await openDb(config.dbPath);
-    const app = createApp({ db, config, logger });
+    const { config } = container;
+    const app = createApp({ container });
     const port = await app.listen(config.port);
     logger.info('flock started', { version: VERSION, port, pid: process.pid });
     console.log(`flock is running at http://localhost:${port}`);
@@ -49,7 +40,7 @@ const commands = {
       force.unref();
       app.server.close(() => {
         clearTimeout(force);
-        try { db.close(); } catch (err) { logger.error('could not close the database', { err }); }
+        try { container.close(); } catch (err) { logger.error('could not close the database', { err }); }
         logger.info('flock stopped');
         process.exit(0);
       });

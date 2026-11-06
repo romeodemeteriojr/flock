@@ -1,15 +1,19 @@
 import http from 'node:http';
-import { DatabaseSync } from 'node:sqlite';
 import { createApp } from '../../src/server.js';
 import { loadConfig } from '../../src/config.js';
+import { openDb } from '../../src/db.js';
+import { makeContainer } from './container.js';
 
-export async function startTestApp({ now, db, config, setup } = {}) {
-  const database = db ?? new DatabaseSync(':memory:');
-  const app = createApp({
-    db: database,
-    now: now ?? (() => new Date('2025-01-05T12:00:00')),
-    config: config ?? loadConfig({}),
-  });
+// Starts the real app on a free port. Old arguments still work; `container`
+// lets a test pass any extra overrides (clock, random, hasher, logger, ...).
+export async function startTestApp({ now, db, config, setup, container: overrides = {} } = {}) {
+  const database = db ?? overrides.db ?? openDb(':memory:');
+  const parts = { config: config ?? loadConfig({}), db: database, ...overrides };
+  if (now && !overrides.clock) {
+    parts.clock = { now: () => { const n = now(); return n instanceof Date ? n : new Date(n); } };
+  }
+  const container = makeContainer(parts);
+  const app = createApp({ container });
   if (setup) setup(app);
   const port = await app.listen(0);
   const url = `http://127.0.0.1:${port}`;
@@ -40,5 +44,5 @@ export async function startTestApp({ now, db, config, setup } = {}) {
     });
   }
 
-  return { url, app, db: database, request, close: () => app.close() };
+  return { url, app, container, data: container.data, db: database, request, close: () => app.close() };
 }

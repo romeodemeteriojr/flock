@@ -1,3 +1,10 @@
+// Registers every route module. Each module exports register(router, deps).
+//
+// deps = { services, config, clock, logger, random, hasher, data, db, now }
+//   services  the application services built by src/container.js (use these)
+//   db, now   DEPRECATED compatibility for route modules that still read
+//             ctx.db / ctx.now(); they go away as the refactor cards land.
+// The same object is handed to handlers as `ctx`.
 import * as auth from './auth.js';
 import * as people from './people.js';
 import * as teams from './teams.js';
@@ -6,8 +13,12 @@ import * as assignments from './assignments.js';
 import * as blockouts from './blockouts.js';
 import * as admin from './admin.js';
 
-export function registerAll(router, ctx) {
-  for (const mod of [auth, people, teams, services, assignments, blockouts, admin]) {
-    mod.register(router, ctx);
-  }
+export const ROUTE_MODULES = Object.freeze([auth, people, teams, services, assignments, blockouts, admin]);
+
+export function register(router, deps) {
+  if (!deps || !deps.services) throw new Error('Routes need deps.services (build them with createContainer)');
+  for (const mod of ROUTE_MODULES) mod.register(router, deps);
 }
+
+// Older name, kept for callers that still use it.
+export const registerAll = register;
