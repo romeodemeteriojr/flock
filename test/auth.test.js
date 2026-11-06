@@ -1,41 +1,71 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
-import { openDb } from '../src/db.js';
-import {
-  hashPassword, verifyPassword, validatePassword, generateTempPassword, TEMP_WORDS,
-  createSession, getSession, destroySession, destroyAllSessions,
-  login, changePassword, setTempPassword, publicPerson,
-} from '../src/auth.js';
+import { scryptHasher } from '../src/infra/hasher.js';
+import { fixedClock } from '../src/infra/clock.js';
+import { validatePassword, TEMP_WORDS, publicPerson } from '../src/services/auth-service.js';
+import { makeContainer } from './helpers/container.js';
+
+// The old src/auth.js tests, now run against services.auth (built by the
+// container with a fixed clock, seeded random and fast hasher).
 
 const T0 = '2025-01-05T12:00:00.000Z';
 
-function makeCtx(start = T0, config = { sessionDays: 14 }) {
-  let t = new Date(start).getTime();
-  return {
-    config,
-    now: () => new Date(t),
-    advance(ms) { t += ms; },
+function makeCtx(start = T0, config) {
+  const clock = fixedClock(start);
+  const overrides = { clock };
+  if (config) overrides.config = { ...makeContainer().config, ...config };
+  const c = makeContainer(overrides);
+  return { c, auth: c.services.auth, data: c.data, db: c.db, advance: (ms) => clock.advance(ms) };
+}
+
+async function seed(ctx = makeCtx()) {
+  const add = async (name, username, pw, role, active) => {
+    const p = await ctx.data.people.create({
+      name, username, role, mustChangePassword: false, passwordHash: await ctx.c.hasher.hash(pw), createdAt: T0,
+    });
+    if (!active) await ctx.data.people.update(p.id, { active: false });
+    return p.id;
   };
+  const ann = await add('Ann Example', 'ann', 'correct horse', 'admin', true);
+  const bob = await add('Bob Sample', 'bob', 'bobs password', 'member', true);
+  const cy = await add('Cy Gone', 'cy', 'cys password', 'member', false);
+  return { ...ctx, ann, bob, cy };
 }
 
-async function seed() {
-  const db = openDb();
-  const ins = db.prepare('INSERT INTO people (name,username,password_hash,role,must_change_password,active,created_at) VALUES (?,?,?,?,?,?,?)');
-  const ann = Number(ins.run('Ann Example', 'ann', await hashPassword('correct horse'), 'admin', 0, 1, T0).lastInsertRowid);
-  const bob = Number(ins.run('Bob Sample', 'bob', await hashPassword('bobs password'), 'member', 0, 1, T0).lastInsertRowid);
-  const cy = Number(ins.run('Cy Gone', 'cy', await hashPassword('cys password'), 'member', 0, 0, T0).lastInsertRowid);
-  return { db, ann, bob, cy };
+const row = (s, id) => s.data.people.findAuthById(id);
+const sessionCount = (s, id) => s.db.prepare('SELECT COUNT(*) n FROM sessions WHERE person_id=?').get(id).n;
+const tryLogin = async (s, u, p) => {
+  try {
+    const r = await s.auth.login(u, p);
+    return { ok: true, ...r };
+  } catch (e) {
+    if (e.status === 429) return { ok: false, reason: 'locked', retryAfterSec: e.retryAfterSec };
+    if (e.status === 401) return { ok: false, reason: e.details?.reason ?? 'invalid' };
+    throw e;
+  }
+};
+const tryChange = async (s, id, o, n, opts) => {
+  try {
+    await s.auth.changePassword(id, o, n, opts);
+    return { ok: true };
+  } catch (e) {
+    if (e.status === 400) return { ok: false, error: e.message };
+    throw e;
+  }
+};
+// Sessions without changing the password: log in with the known passwords.
+const PW = { ann: 'correct horse', bob: 'bobs password', cy: 'cys password' };
+async function loginToken(s, username) {
+  return (await s.auth.login(username, PW[username])).token;
 }
-
-const row = (db, id) => db.prepare('SELECT * FROM people WHERE id=?').get(id);
-const sessionCount = (db, id) => db.prepare('SELECT COUNT(*) n FROM sessions WHERE person_id=?').get(id).n;
 
 // ---------- hashing ----------
 
 test('hashPassword format and unique salts', async () => {
-  const a = await hashPassword('same password');
-  const b = await hashPassword('same password');
+  const hasher = scryptHasher();
+  const a = await hasher.hash('same password');
+  const b = await hasher.hash('same password');
   const re = /^scrypt\$16384\$8\$1\$([A-Za-z0-9+/=]+)\$([A-Za-z0-9+/=]+)$/;
   for (const h of [a, b]) {
     const m = h.match(re);
@@ -49,7 +79,9 @@ test('hashPassword format and unique salts', async () => {
 });
 
 test('verifyPassword right, wrong, malformed', async () => {
-  const h = await hashPassword('correct horse');
+  const hasher = scryptHasher();
+  const verifyPassword = (pw, h) => hasher.verify(pw, h);
+  const h = await hasher.hash('correct horse');
   assert.equal(await verifyPassword('correct horse', h), true);
   assert.equal(await verifyPassword('correct hors', h), false);
   assert.equal(await verifyPassword('Correct horse', h), false);
@@ -90,11 +122,12 @@ test('validatePassword rules', () => {
 });
 
 test('generateTempPassword shape over 200 samples', () => {
+  const { auth } = makeCtx();
   assert.ok(TEMP_WORDS.length >= 64);
   assert.equal(new Set(TEMP_WORDS).size, TEMP_WORDS.length);
   const seen = new Set();
   for (let i = 0; i < 200; i++) {
-    const t = generateTempPassword();
+    const t = auth.generateTempPassword();
     const m = t.match(/^([a-z]+)-([a-z]+)-([0-9]{2})$/);
     assert.ok(m, t);
     assert.ok(TEMP_WORDS.includes(m[1]) && TEMP_WORDS.includes(m[2]), t);
@@ -107,249 +140,248 @@ test('generateTempPassword shape over 200 samples', () => {
 // ---------- sessions ----------
 
 test('session create, get, expire, destroy', async () => {
-  const { db, ann } = await seed();
-  const ctx = makeCtx();
-  const tok = createSession(db, ctx, ann);
+  const s = await seed();
+  const { auth, db, ann } = s;
+  const tok = await loginToken(s, 'ann');
   assert.match(tok, /^[A-Za-z0-9_-]{43}$/);
   assert.equal(Buffer.from(tok, 'base64url').length, 32);
 
-  const s = db.prepare('SELECT * FROM sessions WHERE person_id=?').get(ann);
-  assert.equal(s.created_at, T0);
-  assert.equal(s.expires_at, '2025-01-19T12:00:00.000Z');
+  const row1 = db.prepare('SELECT * FROM sessions WHERE person_id=?').get(ann);
+  assert.equal(row1.created_at, T0);
+  assert.equal(row1.expires_at, '2025-01-19T12:00:00.000Z');
 
-  const p = getSession(db, ctx, tok);
+  const p = await auth.authenticate(tok);
   assert.equal(p.id, ann);
   assert.equal(p.username, 'ann');
-  assert.ok(!('password_hash' in p));
+  assert.ok(!('passwordHash' in p) && !('password_hash' in p));
 
-  assert.equal(getSession(db, ctx, 'nope'), null);
-  assert.equal(getSession(db, ctx, undefined), null);
-  assert.equal(getSession(db, ctx, crypto.randomBytes(32).toString('base64url')), null);
+  assert.equal(await auth.authenticate('nope'), null);
+  assert.equal(await auth.authenticate(undefined), null);
+  assert.equal(await auth.authenticate(crypto.randomBytes(32).toString('base64url')), null);
 
-  ctx.advance(14 * 86400000 - 1);
-  assert.equal(getSession(db, ctx, tok).id, ann);
-  ctx.advance(1);
-  assert.equal(getSession(db, ctx, tok), null);
-  assert.equal(sessionCount(db, ann), 0, 'expired session deleted');
+  s.advance(14 * 86400000 - 1);
+  assert.equal((await auth.authenticate(tok)).id, ann);
+  s.advance(1);
+  assert.equal(await auth.authenticate(tok), null);
+  assert.equal(sessionCount(s, ann), 0, 'expired session deleted');
 
-  const tok2 = createSession(db, ctx, ann);
-  destroySession(db, tok2);
-  assert.equal(getSession(db, ctx, tok2), null);
-  assert.equal(sessionCount(db, ann), 0);
+  const tok2 = await loginToken(s, 'ann');
+  await auth.logout(tok2);
+  assert.equal(await auth.authenticate(tok2), null);
+  assert.equal(sessionCount(s, ann), 0);
 });
 
 test('sessionDays from config, default 14', async () => {
-  const { db, ann, bob } = await seed();
-  createSession(db, makeCtx(T0, { sessionDays: 2 }), ann);
-  createSession(db, makeCtx(T0, {}), bob);
-  assert.equal(db.prepare('SELECT expires_at e FROM sessions WHERE person_id=?').get(ann).e, '2025-01-07T12:00:00.000Z');
-  assert.equal(db.prepare('SELECT expires_at e FROM sessions WHERE person_id=?').get(bob).e, '2025-01-19T12:00:00.000Z');
+  const a = await seed(makeCtx(T0, { sessionDays: 2 }));
+  const b = await seed(makeCtx(T0));
+  await loginToken(a, 'ann');
+  await loginToken(b, 'bob');
+  assert.equal(a.db.prepare('SELECT expires_at e FROM sessions WHERE person_id=?').get(a.ann).e, '2025-01-07T12:00:00.000Z');
+  assert.equal(b.db.prepare('SELECT expires_at e FROM sessions WHERE person_id=?').get(b.bob).e, '2025-01-19T12:00:00.000Z');
 });
 
 test('raw token is never stored', async () => {
-  const { db, ann } = await seed();
-  const ctx = makeCtx();
-  const tok = createSession(db, ctx, ann);
-  const s = db.prepare('SELECT * FROM sessions').get();
-  assert.equal(s.token_hash, crypto.createHash('sha256').update(tok).digest('hex'));
-  const dump = JSON.stringify(db.prepare('SELECT * FROM sessions').all()) + JSON.stringify(db.prepare('SELECT * FROM people').all());
+  const s = await seed();
+  const tok = await loginToken(s, 'ann');
+  const r = s.db.prepare('SELECT * FROM sessions').get();
+  assert.equal(r.token_hash, crypto.createHash('sha256').update(tok).digest('hex'));
+  const dump = JSON.stringify(s.db.prepare('SELECT * FROM sessions').all()) + JSON.stringify(s.db.prepare('SELECT * FROM people').all());
   assert.ok(!dump.includes(tok));
 });
 
 test('inactive person session returns null', async () => {
-  const { db, cy, bob } = await seed();
-  const ctx = makeCtx();
-  const tok = createSession(db, ctx, cy);
-  assert.equal(getSession(db, ctx, tok), null);
-  const tb = createSession(db, ctx, bob);
-  assert.equal(getSession(db, ctx, tb).id, bob);
-  db.prepare('UPDATE people SET active=0 WHERE id=?').run(bob);
-  assert.equal(getSession(db, ctx, tb), null);
+  const s = await seed();
+  const { auth, data, bob } = s;
+  const tb = await loginToken(s, 'bob');
+  assert.equal((await auth.authenticate(tb)).id, bob);
+  await data.people.update(bob, { active: false });
+  assert.equal(await auth.authenticate(tb), null);
+  // A session that somehow exists for an inactive person is not accepted either.
+  const raw = crypto.randomBytes(32).toString('base64url');
+  await data.sessions.create({ tokenHash: crypto.createHash('sha256').update(raw).digest('hex'), personId: s.cy, expiresAt: '2030-01-01T00:00:00.000Z', createdAt: T0 });
+  assert.equal(await auth.authenticate(raw), null);
 });
 
 test('destroyAllSessions with and without exception', async () => {
-  const { db, ann, bob } = await seed();
-  const ctx = makeCtx();
-  const a1 = createSession(db, ctx, ann);
-  const a2 = createSession(db, ctx, ann);
-  const a3 = createSession(db, ctx, ann);
-  const b1 = createSession(db, ctx, bob);
-  destroyAllSessions(db, ann, a2);
-  assert.equal(getSession(db, ctx, a1), null);
-  assert.equal(getSession(db, ctx, a2).id, ann);
-  assert.equal(getSession(db, ctx, a3), null);
-  destroyAllSessions(db, ann);
-  assert.equal(getSession(db, ctx, a2), null);
-  assert.equal(getSession(db, ctx, b1).id, bob);
+  const s = await seed();
+  const { auth, ann, bob } = s;
+  const a1 = await loginToken(s, 'ann');
+  const a2 = await loginToken(s, 'ann');
+  const a3 = await loginToken(s, 'ann');
+  const b1 = await loginToken(s, 'bob');
+  // With an exception: a password change keeps the current session only.
+  await auth.changePassword(ann, 'correct horse', 'brand new pw', { currentToken: a2 });
+  assert.equal(await auth.authenticate(a1), null);
+  assert.equal((await auth.authenticate(a2)).id, ann);
+  assert.equal(await auth.authenticate(a3), null);
+  assert.equal(await auth.endSessions(ann), 1);
+  assert.equal(await auth.authenticate(a2), null);
+  assert.equal((await auth.authenticate(b1)).id, bob);
 });
 
 // ---------- login ----------
 
 test('login success, invalid, unknown, inactive', async () => {
-  const { db, ann } = await seed();
-  const ctx = makeCtx();
-  const ok = await login(db, ctx, 'ann', 'correct horse');
+  const s = await seed();
+  const { ann } = s;
+  const ok = await tryLogin(s, 'ann', 'correct horse');
   assert.equal(ok.ok, true);
   assert.equal(ok.person.id, ann);
-  assert.ok(!('password_hash' in ok.person));
-  assert.equal((await login(db, ctx, 'ANN', 'correct horse')).ok, true, 'username is case-insensitive');
+  assert.ok(!('passwordHash' in ok.person));
+  assert.equal((await tryLogin(s, 'ANN', 'correct horse')).ok, true, 'username is case-insensitive');
 
-  assert.deepEqual(await login(db, ctx, 'ann', 'wrong password'), { ok: false, reason: 'invalid' });
-  assert.deepEqual(await login(db, ctx, 'nobody', 'correct horse'), { ok: false, reason: 'invalid' });
-  assert.deepEqual(await login(db, ctx, '', ''), { ok: false, reason: 'invalid' });
-  assert.deepEqual(await login(db, ctx, undefined, undefined), { ok: false, reason: 'invalid' });
-  assert.deepEqual(await login(db, ctx, 'cy', 'cys password'), { ok: false, reason: 'inactive' });
-  assert.deepEqual(await login(db, ctx, 'cy', 'wrong password'), { ok: false, reason: 'invalid' });
+  assert.deepEqual(await tryLogin(s, 'ann', 'wrong password'), { ok: false, reason: 'invalid' });
+  assert.deepEqual(await tryLogin(s, 'nobody', 'correct horse'), { ok: false, reason: 'invalid' });
+  assert.deepEqual(await tryLogin(s, '', ''), { ok: false, reason: 'invalid' });
+  assert.deepEqual(await tryLogin(s, undefined, undefined), { ok: false, reason: 'invalid' });
+  assert.deepEqual(await tryLogin(s, 'cy', 'cys password'), { ok: false, reason: 'inactive' });
+  assert.deepEqual(await tryLogin(s, 'cy', 'wrong password'), { ok: false, reason: 'invalid' });
 });
 
 test('lockout after 5 failures, unlock after 5 minutes', async () => {
-  const { db, ann } = await seed();
-  const ctx = makeCtx();
-  for (let i = 0; i < 4; i++) assert.equal((await login(db, ctx, 'ann', 'bad')).reason, 'invalid');
-  assert.equal(row(db, ann).failed_logins, 4);
-  assert.equal(row(db, ann).locked_until, null);
-  assert.equal((await login(db, ctx, 'ann', 'bad')).reason, 'invalid');
-  assert.equal(row(db, ann).locked_until, '2025-01-05T12:05:00.000Z');
+  const s = await seed();
+  const { ann } = s;
+  for (let i = 0; i < 4; i++) assert.equal((await tryLogin(s, 'ann', 'bad')).reason, 'invalid');
+  assert.equal((await row(s, ann)).failedLogins, 4);
+  assert.equal((await row(s, ann)).lockedUntil, null);
+  assert.equal((await tryLogin(s, 'ann', 'bad')).reason, 'invalid');
+  assert.equal((await row(s, ann)).lockedUntil, '2025-01-05T12:05:00.000Z');
 
-  const locked = await login(db, ctx, 'ann', 'correct horse');
+  const locked = await tryLogin(s, 'ann', 'correct horse');
   assert.equal(locked.ok, false);
   assert.equal(locked.reason, 'locked');
   assert.equal(locked.retryAfterSec, 300);
 
-  ctx.advance(4 * 60 * 1000 + 30 * 1000);
-  const still = await login(db, ctx, 'ann', 'correct horse');
+  s.advance(4 * 60 * 1000 + 30 * 1000);
+  const still = await tryLogin(s, 'ann', 'correct horse');
   assert.equal(still.reason, 'locked');
   assert.equal(still.retryAfterSec, 30);
 
-  ctx.advance(30 * 1000);
-  const ok = await login(db, ctx, 'ann', 'correct horse');
+  s.advance(30 * 1000);
+  const ok = await tryLogin(s, 'ann', 'correct horse');
   assert.equal(ok.ok, true);
-  assert.equal(row(db, ann).failed_logins, 0);
-  assert.equal(row(db, ann).locked_until, null);
+  assert.equal((await row(s, ann)).failedLogins, 0);
+  assert.equal((await row(s, ann)).lockedUntil, null);
 });
 
 test('after a lock expires, one more failure does not relock immediately', async () => {
-  const { db, ann } = await seed();
-  const ctx = makeCtx();
-  for (let i = 0; i < 5; i++) await login(db, ctx, 'ann', 'bad');
-  ctx.advance(5 * 60 * 1000);
-  assert.equal((await login(db, ctx, 'ann', 'bad')).reason, 'invalid');
-  assert.equal(row(db, ann).failed_logins, 1);
-  assert.equal(row(db, ann).locked_until, null);
-  assert.equal((await login(db, ctx, 'ann', 'correct horse')).ok, true);
+  const s = await seed();
+  const { ann } = s;
+  for (let i = 0; i < 5; i++) await tryLogin(s, 'ann', 'bad');
+  s.advance(5 * 60 * 1000);
+  assert.equal((await tryLogin(s, 'ann', 'bad')).reason, 'invalid');
+  assert.equal((await row(s, ann)).failedLogins, 1);
+  assert.equal((await row(s, ann)).lockedUntil, null);
+  assert.equal((await tryLogin(s, 'ann', 'correct horse')).ok, true);
 });
 
 test('success resets the failure counter', async () => {
-  const { db, ann } = await seed();
-  const ctx = makeCtx();
-  for (let i = 0; i < 4; i++) await login(db, ctx, 'ann', 'bad');
-  assert.equal((await login(db, ctx, 'ann', 'correct horse')).ok, true);
-  assert.equal(row(db, ann).failed_logins, 0);
-  for (let i = 0; i < 4; i++) await login(db, ctx, 'ann', 'bad');
-  assert.equal((await login(db, ctx, 'ann', 'correct horse')).ok, true, 'not locked: counter was reset');
+  const s = await seed();
+  for (let i = 0; i < 4; i++) await tryLogin(s, 'ann', 'bad');
+  assert.equal((await tryLogin(s, 'ann', 'correct horse')).ok, true);
+  assert.equal((await row(s, s.ann)).failedLogins, 0);
+  for (let i = 0; i < 4; i++) await tryLogin(s, 'ann', 'bad');
+  assert.equal((await tryLogin(s, 'ann', 'correct horse')).ok, true, 'not locked: counter was reset');
 });
 
 test('lockout of one person does not affect another', async () => {
-  const { db } = await seed();
-  const ctx = makeCtx();
-  for (let i = 0; i < 5; i++) await login(db, ctx, 'ann', 'bad');
-  assert.equal((await login(db, ctx, 'bob', 'bobs password')).ok, true);
+  const s = await seed();
+  for (let i = 0; i < 5; i++) await tryLogin(s, 'ann', 'bad');
+  assert.equal((await tryLogin(s, 'bob', 'bobs password')).ok, true);
 });
 
 test('concurrent wrong attempts are all counted', async () => {
-  const { db, ann } = await seed();
-  const ctx = makeCtx();
-  await Promise.all(Array.from({ length: 5 }, () => login(db, ctx, 'ann', 'bad')));
-  assert.equal(row(db, ann).failed_logins, 5);
-  assert.equal((await login(db, ctx, 'ann', 'correct horse')).reason, 'locked');
+  const s = await seed();
+  await Promise.all(Array.from({ length: 5 }, () => tryLogin(s, 'ann', 'bad')));
+  assert.equal((await row(s, s.ann)).failedLogins, 5);
+  assert.equal((await tryLogin(s, 'ann', 'correct horse')).reason, 'locked');
 });
 
 // ---------- changePassword ----------
 
 test('changePassword rules', async () => {
-  const { db, ann } = await seed();
-  const ctx = makeCtx();
-  assert.equal((await changePassword(db, ctx, ann, 'wrong one', 'brand new pw')).ok, false);
-  assert.match((await changePassword(db, ctx, ann, 'wrong one', 'brand new pw')).error, /current password/);
-  assert.match((await changePassword(db, ctx, ann, 'correct horse', 'short')).error, /at least 8/);
-  assert.match((await changePassword(db, ctx, ann, 'correct horse', 'correct horse')).error, /different/);
-  assert.match((await changePassword(db, ctx, ann, 'correct horse', '          ')).error, /spaces/);
+  const s = await seed();
+  const { ann, db } = s;
+  assert.equal((await tryChange(s, ann, 'wrong one', 'brand new pw')).ok, false);
+  assert.match((await tryChange(s, ann, 'wrong one', 'brand new pw')).error, /current password/);
+  assert.match((await tryChange(s, ann, 'correct horse', 'short')).error, /at least 8/);
+  assert.match((await tryChange(s, ann, 'correct horse', 'correct horse')).error, /different/);
+  assert.match((await tryChange(s, ann, 'correct horse', '          ')).error, /spaces/);
   db.prepare("UPDATE people SET username='annexample' WHERE id=?").run(ann);
-  assert.match((await changePassword(db, ctx, ann, 'correct horse', 'annexample')).error, /username/);
-  assert.equal((await changePassword(db, ctx, 9999, 'x', 'brand new pw')).ok, false);
+  assert.match((await tryChange(s, ann, 'correct horse', 'annexample')).error, /username/);
+  assert.equal((await tryChange(s, 9999, 'x', 'brand new pw')).ok, false);
 
   db.prepare('UPDATE people SET must_change_password=1 WHERE id=?').run(ann);
-  assert.deepEqual(await changePassword(db, ctx, ann, 'correct horse', 'brand new pw'), { ok: true });
-  assert.equal(row(db, ann).must_change_password, 0);
-  assert.equal(await verifyPassword('brand new pw', row(db, ann).password_hash), true);
-  assert.equal((await login(db, ctx, 'annexample', 'correct horse')).ok, false);
-  assert.equal((await login(db, ctx, 'annexample', 'brand new pw')).ok, true);
+  assert.deepEqual(await tryChange(s, ann, 'correct horse', 'brand new pw'), { ok: true });
+  assert.equal((await row(s, ann)).mustChangePassword, false);
+  assert.equal(await s.c.hasher.verify('brand new pw', (await row(s, ann)).passwordHash), true);
+  assert.equal((await tryLogin(s, 'annexample', 'correct horse')).ok, false);
+  assert.equal((await tryLogin(s, 'annexample', 'brand new pw')).ok, true);
 });
 
 test('changePassword destroys other sessions but keeps the current one', async () => {
-  const { db, ann, bob } = await seed();
-  const ctx = makeCtx();
-  const cur = createSession(db, ctx, ann);
-  const other1 = createSession(db, ctx, ann);
-  const other2 = createSession(db, ctx, ann);
-  const bobs = createSession(db, ctx, bob);
-  assert.equal((await changePassword(db, ctx, ann, 'correct horse', 'brand new pw', { exceptToken: cur })).ok, true);
-  assert.equal(getSession(db, ctx, cur).id, ann);
-  assert.equal(getSession(db, ctx, other1), null);
-  assert.equal(getSession(db, ctx, other2), null);
-  assert.equal(getSession(db, ctx, bobs).id, bob);
+  const s = await seed();
+  const { auth, ann, bob } = s;
+  const cur = await loginToken(s, 'ann');
+  const other1 = await loginToken(s, 'ann');
+  const other2 = await loginToken(s, 'ann');
+  const bobs = await loginToken(s, 'bob');
+  assert.equal((await tryChange(s, ann, 'correct horse', 'brand new pw', { currentToken: cur })).ok, true);
+  assert.equal((await auth.authenticate(cur)).id, ann);
+  assert.equal(await auth.authenticate(other1), null);
+  assert.equal(await auth.authenticate(other2), null);
+  assert.equal((await auth.authenticate(bobs)).id, bob);
 });
 
 test('failed changePassword keeps sessions and hash', async () => {
-  const { db, ann } = await seed();
-  const ctx = makeCtx();
-  const other = createSession(db, ctx, ann);
-  const before = row(db, ann).password_hash;
-  await changePassword(db, ctx, ann, 'wrong one', 'brand new pw');
-  assert.equal(getSession(db, ctx, other).id, ann);
-  assert.equal(row(db, ann).password_hash, before);
+  const s = await seed();
+  const other = await loginToken(s, 'ann');
+  const before = (await row(s, s.ann)).passwordHash;
+  await tryChange(s, s.ann, 'wrong one', 'brand new pw');
+  assert.equal((await s.auth.authenticate(other)).id, s.ann);
+  assert.equal((await row(s, s.ann)).passwordHash, before);
 });
 
 // ---------- setTempPassword ----------
 
 test('setTempPassword forces change, clears lockout, drops sessions', async () => {
-  const { db, ann } = await seed();
-  const ctx = makeCtx();
-  const s = createSession(db, ctx, ann);
-  for (let i = 0; i < 5; i++) await login(db, ctx, 'ann', 'bad');
-  assert.ok(row(db, ann).locked_until);
+  const s = await seed();
+  const { auth, ann } = s;
+  const tok = await loginToken(s, 'ann');
+  for (let i = 0; i < 5; i++) await tryLogin(s, 'ann', 'bad');
+  assert.ok((await row(s, ann)).lockedUntil);
 
-  const temp = await setTempPassword(db, ctx, ann);
+  const temp = await auth.issueTempPassword(ann);
   assert.match(temp, /^[a-z]+-[a-z]+-[0-9]{2}$/);
-  const r = row(db, ann);
-  assert.equal(r.must_change_password, 1);
-  assert.equal(r.failed_logins, 0);
-  assert.equal(r.locked_until, null);
-  assert.ok(!r.password_hash.includes(temp));
-  assert.equal(getSession(db, ctx, s), null);
-  assert.equal(sessionCount(db, ann), 0);
+  const r = await row(s, ann);
+  assert.equal(r.mustChangePassword, true);
+  assert.equal(r.failedLogins, 0);
+  assert.equal(r.lockedUntil, null);
+  assert.ok(!r.passwordHash.includes(temp));
+  assert.equal(await auth.authenticate(tok), null);
+  assert.equal(sessionCount(s, ann), 0);
 
-  const res = await login(db, ctx, 'ann', temp);
+  const res = await tryLogin(s, 'ann', temp);
   assert.equal(res.ok, true);
   assert.equal(publicPerson(res.person).mustChangePassword, true);
-  assert.equal((await login(db, ctx, 'ann', 'correct horse')).ok, false);
+  assert.equal((await tryLogin(s, 'ann', 'correct horse')).ok, false);
 
-  assert.equal((await changePassword(db, ctx, ann, temp, 'my own password')).ok, true);
-  assert.equal(row(db, ann).must_change_password, 0);
+  assert.equal((await tryChange(s, ann, temp, 'my own password')).ok, true);
+  assert.equal((await row(s, ann)).mustChangePassword, false);
 });
 
 test('setTempPassword on unknown person throws', async () => {
-  const { db } = await seed();
-  await assert.rejects(setTempPassword(db, makeCtx(), 9999));
+  const s = await seed();
+  await assert.rejects(s.auth.issueTempPassword(9999));
 });
 
 // ---------- publicPerson ----------
 
 test('publicPerson exposes no hash', async () => {
-  const { db, ann, cy } = await seed();
-  const p = publicPerson(row(db, ann));
-  assert.deepEqual(p, { id: ann, name: 'Ann Example', username: 'ann', role: 'admin', mustChangePassword: false, active: true });
-  assert.ok(!JSON.stringify(p).includes('scrypt'));
-  assert.equal(publicPerson(row(db, cy)).active, false);
+  const s = await seed();
+  const p = publicPerson(await row(s, s.ann));
+  assert.deepEqual(p, { id: s.ann, name: 'Ann Example', username: 'ann', role: 'admin', mustChangePassword: false, active: true });
+  assert.ok(!JSON.stringify(p).includes('fast$') && !JSON.stringify(p).includes('scrypt'));
+  assert.equal(publicPerson(await row(s, s.cy)).active, false);
   assert.equal(publicPerson(null), null);
 });

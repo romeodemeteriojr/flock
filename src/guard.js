@@ -1,5 +1,6 @@
-// Enforces the auth level declared on each route, plus the CSRF header.
-import { getSession, publicPerson } from './auth.js';
+// Thin HTTP adapter over services.auth: reads the session cookie, enforces the
+// auth level declared on each route, the must-change-password gate and the CSRF
+// header. It never touches data itself.
 import { send } from './http.js';
 
 export const COOKIE_NAME = 'flock_session';
@@ -37,6 +38,29 @@ function cookieString(req, ctx, value, maxAge) {
   return c;
 }
 
+/**
+ * Per-IP attempt counter (used for logins): at most `max` attempts per
+ * `windowMs`, timed by the injected clock. hit(ip) records an attempt and
+ * returns true when the IP is over the limit (the attempt is then not counted).
+ */
+export function createIpThrottle({ clock, windowMs = 5 * 60 * 1000, max = 20 }) {
+  const attempts = new Map(); // ip -> array of ms timestamps
+  return {
+    hit(ip = 'unknown') {
+      const nowMs = clock.now().getTime();
+      for (const [k, list] of attempts) {
+        const kept = list.filter((t) => t > nowMs - windowMs);
+        if (kept.length) attempts.set(k, kept); else attempts.delete(k);
+      }
+      const list = attempts.get(ip) ?? [];
+      if (list.length >= max) return true;
+      list.push(nowMs);
+      attempts.set(ip, list);
+      return false;
+    },
+  };
+}
+
 const ALLOWED_WHEN_MUST_CHANGE = new Set(['GET /api/me', 'POST /api/password', 'POST /api/logout']);
 
 export function createGuard() {
@@ -51,12 +75,11 @@ export function createGuard() {
     if (route.auth === 'none') return null;
 
     const token = parseCookies(req.headers.cookie)[COOKIE_NAME];
-    const person = getSession(ctx.db, ctx, token);
-    if (!person) {
+    const user = await ctx.services.auth.authenticate(token);
+    if (!user) {
       send(res, 401, { error: 'Please log in' });
       return null;
     }
-    const user = publicPerson(person);
     req.sessionToken = token;
     if (user.mustChangePassword && !ALLOWED_WHEN_MUST_CHANGE.has(`${method} ${route.pattern}`)) {
       send(res, 403, { error: 'Please choose a new password first', code: 'must_change_password' });

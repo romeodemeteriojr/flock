@@ -1,4 +1,3 @@
-import { hashPassword, generateTempPassword, setTempPassword, destroyAllSessions } from '../auth.js';
 import { tx, logAudit } from '../db.js';
 
 const USERNAME_RE = /^[A-Za-z0-9._-]{3,30}$/;
@@ -96,8 +95,7 @@ export function register(router, ctx) {
       }
       username = body.username.trim().toLowerCase();
     }
-    const tempPassword = generateTempPassword();
-    const hash = await hashPassword(tempPassword);
+    const { tempPassword, passwordHash: hash } = await ctx.services.auth.newTempCredentials();
     try {
       const id = tx(db, () => {
         const uname = username ?? freeUsername(db, n.name);
@@ -151,7 +149,7 @@ export function register(router, ctx) {
       if (newRole !== cur.role) changes.push(`role ${cur.role} -> ${newRole}`);
       if (newActive !== cur.active) changes.push(newActive ? 'reactivated' : 'deactivated');
       db.prepare('UPDATE people SET name = ?, role = ?, active = ? WHERE id = ?').run(name ?? cur.name, newRole, newActive, id);
-      if (newActive === 0) destroyAllSessions(db, id);
+      if (newActive === 0) db.prepare('DELETE FROM sessions WHERE person_id = ?').run(id);
       if (changes.length) logAudit(db, new Date(ctx.now()), user.id, 'person.update', `person ${id}: ${changes.join(', ')}`);
       return { status: 200, json: { person: loadOne(id) } };
     });
@@ -161,7 +159,7 @@ export function register(router, ctx) {
     const id = parseId(params.id);
     if (!id) return bad('That person id is not valid.');
     if (!db.prepare('SELECT 1 FROM people WHERE id = ?').get(id)) return { status: 404, json: { error: 'That person was not found' } };
-    const tempPassword = await setTempPassword(db, ctx, id);
+    const tempPassword = await ctx.services.auth.issueTempPassword(id);
     logAudit(db, new Date(ctx.now()), user.id, 'person.reset_password', `person ${id}`);
     return { status: 200, json: { tempPassword } };
   }, opts);

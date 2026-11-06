@@ -5,11 +5,8 @@
 // no longer breaks any rule fails the test until it is taken off the list.
 // The final QA card asserts LEGACY is empty.
 export const LEGACY = [
-  'src/auth.js',
   'src/blockouts.js',
   'src/db.js',
-  'src/guard.js',
-  'src/routes/auth.js',
   'src/routes/blockouts.js',
   'src/routes/people.js',
   'src/routes/services.js',

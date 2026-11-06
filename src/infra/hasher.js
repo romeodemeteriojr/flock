@@ -38,7 +38,7 @@ function parseStored(stored) {
   return { N, r, p, salt, hash };
 }
 
-// Format: scrypt$16384$8$1$<salt base64>$<hash base64> (the same as src/auth.js).
+// Format: scrypt$16384$8$1$<salt base64>$<hash base64>.
 export function scryptHasher({ N = 16384, r = 8, p = 1, random } = {}) {
   const saltFor = () => (random ? random.bytes(SALT_BYTES) : crypto.randomBytes(SALT_BYTES));
   return {

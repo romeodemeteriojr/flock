@@ -3,6 +3,7 @@ import { createApp } from '../../src/server.js';
 import { loadConfig } from '../../src/config.js';
 import { openDb } from '../../src/db.js';
 import { makeContainer } from './container.js';
+import { registerContainer } from './seed.js';
 
 // Starts the real app on a free port. Old arguments still work; `container`
 // lets a test pass any extra overrides (clock, random, hasher, logger, ...).
@@ -13,6 +14,7 @@ export async function startTestApp({ now, db, config, setup, container: override
     parts.clock = { now: () => { const n = now(); return n instanceof Date ? n : new Date(n); } };
   }
   const container = makeContainer(parts);
+  registerContainer(database, container);
   const app = createApp({ container });
   if (setup) setup(app);
   const port = await app.listen(0);
