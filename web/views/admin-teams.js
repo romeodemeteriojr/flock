@@ -1,6 +1,9 @@
 // Teams page (scheduler only): teams, the positions in each team, and how many
 // people are able to do each position. Deleting asks "Are you sure?" first.
 import { html } from '../lib/html.js';
+import { iconSlot } from '../lib/icons.js';
+import { toasts } from '../lib/toast.js';
+import { skeleton, emptyState, pageHead } from '../lib/ui.js';
 
 export const title = 'Teams';
 
@@ -20,7 +23,7 @@ export function friendlyMessage(err) {
 const cancelBtn = html`<button type="button" class="btn" data-action="cancel">Cancel</button>`;
 
 function nameForm(formName, id, label, value, button) {
-  return html`<form class="form card" data-form="${formName}" data-id="${id}" novalidate>
+  return html`<form class="form confirm" data-form="${formName}" data-id="${id}" novalidate>
     <div class="field">
       <label for="${formName}-${id}">${label}</label>
       <input id="${formName}-${id}" name="name" type="text" maxlength="60" required value="${value}">
@@ -30,7 +33,7 @@ function nameForm(formName, id, label, value, button) {
 }
 
 function confirmBox(text, yesAction, id, yesLabel) {
-  return html`<div class="card" role="alertdialog" aria-label="Confirm">
+  return html`<div class="confirm confirm-danger" role="alertdialog" aria-label="Confirm">
     <p>${text}</p>
     <div class="btn-row">
       <button type="button" class="btn btn-danger" data-action="${yesAction}" data-id="${id}">${yesLabel}</button>
@@ -46,11 +49,14 @@ function positionRow(pos, m) {
   if (panel?.kind === 'delete-position') {
     extra = confirmBox(html`Delete the position <strong>${pos.name}</strong>? This cannot be undone.`, 'delete-position-yes', pos.id, 'Yes, delete it');
   }
-  return html`<li data-position-row="${pos.id}">
-    <p><strong>${pos.name}</strong> <span class="chip chip-plain" data-count>${countWords(n)}</span></p>
-    <div class="btn-row">
-      <button type="button" class="btn" data-action="rename-position" data-id="${pos.id}">Rename</button>
-      <button type="button" class="btn btn-danger" data-action="delete-position" data-id="${pos.id}">Delete</button>
+  return html`<li class="position-row" data-position-row="${pos.id}">
+    <div class="position-main">
+      <p class="position-name"><strong>${pos.name}</strong></p>
+      <span class="chip ${n ? 'chip-info' : 'chip-plain'}" data-count>${iconSlot('users', 'chip-icon')}${countWords(n)}</span>
+    </div>
+    <div class="btn-row btn-row-compact">
+      <button type="button" class="btn btn-sm" data-action="rename-position" data-id="${pos.id}">Rename</button>
+      <button type="button" class="btn btn-sm btn-danger btn-quiet" data-action="delete-position" data-id="${pos.id}">Delete</button>
     </div>
     ${extra}
   </li>`;
@@ -64,33 +70,33 @@ function teamCard(t, m) {
     extra = confirmBox(html`Delete the team <strong>${t.name}</strong>? This cannot be undone. A team that still has positions in use cannot be deleted.`, 'delete-team-yes', t.id, 'Yes, delete it');
   }
   if (mine?.kind === 'add-position') extra = nameForm('add-position', t.id, 'New position name', '', 'Add position');
-  return html`<section class="card" data-team="${t.id}">
+  return html`<section class="card team-card" data-team="${t.id}">
     <h2>${t.name}</h2>
-    <div class="btn-row">
-      <button type="button" class="btn" data-action="add-position" data-id="${t.id}">Add position</button>
-      <button type="button" class="btn" data-action="rename-team" data-id="${t.id}">Rename team</button>
-      <button type="button" class="btn btn-danger" data-action="delete-team" data-id="${t.id}">Delete team</button>
+    <div class="btn-row btn-row-compact">
+      <button type="button" class="btn btn-sm" data-action="add-position" data-id="${t.id}">${iconSlot('plus')} Add position</button>
+      <button type="button" class="btn btn-sm" data-action="rename-team" data-id="${t.id}">Rename team</button>
+      <button type="button" class="btn btn-sm btn-danger btn-quiet" data-action="delete-team" data-id="${t.id}">Delete team</button>
     </div>
     ${extra}
-    ${t.positions.length ? html`<ul class="list">${t.positions.map((p) => positionRow(p, m))}</ul>`
+    ${t.positions.length ? html`<ul class="list position-list">${t.positions.map((p) => positionRow(p, m))}</ul>`
     : html`<p class="hint">No positions yet.</p>`}
   </section>`;
 }
 
 export function renderScreen(m) {
-  if (m.loading) return String(html`<p class="loading">Loading…</p>`);
+  if (m.loading) return String(skeleton('Loading…', 'cards', 2));
   return String(html`
     ${m.error ? html`<p class="form-error" role="alert">${m.error}</p>` : ''}
-    ${m.notice ? html`<p class="hint" role="status">${m.notice}</p>` : ''}
-    <form class="form card" data-form="add-team" novalidate>
-      <h2>Add team</h2>
+    ${toasts([[m.notice, 'ok']])}
+    <form class="form card form-card" data-form="add-team" novalidate>
+      <h2 class="card-title">Add team</h2>
       <div class="field">
         <label for="new-team">Team name</label>
         <input id="new-team" name="name" type="text" maxlength="60" required>
       </div>
-      <button type="submit" class="btn btn-primary">Add team</button>
+      <button type="submit" class="btn btn-primary">${iconSlot('plus')} Add team</button>
     </form>
-    ${m.teams.length ? m.teams.map((t) => teamCard(t, m)) : html`<p class="hint">No teams yet. Add your first team above.</p>`}
+    ${m.teams.length ? m.teams.map((t) => teamCard(t, m)) : emptyState('No teams yet. Add your first team above.', 'art-people')}
   `);
 }
 
@@ -188,8 +194,8 @@ export function createScreen({ api, root }) {
 
 export function render(state) { // eslint-disable-line no-unused-vars
   return String(html`
-    <h1 tabindex="-1">${title}</h1>
-    <div data-screen><p class="loading">Loading…</p></div>
+    ${pageHead(title, 'Teams, the positions in each, and who can do them.')}
+    <div data-screen>${skeleton('Loading…', 'cards', 2)}</div>
   `);
 }
 

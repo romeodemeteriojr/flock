@@ -2,6 +2,10 @@
 // All clicks go through one delegated listener on the screen. Anything risky first
 // shows a plain "Are you sure?" step; nothing is sent until the person says yes.
 import { html, raw } from '../lib/html.js';
+import { iconSlot } from '../lib/icons.js';
+import { avatar } from '../lib/avatar.js';
+import { toasts } from '../lib/toast.js';
+import { skeleton, emptyState, pageHead } from '../lib/ui.js';
 
 export const title = 'People';
 
@@ -50,7 +54,7 @@ function roleConfirmPanel(p, target) {
   const text = target === 'admin'
     ? html`Make ${p.name} a scheduler? ${p.name} will be able to change the whole schedule and see every volunteer's name and username.`
     : html`Make ${p.name} a volunteer? ${p.name} will only see their own schedule.`;
-  return html`<div class="card" role="alertdialog" aria-label="Confirm">
+  return html`<div class="confirm" role="alertdialog" aria-label="Confirm">
     <p>${text}</p>
     <div class="btn-row">
       <button type="button" class="btn btn-primary" data-action="role-yes" data-id="${p.id}">${yes}</button>
@@ -60,11 +64,11 @@ function roleConfirmPanel(p, target) {
 
 function passwordBox(secret) {
   return html`
-    <section class="card" id="secret-box" role="alert" aria-labelledby="secret-head">
-      <h2 id="secret-head">Password for ${secret.name}</h2>
+    <section class="card secret-box" id="secret-box" role="alert" aria-labelledby="secret-head">
+      <h2 id="secret-head">${iconSlot('lock', 'icon-sm')} Password for ${secret.name}</h2>
       <p class="lead">Give this to ${secret.name}: <strong data-secret>${secret.password}</strong>. It is only shown once, and ${secret.name} will choose their own password at first login.</p>
       <div class="btn-row">
-        <button type="button" class="btn btn-primary" data-action="copy">Copy</button>
+        <button type="button" class="btn btn-primary" data-action="copy">${iconSlot('copy')} Copy</button>
         <button type="button" class="btn" data-action="done">Done</button>
       </div>
     </section>`;
@@ -72,7 +76,7 @@ function passwordBox(secret) {
 
 function confirmPanel(p, kind) {
   if (kind === 'reset') {
-    return html`<div class="card" role="alertdialog" aria-label="Confirm">
+    return html`<div class="confirm" role="alertdialog" aria-label="Confirm">
       <p>Make a new temporary password for <strong>${p.name}</strong>? Their old password will stop working.</p>
       <div class="btn-row">
         <button type="button" class="btn btn-primary" data-action="reset-yes" data-id="${p.id}">Yes, reset it</button>
@@ -80,14 +84,14 @@ function confirmPanel(p, kind) {
       </div></div>`;
   }
   if (p.active) {
-    return html`<div class="card" role="alertdialog" aria-label="Confirm">
+    return html`<div class="confirm confirm-danger" role="alertdialog" aria-label="Confirm">
       <p>Deactivate <strong>${p.name}</strong>? They will not be able to log in and will not be offered for scheduling. Nothing is deleted: their history is kept, and you can reactivate them any time.</p>
       <div class="btn-row">
         <button type="button" class="btn btn-danger" data-action="deactivate-yes" data-id="${p.id}">Yes, deactivate</button>
         <button type="button" class="btn" data-action="cancel">No, go back</button>
       </div></div>`;
   }
-  return html`<div class="card" role="alertdialog" aria-label="Confirm">
+  return html`<div class="confirm" role="alertdialog" aria-label="Confirm">
     <p>Reactivate <strong>${p.name}</strong>? They will be able to log in again, and all their history is still there.</p>
     <div class="btn-row">
       <button type="button" class="btn btn-primary" data-action="reactivate-yes" data-id="${p.id}">Yes, reactivate</button>
@@ -96,7 +100,7 @@ function confirmPanel(p, kind) {
 }
 
 function editPanel(p) {
-  return html`<form class="form card" data-form="edit-name" data-id="${p.id}" novalidate>
+  return html`<form class="form confirm" data-form="edit-name" data-id="${p.id}" novalidate>
     <div class="field">
       <label for="edit-name-${p.id}">Name</label>
       <input id="edit-name-${p.id}" name="name" type="text" maxlength="80" required value="${p.name}">
@@ -109,13 +113,13 @@ function editPanel(p) {
 
 function checklistPanel(p, teams, checked) {
   const groups = teams.filter((t) => t.positions.length);
-  return html`<div class="card" data-checklist="${p.id}">
+  return html`<div class="confirm checklist" data-checklist="${p.id}">
     <h3>What can ${p.name} do?</h3>
     ${groups.length ? groups.map((t) => html`
-      <fieldset>
+      <fieldset class="fieldset">
         <legend>${t.name}</legend>
         ${t.positions.map((pos) => html`
-          <div class="field"><label><input type="checkbox" data-action="toggle-position" data-position="${pos.id}"
+          <div class="field"><label class="check"><input type="checkbox" data-action="toggle-position" data-position="${pos.id}"
             ${checked.has(pos.id) ? raw('checked') : ''}> ${pos.name}</label></div>`)}
       </fieldset>`) : html`<p class="hint">There are no positions yet. Add some on the Teams page.</p>`}
     <div class="btn-row">
@@ -134,17 +138,22 @@ function personRow(p, m) {
   }
   const roleButton = !p.active ? ''
     : p.id === m.me ? html`<span class="hint">That's you</span>`
-      : html`<button type="button" class="btn" data-action="role-ask" data-id="${p.id}">${nextRole(p) === 'admin' ? 'Make scheduler' : 'Make volunteer'}</button>`;
+      : html`<button type="button" class="btn btn-sm" data-action="role-ask" data-id="${p.id}">${nextRole(p) === 'admin' ? 'Make scheduler' : 'Make volunteer'}</button>`;
   return html`<li data-person="${p.id}">
-    <p><strong>${p.name}</strong> <span class="hint">(${p.username})</span>
-      <span class="chip chip-plain">${roleWord(p)}</span>
-      ${p.active ? '' : html`<span class="chip chip-bad">Deactivated</span>`}</p>
-    <div class="btn-row">
+    <div class="person${p.active ? '' : ' is-inactive'}">
+      ${avatar(p.name)}
+      <div class="person-text">
+        <p class="person-name"><strong>${p.name}</strong> <span class="hint">(${p.username})</span></p>
+        <p class="person-chips"><span class="chip chip-plain">${roleWord(p)}</span>
+        ${p.active ? '' : html`<span class="chip chip-bad">Deactivated</span>`}</p>
+      </div>
+    </div>
+    <div class="btn-row btn-row-compact">
       ${roleButton}
-      <button type="button" class="btn" data-action="edit" data-id="${p.id}">Edit name</button>
-      <button type="button" class="btn" data-action="positions" data-id="${p.id}">What can they do?</button>
-      <button type="button" class="btn" data-action="reset-ask" data-id="${p.id}">Reset password</button>
-      <button type="button" class="btn ${p.active ? 'btn-danger' : ''}" data-action="active-ask" data-id="${p.id}">${p.active ? 'Deactivate' : 'Reactivate'}</button>
+      <button type="button" class="btn btn-sm" data-action="edit" data-id="${p.id}">Edit name</button>
+      <button type="button" class="btn btn-sm" data-action="positions" data-id="${p.id}">What can they do?</button>
+      <button type="button" class="btn btn-sm" data-action="reset-ask" data-id="${p.id}">Reset password</button>
+      <button type="button" class="btn btn-sm ${p.active ? 'btn-danger' : ''}" data-action="active-ask" data-id="${p.id}">${p.active ? 'Deactivate' : 'Reactivate'}</button>
     </div>
     ${extra}
   </li>`;
@@ -152,21 +161,21 @@ function personRow(p, m) {
 
 export function renderList(m) {
   const shown = filterPeople(m.people, m.query);
-  if (!m.people.length) return String(html`<p class="hint">No people yet.</p>`);
-  if (!shown.length) return String(html`<p class="hint">Nobody matches that. Try fewer letters.</p>`);
-  return String(html`<ul class="list">${shown.map((p) => personRow(p, m))}</ul>`);
+  if (!m.people.length) return String(emptyState('No people yet.', 'art-people'));
+  if (!shown.length) return String(emptyState('Nobody matches that. Try fewer letters.', 'art-lost'));
+  return String(html`<ul class="list people-list">${shown.map((p) => personRow(p, m))}</ul>`);
 }
 
 export function renderScreen(m) {
-  if (m.loading) return String(html`<p class="loading">Loading…</p>`);
+  if (m.loading) return String(skeleton('Loading…', 'list', 4));
   const suggestion = suggestUsername(m.newName);
   return String(html`
     ${m.error ? html`<p class="form-error" role="alert">${m.error}</p>` : ''}
-    ${m.notice ? html`<p class="hint" role="status">${m.notice}</p>` : ''}
+    ${toasts([[m.notice, 'ok']])}
     ${m.secret ? passwordBox(m.secret) : ''}
     ${m.adding ? html`
-      <form class="form card" data-form="add-person" novalidate>
-        <h2>Add person</h2>
+      <form class="form card form-card" data-form="add-person" novalidate>
+        <h2 class="card-title">Add person</h2>
         <div class="field">
           <label for="new-name">Name</label>
           <input id="new-name" name="name" type="text" maxlength="80" required data-action="new-name" value="${m.newName}">
@@ -177,20 +186,23 @@ export function renderScreen(m) {
           <p class="hint" id="new-username-hint">Leave it empty and we will use: <strong data-suggest>${suggestion || 'a username made from the name'}</strong></p>
         </div>
         <div class="field">
-          <label><input type="checkbox" name="scheduler"> Make this person a scheduler</label>
+          <label class="check"><input type="checkbox" name="scheduler"> Make this person a scheduler</label>
         </div>
         <div class="btn-row">
           <button type="submit" class="btn btn-primary">Add person</button>
           <button type="button" class="btn" data-action="add-cancel">Cancel</button>
         </div>
-      </form>` : html`<div class="btn-row"><button type="button" class="btn btn-primary" data-action="add-open">Add person</button></div>`}
-    <div class="card">
+      </form>` : html`<div class="btn-row"><button type="button" class="btn btn-primary" data-action="add-open">${iconSlot('plus')} Add person</button></div>`}
+    <div class="card info-card">
+      ${iconSlot('info', 'info-icon')}
+      <div>
       <p>Scheduler: can manage people, teams, services and the schedule.</p>
       <p>Volunteer: can see their own schedule and mark days they cannot serve.</p>
+      </div>
     </div>
-    <div class="field">
+    <div class="field search-field">
       <label for="people-search">Search by name or username</label>
-      <input id="people-search" type="search" data-action="search" autocomplete="off" value="${m.query}">
+      <div class="input-icon">${iconSlot('search')}<input id="people-search" type="search" data-action="search" autocomplete="off" value="${m.query}"></div>
     </div>
     <div data-list>${raw(renderList(m))}</div>
   `);
@@ -379,8 +391,8 @@ export function createScreen({ api, root, ctx = {}, win = globalThis }) {
 
 export function render(state) { // eslint-disable-line no-unused-vars
   return String(html`
-    <h1 tabindex="-1">${title}</h1>
-    <div data-screen><p class="loading">Loading…</p></div>
+    ${pageHead(title, 'Everyone in the church who can log in.')}
+    <div data-screen>${skeleton('Loading…', 'list', 4)}</div>
   `);
 }
 

@@ -1,12 +1,12 @@
 import { html } from '../lib/html.js';
+import { emptyState } from '../lib/ui.js';
 
 export const title = 'Page not found';
 
 export function render(state) { // eslint-disable-line no-unused-vars
   return String(html`
-    <h1 tabindex="-1">We couldn't find that page</h1>
-    <p>The link may be old or mistyped.</p>
-    <p><a class="btn btn-primary" href="#/">Go to my schedule</a></p>
+    <div class="page-head"><h1 tabindex="-1">We couldn't find that page</h1></div>
+    ${emptyState('The link may be old or mistyped.', 'art-lost', html`<p><a class="btn btn-primary" href="#/">Go to my schedule</a></p>`)}
   `);
 }
 

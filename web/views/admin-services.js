@@ -3,6 +3,9 @@
 // Deleting always asks first, and says how many people are scheduled.
 import { html } from '../lib/html.js';
 import { formatDate, formatTime, todayString } from '../lib/dates.js';
+import { iconSlot } from '../lib/icons.js';
+import { toasts } from '../lib/toast.js';
+import { skeleton, emptyState, pageHead } from '../lib/ui.js';
 
 export const title = 'Services';
 export const DEFAULT_TIME = '09:00';
@@ -102,24 +105,26 @@ export function sortServices(list) {
 
 function createForm(teams, today, draft) {
   const d = draft ?? { date: today, time: DEFAULT_TIME, title: DEFAULT_TITLE, pos: {} };
-  return html`<form class="form card" data-form="create" novalidate>
-    <h2>Add a service</h2>
+  return html`<form class="form card form-card form-wide" data-form="create" novalidate>
+    <h2 class="card-title">Add a service</h2>
+    <div class="field-pair">
     <div class="field"><label for="svc-date">Date</label>
       <input id="svc-date" name="date" type="date" required value="${d.date}"></div>
     <div class="field"><label for="svc-time">Time</label>
       <input id="svc-time" name="time" type="time" required value="${d.time}"></div>
+    </div>
     <div class="field"><label for="svc-title">Title</label>
       <input id="svc-title" name="title" type="text" maxlength="100" value="${d.title}"></div>
     <h3>Positions needed</h3>
-    ${teams.length ? teams.map((t) => html`<fieldset class="field" data-team="${t.id}">
+    ${teams.length ? teams.map((t) => html`<fieldset class="field fieldset" data-team="${t.id}">
       <legend><strong>${t.name}</strong></legend>
-      ${t.positions.length ? t.positions.map((p) => html`<div class="field">
-        <label for="pos-${p.id}"><input id="pos-${p.id}" name="pos-${p.id}" type="checkbox"${d.pos[p.id]?.on ? html` checked` : ''}> ${p.name}</label>
-        <label for="count-${p.id}">How many ${p.name}</label>
+      ${t.positions.length ? t.positions.map((p) => html`<div class="field pos-pick">
+        <label class="check" for="pos-${p.id}"><input id="pos-${p.id}" name="pos-${p.id}" type="checkbox"${d.pos[p.id]?.on ? html` checked` : ''}> ${p.name}</label>
+        <label class="count-label" for="count-${p.id}">How many ${p.name}</label>
         <input id="count-${p.id}" name="count-${p.id}" type="number" min="1" max="${MAX_COUNT}" value="${d.pos[p.id]?.count ?? '1'}" inputmode="numeric">
       </div>`) : html`<p class="hint">No positions in this team yet.</p>`}
     </fieldset>`) : html`<p class="hint">No teams yet. Add teams and positions on the Teams page first.</p>`}
-    <button type="submit" class="btn btn-primary">Add service</button>
+    <button type="submit" class="btn btn-primary">${iconSlot('plus')} Add service</button>
   </form>`;
 }
 
@@ -128,7 +133,7 @@ function serviceCard(svc, m) {
   let extra = '';
   if (mine?.kind === 'edit') {
     const d = mine.draft ?? svc;
-    extra = html`<form class="form card" data-form="edit" data-id="${svc.id}" novalidate>
+    extra = html`<form class="form confirm" data-form="edit" data-id="${svc.id}" novalidate>
       <div class="field"><label for="edit-date-${svc.id}">Date</label>
         <input id="edit-date-${svc.id}" name="date" type="date" required value="${d.date}"></div>
       <div class="field"><label for="edit-time-${svc.id}">Time</label>
@@ -140,7 +145,7 @@ function serviceCard(svc, m) {
     </form>`;
   }
   if (mine?.kind === 'repeat') {
-    extra = html`<form class="form card" data-form="repeat" data-id="${svc.id}" novalidate>
+    extra = html`<form class="form confirm" data-form="repeat" data-id="${svc.id}" novalidate>
       <div class="field"><label for="weeks-${svc.id}">Repeat for how many more weeks?</label>
         <input id="weeks-${svc.id}" name="weeks" type="number" min="1" max="${MAX_WEEKS}" value="${mine.weeks ?? '4'}" inputmode="numeric">
         <p class="hint">Same day of the week, time, title and positions. People are not copied.</p></div>
@@ -150,7 +155,7 @@ function serviceCard(svc, m) {
   }
   if (mine?.kind === 'delete') {
     const n = mine.count;
-    extra = html`<div class="card" role="alertdialog" aria-label="Confirm">
+    extra = html`<div class="confirm confirm-danger" role="alertdialog" aria-label="Confirm">
       <p>${n > 0 ? html`<strong>${mine.text || peopleWords(n)}.</strong> They will be taken off. ` : ''}Delete ${svc.title} on ${formatDate(svc.date)}? This cannot be undone.</p>
       <div class="btn-row">
         <button type="button" class="btn btn-danger" data-action="delete-yes" data-id="${svc.id}">Yes, delete it</button>
@@ -158,27 +163,32 @@ function serviceCard(svc, m) {
       </div></div>`;
   }
   const n = scheduledCount(svc);
-  return html`<li data-service="${svc.id}">
-    <p><strong>${formatDate(svc.date)} at ${formatTime(svc.time)}</strong>: ${svc.title}</p>
-    <p class="hint">${svc.slots?.length ? `${positionsSummary(svc, m.teams)}.` : 'No positions yet.'}${n ? html` ${peopleWords(n)}.` : ''}</p>
-    <div class="btn-row">
-      <button type="button" class="btn" data-action="repeat" data-id="${svc.id}">Repeat for more weeks</button>
-      <button type="button" class="btn" data-action="edit" data-id="${svc.id}">Edit</button>
-      <button type="button" class="btn btn-danger" data-action="delete" data-id="${svc.id}">Delete</button>
+  return html`<li class="service-row" data-service="${svc.id}">
+    <div class="service-main">
+      <span class="service-icon">${iconSlot('calendar')}</span>
+      <div>
+        <p class="service-title"><strong class="num">${formatDate(svc.date)} at ${formatTime(svc.time)}</strong>: ${svc.title}</p>
+        <p class="hint">${svc.slots?.length ? `${positionsSummary(svc, m.teams)}.` : 'No positions yet.'}${n ? html` ${peopleWords(n)}.` : ''}</p>
+      </div>
+    </div>
+    <div class="btn-row btn-row-compact">
+      <button type="button" class="btn btn-sm" data-action="repeat" data-id="${svc.id}">Repeat for more weeks</button>
+      <button type="button" class="btn btn-sm" data-action="edit" data-id="${svc.id}">${iconSlot('edit')} Edit</button>
+      <button type="button" class="btn btn-sm btn-danger btn-quiet" data-action="delete" data-id="${svc.id}">Delete</button>
     </div>
     ${extra}
   </li>`;
 }
 
 export function renderScreen(m) {
-  if (m.loading) return String(html`<p class="loading">Loading…</p>`);
+  if (m.loading) return String(skeleton('Loading…', 'cards', 2));
   return String(html`
     ${m.error ? html`<p class="form-error" role="alert">${m.error}</p>` : ''}
-    ${m.notice ? html`<p class="hint" role="status">${m.notice}</p>` : ''}
+    ${toasts([[m.notice, 'ok']])}
     ${createForm(m.teams, m.today, m.draft)}
-    <h2>Upcoming services</h2>
-    ${m.services.length ? html`<ul class="list" data-services>${m.services.map((s) => serviceCard(s, m))}</ul>`
-    : html`<p class="empty">No upcoming services yet. Add one above.</p>`}
+    <h2 class="section-title">Upcoming services</h2>
+    ${m.services.length ? html`<ul class="list card-list" data-services>${m.services.map((s) => serviceCard(s, m))}</ul>`
+    : emptyState('No upcoming services yet. Add one above.', 'art-calendar')}
   `);
 }
 
@@ -307,8 +317,8 @@ export function createScreen({ api, root, today = todayString() }) {
 
 export function render(state) { // eslint-disable-line no-unused-vars
   return String(html`
-    <h1 tabindex="-1">${title}</h1>
-    <div data-screen><p class="loading">Loading…</p></div>
+    ${pageHead(title, 'Service dates and the positions each one needs.')}
+    <div data-screen>${skeleton('Loading…', 'cards', 2)}</div>
   `);
 }
 

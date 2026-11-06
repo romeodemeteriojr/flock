@@ -1,0 +1,100 @@
+// Bottom sheet (phones) / side panel (wide screens) behaviour for a screen's
+// slot panel. The markup comes from slotpanel.js; this adds the keyboard and
+// focus rules:
+//  - when it opens, focus moves to its heading;
+//  - Escape closes it (so does tapping the backdrop: data-action="slot-close");
+//  - Tab and Shift+Tab stay inside it while it is open (it is aria-modal);
+//  - when it closes, focus goes back to the slot button that opened it.
+// Works with a real DOM, and degrades quietly with the test fakes.
+
+const PANEL = '[data-slot-panel]';
+const FOCUSABLE = 'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+const canFocus = (el) => !!el && typeof el.focus === 'function';
+
+function visible(el) {
+  if (!el) return false;
+  if (typeof el.getClientRects !== 'function') return true;
+  return el.getClientRects().length > 0;
+}
+
+// The first visible match (the schedule has the same button in the grid and in the cards).
+function pick(root, selector) {
+  if (typeof root?.querySelectorAll === 'function') {
+    const all = [...root.querySelectorAll(selector)];
+    return all.find(visible) ?? all[0] ?? null;
+  }
+  return typeof root?.querySelector === 'function' ? root.querySelector(selector) : null;
+}
+
+/**
+ * root: the screen element. isOpen(): is the panel showing. close(): close it.
+ * Call opened(id) when a slot button opens the panel, before() just before
+ * every paint and update() just after it.
+ */
+export function createSheet({ root, isOpen, close }) {
+  let openerId = null;
+  let wasOpen = false;
+  let keep = null; // the control inside the panel that had focus before a repaint
+
+  // Call just before root.innerHTML is replaced.
+  function before() {
+    keep = null;
+    if (!wasOpen) return;
+    const panel = pick(root, PANEL);
+    const active = panel?.ownerDocument?.activeElement;
+    if (!active || typeof panel.contains !== 'function' || !panel.contains(active)) return;
+    const action = active.getAttribute?.('data-action');
+    const id = active.getAttribute?.('data-id');
+    if (action) keep = `${PANEL} [data-action="${action}"]${id ? `[data-id="${id}"]` : ''}`;
+    else keep = `${PANEL} h2`;
+  }
+
+  function update() {
+    const open = !!isOpen();
+    if (open && !wasOpen) {
+      const h = pick(root, `${PANEL} h2`);
+      if (canFocus(h)) h.focus();
+    } else if (open && keep) {
+      // A repaint replaced the panel: put focus back on the same control (or the heading).
+      const el = pick(root, keep) ?? pick(root, `${PANEL} h2`);
+      if (canFocus(el)) el.focus();
+    } else if (!open && wasOpen && openerId !== null) {
+      const back = pick(root, `[data-action="slot-open"][data-id="${openerId}"]`);
+      if (canFocus(back)) back.focus();
+      openerId = null;
+    }
+    wasOpen = open;
+    keep = null;
+  }
+
+  function trapTab(e) {
+    const panel = pick(root, PANEL);
+    if (!panel || typeof panel.querySelectorAll !== 'function') return;
+    const items = [...panel.querySelectorAll(FOCUSABLE)].filter(visible);
+    if (!items.length) return;
+    const first = items[0];
+    const last = items[items.length - 1];
+    const active = panel.ownerDocument?.activeElement;
+    const inside = typeof panel.contains === 'function' && panel.contains(active);
+    if (e.shiftKey && (active === first || !inside)) { e.preventDefault?.(); last.focus(); }
+    else if (!e.shiftKey && (active === last || !inside)) { e.preventDefault?.(); first.focus(); }
+  }
+
+  root.addEventListener('keydown', (e) => {
+    if (!isOpen()) return;
+    if (e.key === 'Escape' || e.key === 'Esc') {
+      e.preventDefault?.();
+      close();
+    } else if (e.key === 'Tab') {
+      trapTab(e);
+    }
+  });
+
+  return {
+    opened(id) { openerId = id; },
+    before,
+    update,
+    get openerId() { return openerId; },
+  };
+}

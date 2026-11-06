@@ -1,4 +1,5 @@
 import { html } from '../lib/html.js';
+import { iconSlot } from '../lib/icons.js';
 
 export const title = 'Your password';
 export const MIN_LENGTH = 8;
@@ -17,26 +18,31 @@ export function render(state, opts = {}) {
   const must = !!state?.user?.mustChangePassword;
   const error = opts.error ?? '';
   return String(html`
-    <h1 tabindex="-1">${must ? 'Please choose your own password' : 'Change your password'}</h1>
-    ${must ? html`<p class="lead">You logged in with a password someone gave you. Please choose your own password before you go on.</p>` : ''}
-    <form class="form" data-form="password" novalidate>
-      ${error ? html`<p class="form-error" role="alert">${error}</p>` : ''}
-      <div class="field">
-        <label for="pw-old">${must ? 'The password you were given' : 'Current password'}</label>
-        <input id="pw-old" name="oldPassword" type="password" autocomplete="current-password" required>
+    <section class="auth">
+      <div class="auth-card">
+        <span class="auth-mark">${iconSlot('lock', 'icon-lg')}</span>
+        <h1 tabindex="-1">${must ? 'Please choose your own password' : 'Change your password'}</h1>
+        ${must ? html`<p class="lead">You logged in with a password someone gave you. Please choose your own password before you go on.</p>` : ''}
+        <form class="form" data-form="password" novalidate>
+          ${error ? html`<p class="form-error" role="alert">${error}</p>` : ''}
+          <div class="field">
+            <label for="pw-old">${must ? 'The password you were given' : 'Current password'}</label>
+            <input id="pw-old" name="oldPassword" type="password" autocomplete="current-password" required>
+          </div>
+          <div class="field">
+            <label for="pw-new">New password</label>
+            <input id="pw-new" name="newPassword" type="password" autocomplete="new-password"
+              minlength="${MIN_LENGTH}" required aria-describedby="pw-rule">
+            <p class="hint" id="pw-rule">At least ${MIN_LENGTH} characters. A few everyday words together work well.</p>
+          </div>
+          <div class="field">
+            <label for="pw-confirm">Type the new password again</label>
+            <input id="pw-confirm" name="confirm" type="password" autocomplete="new-password" required>
+          </div>
+          <button type="submit" class="btn btn-primary btn-block btn-lg">Save my new password</button>
+        </form>
       </div>
-      <div class="field">
-        <label for="pw-new">New password</label>
-        <input id="pw-new" name="newPassword" type="password" autocomplete="new-password"
-          minlength="${MIN_LENGTH}" required aria-describedby="pw-rule">
-        <p class="hint" id="pw-rule">At least ${MIN_LENGTH} characters. A few everyday words together work well.</p>
-      </div>
-      <div class="field">
-        <label for="pw-confirm">Type the new password again</label>
-        <input id="pw-confirm" name="confirm" type="password" autocomplete="new-password" required>
-      </div>
-      <button type="submit" class="btn btn-primary btn-block">Save my new password</button>
-    </form>
+    </section>
   `);
 }
 

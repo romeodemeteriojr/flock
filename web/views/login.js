@@ -1,4 +1,5 @@
 import { html } from '../lib/html.js';
+import { iconSlot } from '../lib/icons.js';
 
 export const title = 'Log in';
 
@@ -6,21 +7,27 @@ export const title = 'Log in';
 export function render(state, opts = {}) {
   const error = opts.error ?? '';
   return String(html`
-    <h1 tabindex="-1">Log in to Flock</h1>
-    <form class="form" data-form="login" novalidate>
-      ${error ? html`<p class="form-error" role="alert" id="login-error">${error}</p>` : ''}
-      <div class="field">
-        <label for="login-username">Username</label>
-        <input id="login-username" name="username" type="text" autocomplete="username"
-          autocapitalize="none" spellcheck="false" required value="${opts.username ?? ''}">
+    <section class="auth">
+      <div class="auth-card">
+        <span class="auth-mark">${iconSlot('sparkle', 'icon-lg')}</span>
+        <h1 tabindex="-1">Log in to Flock</h1>
+        <p class="page-lead">Your church serving schedule.</p>
+        <form class="form" data-form="login" novalidate>
+          ${error ? html`<p class="form-error" role="alert" id="login-error">${error}</p>` : ''}
+          <div class="field">
+            <label for="login-username">Username</label>
+            <input id="login-username" name="username" type="text" autocomplete="username"
+              autocapitalize="none" spellcheck="false" required value="${opts.username ?? ''}">
+          </div>
+          <div class="field">
+            <label for="login-password">Password</label>
+            <input id="login-password" name="password" type="password" autocomplete="current-password" required>
+          </div>
+          <button type="submit" class="btn btn-primary btn-block btn-lg">Log in</button>
+        </form>
       </div>
-      <div class="field">
-        <label for="login-password">Password</label>
-        <input id="login-password" name="password" type="password" autocomplete="current-password" required>
-      </div>
-      <button type="submit" class="btn btn-primary btn-block">Log in</button>
-    </form>
-    <p class="hint">Forgot your password? Ask the scheduler to reset it for you.</p>
+      <p class="hint auth-foot">${iconSlot('lock', 'icon-sm')} Forgot your password? Ask the scheduler to reset it for you.</p>
+    </section>
   `);
 }
 

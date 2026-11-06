@@ -3,8 +3,17 @@
 import { createApi } from './api.js';
 import { resolve } from './routes.js';
 import * as nav from './views/nav.js';
+import { TOAST_REGION, createToaster } from './lib/toast.js';
+import { watchIcons } from './lib/icons.js';
+import { skeleton } from './lib/ui.js';
 
 const GENERIC = 'Something went wrong. Please reload the page and try again.';
+
+// The page frame: sticky top bar (with the menu), the toast region, the page.
+export const SHELL = `
+    <header class="top" id="top"></header>
+    ${TOAST_REGION}
+    <main class="main" id="main" tabindex="-1"></main>`;
 
 export function createApp({ root, win = globalThis.window, api = createApi() }) {
   const doc = root.ownerDocument;
@@ -12,31 +21,23 @@ export function createApp({ root, win = globalThis.window, api = createApi() }) 
   let pending = null; // message to keep through the next page change
   let renderCount = 0;
 
-  root.innerHTML = `
-    <header class="top" id="top"></header>
-    <div class="message" id="message" role="alert" hidden></div>
-    <main class="main" id="main" tabindex="-1"></main>`;
+  root.innerHTML = SHELL;
   const top = root.querySelector('#top');
-  const box = root.querySelector('#message');
+  const toaster = createToaster(root.querySelector('#message'), { win });
   const main = root.querySelector('#main');
+  watchIcons(root, win);
 
-  function showBox(text, kind) {
-    box.textContent = text;
-    box.className = `message message-${kind}`;
-    box.hidden = false;
-  }
-  function hideBox() {
-    box.hidden = true;
-    box.textContent = '';
-  }
+  // A message shown now stays through the next page change (pending.shown);
+  // one saved for later (pending without shown) appears on the next page.
   function showError(message) {
     const text = message || GENERIC;
-    pending = { text, kind: 'error' };
-    showBox(text, 'error');
+    pending = { text, kind: 'error', shown: true };
+    toaster.show(text, 'error');
   }
   function showMessage(message) {
-    pending = { text: message, kind: 'ok' };
-    showBox(message, 'ok');
+    if (!message) return;
+    pending = { text: message, kind: 'ok', shown: true };
+    toaster.show(message, 'ok');
   }
 
   function navigate(hash) {
@@ -71,7 +72,10 @@ export function createApp({ root, win = globalThis.window, api = createApi() }) 
         }
       }
       const view = r.route.view;
-      if (pending) { showBox(pending.text, pending.kind); pending = null; } else hideBox();
+      if (pending) {
+        if (!pending.shown) toaster.show(pending.text, pending.kind);
+        pending = null;
+      } else toaster.clear();
       top.innerHTML = nav.render(state, hash);
       nav.mount(top, ctx);
       main.innerHTML = view.render(state);
@@ -93,7 +97,7 @@ export function createApp({ root, win = globalThis.window, api = createApi() }) 
     win.addEventListener('hashchange', render);
     win.addEventListener('unhandledrejection', (e) => { e.preventDefault(); handleError(e.reason); });
     win.addEventListener('error', (e) => { e.preventDefault(); handleError(e.error); });
-    main.innerHTML = '<p class="loading">Loading…</p>';
+    main.innerHTML = String(skeleton('Loading…', 'cards', 2));
     try {
       const r = await api.get('/api/me');
       state.user = r?.person ?? null;

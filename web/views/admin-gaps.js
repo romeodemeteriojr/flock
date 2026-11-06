@@ -3,7 +3,12 @@
 // panel: drafted messages to copy. Flock never sends anything itself.
 import { html } from '../lib/html.js';
 import { formatDate, formatTime, todayString } from '../lib/dates.js';
-import { createSlotPanel, focusPanel, copyText } from '../lib/slotpanel.js';
+import { createSlotPanel, copyText } from '../lib/slotpanel.js';
+import { createSheet } from '../lib/sheet.js';
+import { iconSlot } from '../lib/icons.js';
+import { avatar } from '../lib/avatar.js';
+import { toasts } from '../lib/toast.js';
+import { skeleton, emptyState, pageHead } from '../lib/ui.js';
 
 export const title = 'Gaps';
 export const NEVER_SENDS = 'Flock never sends messages. Copy these into your usual messages app.';
@@ -57,14 +62,21 @@ export function allRemindersText(reminders) {
 // ---------- rendering ----------
 
 function summary(sum) {
-  return html`<ul class="list" data-summary>${GAP_ORDER.map((t) => html`<li><strong data-count="${t}">${Number(sum?.[t] ?? 0)}</strong> ${GAP_LABELS[t]}</li>`)}</ul>`;
+  return html`<ul class="stats" data-summary>${GAP_ORDER.map((t) => {
+    const n = Number(sum?.[t] ?? 0);
+    return html`<li class="stat${n ? ' stat-' + GAP_TONE[t] : ''}"><strong class="stat-num num" data-count="${t}">${n}</strong> ${GAP_LABELS[t]}</li>`;
+  })}</ul>`;
 }
+
+// Colour family per kind (the label words always go with it).
+const GAP_TONE = { open: 'bad', declined: 'bad', unanswered: 'wait', blocked: 'wait', inactive: 'wait' };
 
 function gapItem(it) {
   return html`<li>
-    <button type="button" class="slot-btn" data-action="slot-open" data-id="${it.slotId}">
-      <span class="slot-who"><strong>${it.positionName}</strong> (${it.teamName}), ${formatDate(it.date)} at ${formatTime(it.time)}</span>
+    <button type="button" class="slot-btn gap-btn" data-action="slot-open" data-id="${it.slotId}">
+      <span class="slot-who"><strong>${it.positionName}</strong> (${it.teamName}), <span class="num">${formatDate(it.date)} at ${formatTime(it.time)}</span></span>
       <span class="hint">${it.serviceTitle}${it.personName && it.type !== 'open' ? html`. ${it.personName}` : ''}</span>
+      ${iconSlot('chevron', 'gap-chevron')}
     </button>
   </li>`;
 }
@@ -72,23 +84,23 @@ function gapItem(it) {
 function reminders(m) {
   const r = m.reminders;
   let body = '';
-  if (r.loading) body = html`<p class="loading">Loading…</p>`;
+  if (r.loading) body = skeleton('Loading…', 'list', 2);
   else if (r.list) {
     body = r.list.length
-      ? html`<div class="btn-row"><button type="button" class="btn btn-primary" data-action="copy-all">Copy all</button></div>
-        <ul class="list" data-reminders>${r.list.map((x) => html`<li data-reminder="${x.personId}">
-          <p><strong>${x.name}</strong></p>
-          <p>${x.message}</p>
-          <div class="btn-row"><button type="button" class="btn" data-action="copy-one" data-id="${x.personId}">Copy</button></div>
+      ? html`<div class="btn-row"><button type="button" class="btn btn-primary" data-action="copy-all">${iconSlot('copy')} Copy all</button></div>
+        <ul class="list reminder-list" data-reminders>${r.list.map((x) => html`<li class="reminder" data-reminder="${x.personId}">
+          <p class="reminder-who">${avatar(x.name, 'sm')}<strong>${x.name}</strong></p>
+          <p class="reminder-text">${x.message}</p>
+          <div class="btn-row"><button type="button" class="btn btn-sm" data-action="copy-one" data-id="${x.personId}">${iconSlot('copy')} Copy</button></div>
         </li>`)}</ul>`
-      : html`<p class="empty">Nobody is scheduled that week.</p>`;
+      : emptyState('Nobody is scheduled that week.', 'art-calendar');
   }
-  return html`<section class="card" data-reminders-panel>
-    <h2>Reminders</h2>
-    <p class="notice"><strong>${NEVER_SENDS}</strong></p>
+  return html`<section class="card reminders-card" data-reminders-panel>
+    <h2 class="card-title">${iconSlot('bell', 'icon-sm')} Reminders</h2>
+    <p class="notice notice-info">${iconSlot('mail', 'notice-icon')}<strong>${NEVER_SENDS}</strong></p>
     ${r.error ? html`<p class="form-error" role="alert">${r.error}</p>` : ''}
-    ${r.notice ? html`<p class="hint" role="status">${r.notice}</p>` : ''}
-    <form class="form" data-form="reminders" novalidate>
+    ${toasts([[r.notice, 'ok']])}
+    <form class="form form-inline" data-form="reminders" novalidate>
       <div class="field"><label for="week-of">Week starting</label>
         <input id="week-of" name="weekOf" type="date" required value="${r.weekOf}"></div>
       <button type="submit" class="btn btn-primary">Show messages</button>
@@ -98,19 +110,19 @@ function reminders(m) {
 }
 
 export function renderScreen(m, panelHtml = '') {
-  if (m.loading) return String(html`<p class="loading">Loading…</p>`);
+  if (m.loading) return String(skeleton('Loading…', 'list', 4));
   const groups = groupGaps(m.items);
   return String(html`
     ${m.error ? html`<p class="form-error" role="alert">${m.error}</p>` : ''}
-    ${m.notice ? html`<p class="hint" role="status">${m.notice}</p>` : ''}
+    ${toasts([[m.notice, 'ok']])}
     ${panelHtml}
-    <h2>Next 4 weeks</h2>
+    <h2 class="section-title">Next 4 weeks</h2>
     ${summary(m.summary)}
-    ${groups.length ? groups.map((g) => html`<section data-gap-group="${g.type}">
-      <h3>${g.label} (${g.items.length})</h3>
+    ${groups.length ? groups.map((g) => html`<section class="gap-group" data-gap-group="${g.type}">
+      <h3 class="gap-title"><span class="chip chip-${GAP_TONE[g.type]}">${g.label} (${g.items.length})</span></h3>
       <p class="hint">${GAP_HINTS[g.type]}</p>
-      <ul class="list">${g.items.map(gapItem)}</ul>
-    </section>`) : html`<p class="empty">No gaps. Every position has someone.</p>`}
+      <ul class="list gap-list">${g.items.map(gapItem)}</ul>
+    </section>`) : emptyState('No gaps. Every position has someone.', 'art-done')}
     ${reminders(m)}
   `);
 }
@@ -122,13 +134,11 @@ export function createScreen({ api, root, today = todayString(), win = globalThi
     loading: true, error: '', notice: '', summary: {}, items: [],
     reminders: { weekOf: today, list: null, loading: false, error: '', notice: '' },
   };
-  let panelWasOpen = false;
   let reminderSeq = 0;
   const paint = () => {
+    sheet.before();
     root.innerHTML = renderScreen(m, panel.render());
-    const open = !!panel.state;
-    if (open && !panelWasOpen) focusPanel(root);
-    panelWasOpen = open;
+    sheet.update();
   };
   const reload = async () => {
     const r = await api.get('/api/admin/gaps');
@@ -144,6 +154,8 @@ export function createScreen({ api, root, today = todayString(), win = globalThi
       try { await reload(); } catch (err) { m.error = String(err?.message || 'Could not reload the gaps.'); }
     },
   });
+
+  const sheet = createSheet({ root, isOpen: () => !!panel.state, close: () => panel.close() });
 
   async function loadReminders(weekOf) {
     const r = m.reminders;
@@ -182,6 +194,8 @@ export function createScreen({ api, root, today = todayString(), win = globalThi
       const it = m.items.find((x) => x.slotId === id);
       if (!it) return undefined;
       m.notice = '';
+      m.reminders.notice = '';
+      sheet.opened(id);
       return panel.open(gapSlot(it));
     }
     if (action === 'copy-all') return copy(allRemindersText(m.reminders.list));
@@ -209,8 +223,8 @@ export function createScreen({ api, root, today = todayString(), win = globalThi
 
 export function render(state) { // eslint-disable-line no-unused-vars
   return String(html`
-    <h1 tabindex="-1">${title}</h1>
-    <div data-screen><p class="loading">Loading…</p></div>
+    ${pageHead(title, 'What still needs someone, and reminders to send.')}
+    <div data-screen>${skeleton('Loading…', 'list', 4)}</div>
   `);
 }
 

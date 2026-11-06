@@ -2,6 +2,9 @@
 import { html } from '../lib/html.js';
 import { formatDate, formatRange, isDate, todayString } from '../lib/dates.js';
 import { makeHost, isAlive } from '../lib/host.js';
+import { iconSlot } from '../lib/icons.js';
+import { toasts } from '../lib/toast.js';
+import { skeleton, emptyState, pageHead } from '../lib/ui.js';
 
 export const title = "Days I can't serve";
 
@@ -29,40 +32,45 @@ export function render(state, view = { loading: true }) {
     list = html`<p class="form-error" role="alert">${view.error}</p>
       <p><button type="button" class="btn btn-primary" data-action="retry">Try again</button></p>`;
   } else if (view.loading || !view.list) {
-    list = html`<p class="loading">Loading…</p>`;
+    list = skeleton('Loading…', 'list', 2);
   } else if (!view.list.length) {
-    list = html`<p class="empty">You have no days off saved. Add one above if there is a time you can't serve.</p>`;
+    list = emptyState("You have no days off saved. Add one above if there is a time you can't serve.", 'art-done');
   } else {
-    list = html`<ul class="cards">${view.list.map((b) => html`<li class="card" data-blockout="${b.id}">
-      <h3>${formatRange(b.startDate, b.endDate)}</h3>
-      ${b.reason ? html`<p>${b.reason}</p>` : ''}
-      <button type="button" class="btn btn-danger" data-action="remove" data-id="${b.id}" ${busy}>Remove</button>
+    list = html`<ul class="cards">${view.list.map((b) => html`<li class="card off-card" data-blockout="${b.id}">
+      <span class="off-icon">${iconSlot('calendar')}</span>
+      <div class="off-text">
+        <h3 class="num">${formatRange(b.startDate, b.endDate)}</h3>
+        ${b.reason ? html`<p class="hint">${b.reason}</p>` : ''}
+      </div>
+      <button type="button" class="btn btn-danger btn-quiet" data-action="remove" data-id="${b.id}" ${busy}>Remove</button>
     </li>`)}</ul>`;
   }
   const conflicts = view.conflicts ?? [];
   return String(html`
-    <h1 tabindex="-1">${title}</h1>
-    ${view.message ? html`<p class="message message-ok" role="status" data-note>${view.message}</p>` : ''}
-    ${view.problem ? html`<p class="message message-error" role="alert" data-problem>${view.problem}</p>` : ''}
-    ${conflicts.length ? html`<div class="notice" role="alert" data-conflicts>
-      <ul>${conflicts.map((c) => html`<li>${conflictLine(c)}</li>`)}</ul>
+    ${pageHead(title, 'Tell your scheduler when you are away, so nobody asks you on those days.')}
+    ${toasts([[view.message, 'ok', 'data-note'], [view.problem, 'error', 'data-problem']])}
+    ${conflicts.length ? html`<div class="notice notice-warn" role="alert" data-conflicts>
+      ${iconSlot('warning', 'notice-icon')}<div class="notice-body"><ul>${conflicts.map((c) => html`<li>${conflictLine(c)}</li>`)}</ul></div>
     </div>` : ''}
-    <form class="form" data-form="blockout" novalidate>
-      <div class="field">
-        <label for="bo-from">From</label>
-        <input id="bo-from" name="from" type="date" required value="${f.from}">
-      </div>
-      <div class="field">
-        <label for="bo-to">To</label>
-        <input id="bo-to" name="to" type="date" required value="${f.to}">
+    <form class="form card form-card" data-form="blockout" novalidate>
+      <h2 class="card-title">Add days off</h2>
+      <div class="field-pair">
+        <div class="field">
+          <label for="bo-from">From</label>
+          <input id="bo-from" name="from" type="date" required value="${f.from}">
+        </div>
+        <div class="field">
+          <label for="bo-to">To</label>
+          <input id="bo-to" name="to" type="date" required value="${f.to}">
+        </div>
       </div>
       <div class="field">
         <label for="bo-reason">Reason (optional)</label>
         <input id="bo-reason" name="reason" type="text" maxlength="200" value="${f.reason}">
       </div>
-      <button type="submit" class="btn btn-primary btn-block" ${busy}>Add</button>
+      <button type="submit" class="btn btn-primary btn-block" ${busy}>${iconSlot('plus')} Add</button>
     </form>
-    <h2>Days I have off</h2>
+    <h2 class="section-title">Days I have off</h2>
     ${list}
   `);
 }

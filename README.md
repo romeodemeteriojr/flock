@@ -113,6 +113,18 @@ printed. Every name in the demo is fake. Flock refuses to put demo data into
 a database that already has people in it. When you are done, stop Flock and
 delete `data/demo.db`.
 
+## Look and feel
+
+Flock follows your phone or computer's light or dark setting by itself (dark
+mode), and turns off animations if you have asked your device for less
+motion. On phones the main pages sit in a tab bar at the bottom; on wider
+screens they are tabs along the top. Printing the Schedule page gives a plain
+black-and-white grid.
+
+To see every screen and part of the design without logging in, open
+`/gallery.html` (for example `http://localhost:8080/gallery.html`). It uses
+made-up names only, saves nothing and is not linked from the app.
+
 ## Backups: please make one every week
 
 Everything Flock knows is in its one database file. If that computer's disk

@@ -9,6 +9,9 @@
 // `changed(notice)` runs after an assign or remove worked, so the screen can reload.
 import { html } from './html.js';
 import { formatDate, formatTime } from './dates.js';
+import { iconSlot } from './icons.js';
+import { avatar } from './avatar.js';
+import { skeleton, emptyState } from './ui.js';
 
 // ---------- status chip ----------
 
@@ -178,50 +181,65 @@ export function createSlotPanel({ api, paint, changed = () => {} }) {
     const hasPerson = slot.personId !== null && slot.personId !== undefined;
     let conflict = '';
     if (p.conflict) {
-      conflict = html`<div class="notice" role="alertdialog" aria-label="Please check" data-conflict="${p.conflict.code}">
-        <p>${p.conflict.message}</p>
+      conflict = html`<div class="notice notice-warn" role="alertdialog" aria-label="Please check" data-conflict="${p.conflict.code}">
+        ${iconSlot('warning', 'notice-icon')}<div class="notice-body"><p>${p.conflict.message}</p>
         <div class="btn-row">
           ${p.conflict.force ? html`<button type="button" class="btn btn-primary" data-action="slot-force">Yes, assign anyway</button>
           <button type="button" class="btn" data-action="slot-conflict-back">No, go back</button>`
     : html`<button type="button" class="btn" data-action="slot-conflict-back">OK</button>`}
-        </div></div>`;
+        </div></div></div>`;
     }
     let removeBox = '';
     if (hasPerson) {
       removeBox = p.removeAsk
-        ? html`<div class="card" role="alertdialog" aria-label="Confirm">
+        ? html`<div class="confirm confirm-danger" role="alertdialog" aria-label="Confirm">
             <p>Take ${slot.personName} off ${slotWhere(slot)}?</p>
             <div class="btn-row">
               <button type="button" class="btn btn-danger" data-action="slot-remove-yes">Yes, remove ${slot.personName}</button>
               <button type="button" class="btn" data-action="slot-remove-no">No, go back</button>
             </div></div>`
-        : html`<div class="btn-row"><button type="button" class="btn btn-danger" data-action="slot-remove-ask">Remove person</button></div>`;
+        : html`<div class="btn-row"><button type="button" class="btn btn-danger btn-quiet" data-action="slot-remove-ask">Remove person</button></div>`;
     }
     let list;
-    if (p.loading) list = html`<p class="loading">Looking for people…</p>`;
+    if (p.loading) list = html`<p class="hint">Looking for people…</p>${skeleton('Loading…', 'list', 3)}`;
     else if (!p.candidates.length) {
-      list = html`<p class="empty">${p.showAll ? 'Nobody is free for this.' : 'Nobody trained for this is free. Try showing people not trained for this.'}</p>`;
+      list = emptyState(p.showAll ? 'Nobody is free for this.' : 'Nobody trained for this is free. Try showing people not trained for this.', 'art-people');
     } else {
-      list = html`<ol class="list" data-candidates>${p.candidates.map((c) => html`<li data-candidate="${c.personId}">
-        <p><strong>${c.name}</strong>${c.qualified === false ? html` <span class="chip chip-plain">Not trained</span>` : ''}</p>
-        <ul class="hint">${(c.reasons ?? []).map((r) => html`<li>${r}</li>`)}</ul>
-        <div class="btn-row"><button type="button" class="btn btn-primary" data-action="slot-assign" data-id="${c.personId}">Assign</button></div>
+      list = html`<ol class="list candidates" data-candidates>${p.candidates.map((c) => html`<li class="candidate" data-candidate="${c.personId}">
+        <div class="candidate-main">${avatar(c.name)}<div class="candidate-text">
+        <p class="candidate-name"><strong>${c.name}</strong>${c.qualified === false ? html` <span class="chip chip-plain">Not trained</span>` : ''}</p>
+        <ul class="hint reasons">${(c.reasons ?? []).map((r) => html`<li>${r}</li>`)}</ul></div></div>
+        <div class="btn-row candidate-actions"><button type="button" class="btn btn-primary" data-action="slot-assign" data-id="${c.personId}">Assign</button></div>
       </li>`)}</ol>`;
     }
-    return html`<section class="card slot-panel" data-slot-panel="${slot.id}" aria-label="Fill this position">
-      <h2 tabindex="-1">${slot.positionName}</h2>
-      <p>${slot.title ? html`${slot.title}, ` : ''}${formatDate(slot.date)}${slot.time ? html` at ${formatTime(slot.time)}` : ''}${slot.teamName ? html` (${slot.teamName})` : ''}</p>
-      <p>${hasPerson ? html`<strong>${slot.personName}</strong> ` : html`<strong>Nobody yet</strong> `}${slot.statusLabel ? html`<span class="chip chip-plain">${slot.statusLabel}</span>` : statusChip(status)}</p>
+    const seg = (pressed, label) => (pressed
+      ? html`<button type="button" class="segment" aria-pressed="true">${label}</button>`
+      : html`<button type="button" class="segment" data-action="slot-toggle" aria-pressed="false">${label}</button>`);
+    const entering = !p.entered; // slide in once, not on every repaint
+    p.entered = true;
+    return html`<div class="sheet-layer${entering ? ' is-entering' : ''}" data-sheet>
+    <div class="sheet-backdrop" data-action="slot-close"></div>
+    <section class="sheet slot-panel" data-slot-panel="${slot.id}" role="dialog" aria-modal="true" aria-labelledby="slot-panel-title" aria-describedby="slot-panel-when">
+      <div class="sheet-grab" aria-hidden="true"></div>
+      <div class="sheet-head">
+        <h2 id="slot-panel-title" tabindex="-1">${slot.positionName}</h2>
+        <button type="button" class="icon-btn" data-action="slot-close" aria-label="Close">${iconSlot('x')}</button>
+      </div>
+      <div class="sheet-body">
+      <p class="sheet-when" id="slot-panel-when">${iconSlot('calendar', 'icon-sm')} <span>${slot.title ? html`${slot.title}, ` : ''}${formatDate(slot.date)}${slot.time ? html` at <span class="num">${formatTime(slot.time)}</span>` : ''}${slot.teamName ? html` (${slot.teamName})` : ''}</span></p>
+      <p class="sheet-who">${hasPerson ? html`${avatar(slot.personName)}<strong>${slot.personName}</strong> ` : html`<strong>Nobody yet</strong> `}${slot.statusLabel ? html`<span class="chip chip-plain">${slot.statusLabel}</span>` : statusChip(status)}</p>
       ${p.error ? html`<p class="form-error" role="alert">${p.error}</p>` : ''}
       ${conflict}
       ${removeBox}
       <h3>Who could do this</h3>
-      <div class="btn-row">
-        <button type="button" class="btn" data-action="slot-toggle" aria-pressed="${p.showAll ? 'true' : 'false'}">${p.showAll ? 'Show only people trained for this' : 'Show people not trained for this'}</button>
+      <div class="segmented" role="group" aria-label="Who to show">
+        ${seg(!p.showAll, 'Only people trained for this')}
+        ${seg(p.showAll, 'Show people not trained for this')}
       </div>
       ${list}
-      <div class="btn-row"><button type="button" class="btn" data-action="slot-close">Close</button></div>
-    </section>`;
+      </div>
+      <div class="sheet-foot"><button type="button" class="btn btn-block" data-action="slot-close">Close</button></div>
+    </section></div>`;
   }
 
   return { open, close, handle, render, get state() { return p; } };
