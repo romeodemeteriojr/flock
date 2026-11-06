@@ -6,8 +6,6 @@
 // The final QA card asserts LEGACY is empty.
 export const LEGACY = [
   'src/db.js',
-  'src/routes/people.js',
-  'src/routes/teams.js',
 ];
 
 import test from 'node:test';
