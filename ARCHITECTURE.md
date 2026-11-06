@@ -135,6 +135,10 @@ object reaches handlers as `ctx`). They never get the data layer or the raw
 database connection; the old `ctx.db` and `ctx.now()` are gone. When the
 container opens the database it passes its clock to `openDb` for the migration
 timestamps; `openDb(file)` without a clock (tests) lets SQLite record the time.
+Before migrating, `openDb` refuses (with a `DatabaseFileError` and a plain
+message) a database file that is empty, damaged (`PRAGMA quick_check`) or not
+a database, and one made by a newer flock (it lists a migration this version
+does not have). The CLI prints that message as it is.
 
 ## Errors and validation
 

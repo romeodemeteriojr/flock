@@ -187,7 +187,8 @@ export async function run(argv, env = {}) {
   try {
     return await commands[name](argv.slice(1), env);
   } catch (err) {
-    if (err instanceof UsageError || err instanceof Refusal || err instanceof AppError || err?.name === 'ConfigError') {
+    if (err instanceof UsageError || err instanceof Refusal || err instanceof AppError || err?.name === 'ConfigError'
+      || err?.name === 'DatabaseFileError') {
       console.error(err.message);
       return 1;
     }
