@@ -1,0 +1,71 @@
+// Enforces the auth level declared on each route, plus the CSRF header.
+import { getSession, publicPerson } from './auth.js';
+import { send } from './http.js';
+
+export const COOKIE_NAME = 'flock_session';
+
+export function parseCookies(header) {
+  const out = {};
+  if (typeof header !== 'string') return out;
+  for (const part of header.split(';')) {
+    const i = part.indexOf('=');
+    if (i < 0) continue;
+    const k = part.slice(0, i).trim();
+    if (k && !(k in out)) out[k] = part.slice(i + 1).trim();
+  }
+  return out;
+}
+
+export function isSecure(req, ctx) {
+  const xfp = String(req.headers['x-forwarded-proto'] ?? '').split(',')[0].trim().toLowerCase();
+  return !!ctx.config?.secureCookies || xfp === 'https';
+}
+
+export function sessionCookie(req, ctx, token) {
+  const days = Number(ctx.config?.sessionDays);
+  const secs = Math.round((Number.isFinite(days) && days > 0 ? days : 14) * 86400);
+  return cookieString(req, ctx, token, secs);
+}
+
+export function clearCookie(req, ctx) {
+  return cookieString(req, ctx, '', 0);
+}
+
+function cookieString(req, ctx, value, maxAge) {
+  let c = `${COOKIE_NAME}=${value}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${maxAge}`;
+  if (isSecure(req, ctx)) c += '; Secure';
+  return c;
+}
+
+const ALLOWED_WHEN_MUST_CHANGE = new Set(['GET /api/me', 'POST /api/password', 'POST /api/logout']);
+
+export function createGuard() {
+  return async function guard({ req, res, route, ctx }) {
+    const method = req.method.toUpperCase();
+    if (method !== 'GET' && method !== 'HEAD' && !(method === 'POST' && route.pattern === '/api/login')) {
+      if (req.headers['x-flock'] !== '1') {
+        send(res, 403, { error: 'Request not allowed' });
+        return null;
+      }
+    }
+    if (route.auth === 'none') return null;
+
+    const token = parseCookies(req.headers.cookie)[COOKIE_NAME];
+    const person = getSession(ctx.db, ctx, token);
+    if (!person) {
+      send(res, 401, { error: 'Please log in' });
+      return null;
+    }
+    const user = publicPerson(person);
+    req.sessionToken = token;
+    if (user.mustChangePassword && !ALLOWED_WHEN_MUST_CHANGE.has(`${method} ${route.pattern}`)) {
+      send(res, 403, { error: 'Please choose a new password first', code: 'must_change_password' });
+      return null;
+    }
+    if (route.auth === 'admin' && user.role !== 'admin') {
+      send(res, 403, { error: 'Only the scheduler can do that' });
+      return null;
+    }
+    return user;
+  };
+}

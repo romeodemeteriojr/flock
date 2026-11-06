@@ -8,8 +8,8 @@ async function withApp(fn) {
     setup(app) {
       const r = app.router;
       r.add('GET', '/api/t/:a/x/:b', ({ params, query }) => ({ status: 200, json: { params, query } }), { auth: 'none' });
-      r.add('POST', '/api/t/echo', ({ body }) => ({ status: 201, json: body }), { auth: 'admin' });
-      r.add('GET', '/api/t/boom', () => { throw new Error('secret detail'); });
+      r.add('POST', '/api/t/echo', ({ body }) => ({ status: 201, json: body }), { auth: 'none' });
+      r.add('GET', '/api/t/boom', () => { throw new Error('secret detail'); }, { auth: 'none' });
     },
   });
   try { await fn(t); } finally { await t.close(); }
@@ -22,19 +22,19 @@ test('route params and query', () => withApp(async (t) => {
 }));
 
 test('post body is parsed', () => withApp(async (t) => {
-  const r = await t.request('POST', '/api/t/echo', { body: { a: 1 } });
+  const r = await t.request('POST', '/api/t/echo', { headers: { 'X-Flock': '1' }, body: { a: 1 } });
   assert.equal(r.status, 201);
   assert.deepEqual(r.json, { a: 1 });
 }));
 
 test('body over 100 KB gives 413', () => withApp(async (t) => {
-  const r = await t.request('POST', '/api/t/echo', { body: { s: 'x'.repeat(101 * 1024) } });
+  const r = await t.request('POST', '/api/t/echo', { headers: { 'X-Flock': '1' }, body: { s: 'x'.repeat(101 * 1024) } });
   assert.equal(r.status, 413);
   assert.ok(r.json.error);
 }));
 
 test('invalid JSON gives 400', () => withApp(async (t) => {
-  const r = await t.request('POST', '/api/t/echo', { body: '{nope' });
+  const r = await t.request('POST', '/api/t/echo', { headers: { 'X-Flock': '1' }, body: '{nope' });
   assert.equal(r.status, 400);
   assert.ok(r.json.error);
 }));
