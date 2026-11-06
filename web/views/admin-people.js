@@ -40,7 +40,23 @@ export function friendlyMessage(err) {
   return text || 'Something went wrong. Please try again.';
 }
 
-const roleWord = (p) => (p.role === 'admin' ? 'Scheduler' : 'Member');
+const roleWord = (p) => (p.role === 'admin' ? 'Scheduler' : 'Volunteer');
+
+// The level a person would get if their role button were pressed.
+const nextRole = (p) => (p.role === 'admin' ? 'member' : 'admin');
+
+function roleConfirmPanel(p, target) {
+  const yes = target === 'admin' ? 'Yes, make a scheduler' : 'Yes, make a volunteer';
+  const text = target === 'admin'
+    ? html`Make ${p.name} a scheduler? ${p.name} will be able to change the whole schedule and see every volunteer's name and username.`
+    : html`Make ${p.name} a volunteer? ${p.name} will only see their own schedule.`;
+  return html`<div class="card" role="alertdialog" aria-label="Confirm">
+    <p>${text}</p>
+    <div class="btn-row">
+      <button type="button" class="btn btn-primary" data-action="role-yes" data-id="${p.id}">${yes}</button>
+      <button type="button" class="btn" data-action="cancel">No, go back</button>
+    </div></div>`;
+}
 
 function passwordBox(secret) {
   return html`
@@ -112,14 +128,19 @@ function personRow(p, m) {
   let extra = '';
   if (panel) {
     if (panel.kind === 'reset' || panel.kind === 'active') extra = confirmPanel(p, panel.kind);
+    else if (panel.kind === 'role') extra = roleConfirmPanel(p, panel.role);
     else if (panel.kind === 'edit') extra = editPanel(p);
     else if (panel.kind === 'positions') extra = checklistPanel(p, m.teams, panel.checked);
   }
+  const roleButton = !p.active ? ''
+    : p.id === m.me ? html`<span class="hint">That's you</span>`
+      : html`<button type="button" class="btn" data-action="role-ask" data-id="${p.id}">${nextRole(p) === 'admin' ? 'Make scheduler' : 'Make volunteer'}</button>`;
   return html`<li data-person="${p.id}">
     <p><strong>${p.name}</strong> <span class="hint">(${p.username})</span>
       <span class="chip chip-plain">${roleWord(p)}</span>
       ${p.active ? '' : html`<span class="chip chip-bad">Deactivated</span>`}</p>
     <div class="btn-row">
+      ${roleButton}
       <button type="button" class="btn" data-action="edit" data-id="${p.id}">Edit name</button>
       <button type="button" class="btn" data-action="positions" data-id="${p.id}">What can they do?</button>
       <button type="button" class="btn" data-action="reset-ask" data-id="${p.id}">Reset password</button>
@@ -163,6 +184,10 @@ export function renderScreen(m) {
           <button type="button" class="btn" data-action="add-cancel">Cancel</button>
         </div>
       </form>` : html`<div class="btn-row"><button type="button" class="btn btn-primary" data-action="add-open">Add person</button></div>`}
+    <div class="card">
+      <p>Scheduler: can manage people, teams, services and the schedule.</p>
+      <p>Volunteer: can see their own schedule and mark days they cannot serve.</p>
+    </div>
     <div class="field">
       <label for="people-search">Search by name or username</label>
       <input id="people-search" type="search" data-action="search" autocomplete="off" value="${m.query}">
@@ -176,8 +201,9 @@ export function renderScreen(m) {
 export function createScreen({ api, root, ctx = {}, win = globalThis }) {
   const m = {
     people: [], teams: [], query: '', loading: true, adding: false, newName: '',
-    panel: null, secret: null, error: '', notice: '',
+    panel: null, secret: null, error: '', notice: '', me: null,
   };
+  const me = () => ctx.state?.user?.id ?? null;
   let busy = false;
 
   const paint = () => { root.innerHTML = renderScreen(m); };
@@ -188,6 +214,7 @@ export function createScreen({ api, root, ctx = {}, win = globalThis }) {
   const find = (id) => m.people.find((p) => p.id === Number(id));
 
   async function reload() {
+    m.me = me();
     const [people, teams] = await Promise.all([api.get('/api/people'), api.get('/api/teams')]);
     m.people = Array.isArray(people) ? people : [];
     m.teams = Array.isArray(teams) ? teams : [];
@@ -244,6 +271,22 @@ export function createScreen({ api, root, ctx = {}, win = globalThis }) {
       const r = await api.post(`/api/people/${p.id}/reset-password`, {});
       m.secret = { name: p.name, password: r.tempPassword };
       m.panel = null;
+    }),
+    'role-ask': (id) => {
+      const p = find(id);
+      if (!p || !p.active || p.id === me()) return;
+      m.panel = { kind: 'role', id: p.id, role: nextRole(p) };
+      paint();
+    },
+    'role-yes': (id) => attempt(async () => {
+      const p = find(id);
+      if (m.panel?.kind !== 'role' || m.panel.id !== Number(id) || !p) return;
+      if (!p.active || p.id === me() || m.panel.role !== nextRole(p)) return;
+      const role = m.panel.role;
+      await api.patch(`/api/people/${p.id}`, { role });
+      m.panel = null;
+      await reload();
+      m.notice = role === 'admin' ? `${p.name} is now a scheduler.` : `${p.name} is now a volunteer.`;
     }),
     'deactivate-yes': (id) => setActive(id, false, 'active'),
     'reactivate-yes': (id) => setActive(id, true, 'active'),

@@ -273,3 +273,110 @@ test('teams: position delete also needs confirmation', async () => {
   await flush();
   assert.equal(api.calls[0], 'DELETE /api/positions/11');
 });
+
+// ---------- access levels (make scheduler / make volunteer) ----------
+
+async function setupAs(me, extra = {}) {
+  const api = fakeApi({ 'GET /api/people': PEOPLE, 'GET /api/teams': TEAMS, ...extra });
+  const root = fakeRoot();
+  const s = people.createScreen({ api, root, ctx: { state: { user: { id: me } } } });
+  await s.ready;
+  api.calls.length = 0;
+  return { api, root, s };
+}
+const rowOf = (root, id) => {
+  const h = root.innerHTML;
+  const start = h.indexOf(`<li data-person="${id}">`);
+  const end = h.indexOf('</li>', start);
+  return h.slice(start, end);
+};
+
+test('people page explains the two access levels in plain words', async () => {
+  const { root } = await setupAs(9);
+  assert.match(root.innerHTML, /Scheduler: can manage people, teams, services and the schedule\./);
+  assert.match(root.innerHTML, /Volunteer: can see their own schedule and mark days they cannot serve\./);
+});
+
+test('each row shows a text level badge and the matching role button', async () => {
+  const { root } = await setupAs(9);
+  const ann = rowOf(root, 1);
+  const sam = rowOf(root, 2);
+  assert.match(ann, /chip-plain">Scheduler</);
+  assert.match(ann, />Make volunteer</);
+  assert.match(sam, /chip-plain">Volunteer</);
+  assert.match(sam, />Make scheduler</);
+});
+
+test('own row has no role button and says That\'s you', async () => {
+  const { root } = await setupAs(1);
+  const ann = rowOf(root, 1);
+  assert.match(ann, /That's you/);
+  assert.ok(!ann.includes('role-ask'));
+  assert.ok(!ann.includes('Make volunteer'));
+  assert.match(rowOf(root, 2), /role-ask/);
+  root.click('role-ask', 1);
+  assert.ok(!root.innerHTML.includes("Make Ann Admin a volunteer?"));
+});
+
+test('deactivated row shows its level but no role button', async () => {
+  const { root } = await setupAs(9);
+  const joe = rowOf(root, 3);
+  assert.match(joe, /chip-plain">Volunteer</);
+  assert.match(joe, /Deactivated/);
+  assert.ok(!joe.includes('role-ask'));
+  assert.ok(!joe.includes('Make scheduler'));
+});
+
+test('role confirm panel names the person and the right level', async () => {
+  const { root } = await setupAs(9);
+  root.click('role-ask', 2);
+  assert.match(root.innerHTML, /Make Sam Ortiz a scheduler\? Sam Ortiz will be able to change the whole schedule and see every volunteer's name and username\./);
+  root.click('cancel');
+  root.click('role-ask', 1);
+  assert.match(root.innerHTML, /Make Ann Admin a volunteer\? Ann Admin will only see their own schedule\./);
+});
+
+test('role button without confirming sends nothing', async () => {
+  const { api, root } = await setupAs(9);
+  root.click('role-ask', 2);
+  await flush();
+  assert.equal(api.calls.length, 0);
+});
+
+test('confirming a role change sends the PATCH body, refreshes and shows success', async () => {
+  const { api, root } = await setupAs(9, { 'PATCH /api/people/2': { id: 2 } });
+  root.click('role-ask', 2);
+  root.click('role-yes', 2);
+  await flush();
+  assert.equal(api.calls[0], 'PATCH /api/people/2 {"role":"admin"}');
+  assert.ok(api.calls.includes('GET /api/people'));
+  assert.match(root.innerHTML, /Sam Ortiz is now a scheduler\./);
+  assert.equal(root.innerHTML.includes('Make Sam Ortiz a scheduler?'), false);
+});
+
+test('confirm action is ignored unless its panel is open for that person', async () => {
+  const { api, root } = await setupAs(9, { 'PATCH /api/people/2': { id: 2 } });
+  root.click('role-yes', 2);
+  await flush();
+  assert.equal(api.calls.length, 0);
+  root.click('role-ask', 2);
+  root.click('role-yes', 3);
+  await flush();
+  assert.equal(api.calls.length, 0);
+});
+
+test('a role change refused with 409 shows the message instead of failing silently', async () => {
+  const { root } = await setupAs(9, { 'PATCH /api/people/1': apiErr(409, 'There must always be at least one active admin') });
+  root.click('role-ask', 1);
+  root.click('role-yes', 1);
+  await flush();
+  assert.match(root.innerHTML, /at least one active scheduler/);
+});
+
+test('hostile names stay escaped in the role confirm panel', async () => {
+  const bad = '<script>alert(1)</script>';
+  const { root } = await setupAs(9, { 'GET /api/people': [P(5, bad, 'x.y')] });
+  root.click('role-ask', 5);
+  assert.ok(!root.innerHTML.includes('<script>'));
+  assert.match(root.innerHTML, /Make &lt;script&gt;alert\(1\)&lt;\/script&gt; a scheduler\?/);
+});
