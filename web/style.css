@@ -40,7 +40,7 @@ a:hover { color: var(--primary-dark); }
 
 .lead { font-size: 1.1rem; }
 .hint { color: var(--muted); font-size: 0.95rem; margin: 0.35rem 0 0; }
-.loading, .coming-soon { color: var(--muted); font-size: 1.1rem; }
+.loading { color: var(--muted); font-size: 1.1rem; }
 .visually-hidden {
   position: absolute; width: 1px; height: 1px; overflow: hidden;
   clip: rect(0 0 0 0); white-space: nowrap;

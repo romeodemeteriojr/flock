@@ -23,5 +23,5 @@ files that break them are listed in a `LEGACY` array that may only shrink.
 
 - Business rules get fast unit tests with injected fakes.
 - Adding a feature touches up to three small files (route, service, data).
-- Until every LEGACY file is refactored, two styles exist side by side; the
-  architecture test stops the old style from spreading.
+- Every LEGACY file has been refactored and the `LEGACY` list is empty; the
+  architecture test keeps it that way.

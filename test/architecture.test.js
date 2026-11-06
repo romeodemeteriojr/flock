@@ -4,13 +4,11 @@
 // wait for their refactor card. The list can only shrink: a file in LEGACY that
 // no longer breaks any rule fails the test until it is taken off the list.
 // The final QA card asserts LEGACY is empty.
-export const LEGACY = [
-  'src/db.js',
-];
+export const LEGACY = [];
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { ROOT, listJs, lex, importsOf, analyse, findCycles } from './helpers/source.js';
 
@@ -24,7 +22,7 @@ const SQL_TEXT_OK = ['src/db.js', 'src/migrations/', 'src/data/sqlite/'];
 const IMPURE_OK = ['src/infra/', 'src/config.js', 'src/container.js', 'bin/', 'src/cli/'];
 const DATA_MAY_IMPORT = ['src/data/', 'src/db.js', 'src/errors.js'];
 // Code that must reach data only through services / the data layer, never via
-// the deprecated raw connection that is still passed as ctx.db.
+// a raw connection (the old ctx.db, now removed from the route deps).
 const NO_RAW_DB = ['src/routes/', 'src/services/', 'src/guard.js', 'src/http.js'];
 const RAW_DB = /\b(?:ctx|deps)\s*\.\s*db\b|\{[^{}]*\bdb\b[^{}]*\}\s*=\s*(?:ctx|deps)\b/g;
 
@@ -202,4 +200,99 @@ test('scanner: cycle finder', () => {
   assert.deepEqual(findCycles({ a: ['b'], b: ['c'], c: ['a'], d: ['a'] }), [['a', 'b', 'c']]);
   assert.deepEqual(findCycles({ a: ['a'] }), [['a']]);
   assert.deepEqual(findCycles({ a: ['b'], b: [] }), []);
+});
+
+// ---------- final QA (C-78) ----------
+
+test('architecture: LEGACY is empty (every file follows every rule)', () => {
+  assert.deepEqual(LEGACY, []);
+});
+
+test('architecture: services are built only in src/container.js', () => {
+  // A service factory is createXService (in src/services/x-service.js). Only
+  // the container may name or call one; nothing in src or bin builds its own.
+  // (Importing a plain constant from a service module is fine.)
+  const factoryNames = [];
+  for (const f of files.filter((x) => under(x.file, 'src/services'))) {
+    for (const m of f.code.matchAll(/export\s+function\s+(create[A-Z]\w*Service)\b/g)) factoryNames.push(m[1]);
+  }
+  assert.ok(factoryNames.length >= 7, `found only ${factoryNames.join(', ')}`);
+  const offenders = [];
+  for (const f of files) {
+    if (f.file === 'src/container.js' || under(f.file, 'src/services')) continue;
+    for (const name of factoryNames) {
+      if (new RegExp(`\\b${name}\\b`).test(f.code)) offenders.push(`${f.file} uses ${name}`);
+    }
+  }
+  // Services never build each other either: they get other services injected.
+  for (const f of files.filter((x) => under(x.file, 'src/services'))) {
+    for (const name of factoryNames) {
+      const uses = [...f.code.matchAll(new RegExp(`(?<!function\\s+)\\b${name}\\s*\\(`, 'g'))];
+      if (uses.length) offenders.push(`${f.file} calls ${name}`);
+    }
+  }
+  assert.deepEqual(offenders, []);
+});
+
+/** Repository name -> method names, read from the JSDoc typedefs in src/data/index.js. */
+export function interfaceMethods(src) {
+  const blocks = src.split('/**').slice(1).map((b) => b.split('*/')[0]);
+  const props = (block) => {
+    const out = [];
+    let i = 0;
+    while ((i = block.indexOf('@property {', i)) >= 0) {
+      let depth = 0;
+      let j = i + '@property '.length;
+      for (; j < block.length; j++) {
+        if (block[j] === '{') depth++;
+        else if (block[j] === '}' && --depth === 0) break;
+      }
+      const name = /^\s*([A-Za-z_$][\w$]*)/.exec(block.slice(j + 1));
+      if (name) out.push({ type: block.slice(i + '@property {'.length, j), name: name[1] });
+      i = j;
+    }
+    return out;
+  };
+  const typedefs = {};
+  for (const b of blocks) {
+    const m = /@typedef\s+\{object\}\s+(\w+)/.exec(b);
+    if (m) typedefs[m[1]] = props(b);
+  }
+  const repos = {};
+  for (const { type, name } of typedefs.Data ?? []) {
+    if (typedefs[type]) repos[name] = typedefs[type].map((p) => p.name);
+  }
+  return { repos, dataProps: (typedefs.Data ?? []).map((p) => p.name) };
+}
+
+test('data interface: every repository method in src/data/index.js has a contract test', () => {
+  const src = readFileSync(path.join(ROOT, 'src/data/index.js'), 'utf8');
+  // Code only: a call that is commented out does not count.
+  const contract = lex(readFileSync(path.join(ROOT, 'test/data/contract.js'), 'utf8')).code;
+  const { repos, dataProps } = interfaceMethods(src);
+  assert.deepEqual(Object.keys(repos).sort(),
+    ['audit', 'blockouts', 'maintenance', 'people', 'positions', 'qualifications', 'services', 'sessions', 'slots', 'teams']);
+  assert.ok(dataProps.includes('tx'));
+  const missing = [];
+  let count = 0;
+  for (const [repo, methods] of Object.entries(repos)) {
+    assert.ok(methods.length > 0, `${repo} has no methods`);
+    for (const m of methods) {
+      count++;
+      if (!new RegExp(`\\.${repo}\\.${m}\\(`).test(contract)) missing.push(`${repo}.${m}`);
+    }
+  }
+  if (!/\.tx\(/.test(contract)) missing.push('tx');
+  assert.ok(count >= 50, `only ${count} methods found; is the JSDoc parser broken?`);
+  assert.deepEqual(missing, [], `Not exercised in test/data/contract.js: ${missing.join(', ')}`);
+});
+
+test('data interface: the JSDoc parser reads nested braces in types', () => {
+  const { repos } = interfaceMethods([
+    '/**', ' * @typedef {object} FooRepo',
+    ' * @property {(p: {a: number, b?: {c: string}}) => Promise<{id: number}>} make  Some text.',
+    ' * @property {() => Promise<number>} count', ' */',
+    '/**', ' * @typedef {object} Data', ' * @property {FooRepo} foo', ' * @property {Function} tx', ' */',
+  ].join('\n'));
+  assert.deepEqual(repos, { foo: ['make', 'count'] });
 });

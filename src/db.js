@@ -5,7 +5,10 @@ import { fileURLToPath } from 'node:url';
 
 const migrationsDir = path.join(path.dirname(fileURLToPath(import.meta.url)), 'migrations');
 
-export function openDb(file = ':memory:') {
+// The migration time comes from the injected clock when there is one (the
+// container passes it); otherwise SQLite's own clock records it.
+export function openDb(file = ':memory:', options = {}) {
+  const clock = options?.clock;
   const db = new DatabaseSync(file);
   db.exec('PRAGMA foreign_keys=ON');
   if (file !== ':memory:') db.exec('PRAGMA journal_mode=WAL');
@@ -17,10 +20,19 @@ export function openDb(file = ':memory:') {
     const sql = readFileSync(path.join(migrationsDir, f), 'utf8');
     tx(db, () => {
       db.exec(sql);
-      db.prepare('INSERT INTO schema_migrations (name, applied_at) VALUES (?, ?)').run(f, new Date().toISOString());
+      if (clock) {
+        db.prepare('INSERT INTO schema_migrations (name, applied_at) VALUES (?, ?)').run(f, isoOf(clock.now()));
+      } else {
+        db.prepare("INSERT INTO schema_migrations (name, applied_at) VALUES (?, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))").run(f);
+      }
     });
   }
   return db;
+}
+
+// Clocks return a Date; an ISO string or epoch milliseconds is accepted too.
+function isoOf(value) {
+  return (value instanceof Date ? value : new Date(value)).toISOString();
 }
 
 let spCounter = 0;

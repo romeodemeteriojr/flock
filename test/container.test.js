@@ -134,7 +134,9 @@ test('container: injected clock, random and hasher are the ones a service sees (
   const app = await startTestApp({ container: { clock, factories: { probe: { factory: probe, needs: ['clock'] } } } });
   try {
     assert.equal(app.container.clock, clock);
-    assert.equal(app.app.ctx.now().toISOString(), '2031-05-06T07:08:10.000Z');
+    assert.equal(app.app.ctx.clock.now().toISOString(), '2031-05-06T07:08:10.000Z');
+    // The deprecated compat fields are gone from the route dependencies.
+    assert.deepEqual(Object.keys(app.app.ctx).sort(), ['clock', 'config', 'logger', 'services']);
     assert.equal(app.container.services.probe, app.app.ctx.services.probe);
     assert.equal((await app.request('GET', '/api/health')).status, 200);
     assert.equal(app.data, app.container.data);
@@ -156,7 +158,8 @@ test('container: a missing dependency gives a clear error', () => {
 test('container: the old createApp({db, now, config}) form still works', async () => {
   const db = openDb(':memory:');
   const app = createApp({ db, now: () => new Date('2025-01-05T12:00:00Z'), config: loadConfig({}) });
-  assert.equal(app.ctx.db, db);
+  assert.equal(app.ctx.db, undefined, 'routes no longer get the raw database');
+  assert.equal(app.ctx.now, undefined, 'routes no longer get ctx.now()');
   assert.equal(app.container.db, db);
   assert.equal(app.container.clock.now().toISOString(), '2025-01-05T12:00:00.000Z');
   assert.deepEqual(Object.keys(app.ctx.services).sort(), [...SERVICE_NAMES].sort());
@@ -175,4 +178,15 @@ test('container: process.env is read only by config (static check)', () => {
   assert.deepEqual(readers, ['src/config.js', 'src/infra/hasher.js']);
   const container = files.find((f) => f.file === 'src/container.js');
   assert.ok(container.imports.some((im) => im.target === 'src/config.js'), 'the container gets config through loadConfig');
+});
+
+test('container: the database it opens records migrations with the injected clock', () => {
+  const c = createContainer({
+    config: { ...loadConfig({}), dbPath: ':memory:' },
+    clock: fixedClock('2032-03-04T05:06:07.000Z'),
+    logger: silentLogger(),
+  });
+  try {
+    assert.equal(c.db.prepare('SELECT applied_at FROM schema_migrations').get().applied_at, '2032-03-04T05:06:07.000Z');
+  } finally { c.close(); }
 });

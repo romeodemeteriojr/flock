@@ -3,6 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "scripts": { "test": "node --test", "start": "node bin/flock.js serve" },
-  "engines": { "node": ">=22.5" }
+  "scripts": {
+    "test": "node --test",
+    "coverage": "node --test --experimental-test-coverage",
+    "start": "node bin/flock.js serve"
+  },
+  "engines": { "node": ">=22.16" }
 }

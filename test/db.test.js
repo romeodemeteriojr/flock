@@ -122,3 +122,22 @@ test('logAudit truncates and stores', () => {
   assert.equal(rows[1].actor_id, null);
   assert.equal(rows[1].at, T);
 });
+
+test('migration time comes from the injected clock (no direct new Date())', () => {
+  const clock = { now: () => new Date('2030-02-03T04:05:06.000Z') };
+  const db = openDb(':memory:', { clock });
+  assert.deepEqual(db.prepare('SELECT applied_at FROM schema_migrations').all().map((r) => r.applied_at), ['2030-02-03T04:05:06.000Z']);
+  db.close();
+  // Without a clock SQLite's own clock records a valid ISO time.
+  const plain = openDb();
+  assert.match(plain.prepare('SELECT applied_at FROM schema_migrations').get().applied_at, /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/);
+  plain.close();
+  // A clock that returns a string or milliseconds works too, and null options are fine.
+  const s = openDb(':memory:', { clock: { now: () => '2030-02-03T04:05:06.000Z' } });
+  assert.equal(s.prepare('SELECT applied_at FROM schema_migrations').get().applied_at, '2030-02-03T04:05:06.000Z');
+  s.close();
+  const ms = openDb(':memory:', { clock: { now: () => Date.UTC(2030, 1, 3) } });
+  assert.equal(ms.prepare('SELECT applied_at FROM schema_migrations').get().applied_at, '2030-02-03T00:00:00.000Z');
+  ms.close();
+  openDb(':memory:', null).close();
+});

@@ -1,10 +1,12 @@
 // Registers every route module. Each module exports register(router, deps).
 //
-// deps = { services, config, clock, logger, random, hasher, data, db, now }
-//   services  the application services built by src/container.js (use these)
-//   db, now   DEPRECATED compatibility for route modules that still read
-//             ctx.db / ctx.now(); they go away as the refactor cards land.
-// The same object is handed to handlers as `ctx`.
+// deps = { services, config, clock, logger }
+//   services  the application services built by src/container.js
+//   config    the settings (cookie flags, session length)
+//   clock     the injected clock (login throttle)
+//   logger    the injected logger
+// Routes never get the data layer or the raw database. The same object is
+// handed to handlers as `ctx`.
 import * as auth from './auth.js';
 import * as people from './people.js';
 import * as teams from './teams.js';

@@ -28,21 +28,15 @@ export function createApp(opts = {}) {
   // silent form behaves exactly as before.
   const explicitLogger = opts.container ? logger : opts.logger;
   const router = createRouter({ logger: explicitLogger, clock, random });
-  const now = !opts.container && opts.now ? opts.now : () => clock.now();
-  const ctx = {
+  // What route modules and handlers get (see src/routes/index.js): services
+  // and the few infrastructure parts the HTTP edge needs. No data layer and
+  // no raw database: routes reach data only through services.
+  const ctx = Object.freeze({
     services: container.services,
     config,
     clock,
     logger,
-    random,
-    hasher: container.hasher,
-    data: container.data,
-    // DEPRECATED: the raw database connection and now(), only for the route
-    // modules that still use them until their refactor cards land. New code
-    // uses services (and clock) instead.
-    db: container.db,
-    now,
-  };
+  });
   router.setGuard(createGuard());
   registerRoutes(router, ctx);
   router.add('GET', '/api/health', () => ({ status: 200, json: { ok: true } }), { auth: 'none' });

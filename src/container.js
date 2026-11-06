@@ -71,9 +71,9 @@ function stderrLogger() {
   return createLogger({ level: 'info', write: (line) => process.stderr.write(`${line}\n`) });
 }
 
-function defaultDb(config) {
+function defaultDb(config, clock) {
   if (config.dbPath !== ':memory:') mkdirSync(path.dirname(path.resolve(config.dbPath)), { recursive: true });
-  return openDb(config.dbPath);
+  return openDb(config.dbPath, { clock });
 }
 
 // Normalise overrides.factories entries: a function keeps the default needs
@@ -157,7 +157,7 @@ export function createContainer(overrides = {}) {
     db = overrides.db;
     if (!db) throw new ContainerError('Missing dependency: db');
   } else if (!has('data')) {
-    db = defaultDb(config);
+    db = defaultDb(config, clock);
     ownsDb = true;
   }
   const data = has('data') ? need('data') : createData(db);

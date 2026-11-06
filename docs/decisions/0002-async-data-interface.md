@@ -23,5 +23,7 @@ transaction is safe. Errors are `DuplicateError`, `InUseError` or a plain
   services or routes; it runs the same contract tests.
 - A small cost: promises around synchronous calls, and the queue serialises
   database work (fine for a church of about 70 people).
-- Services must use the `d` handed to `data.tx(async (d) => ...)` inside a
-  transaction.
+- Services should use the `d` handed to `data.tx(async (d) => ...)` inside a
+  transaction. A top-level call made while a transaction is open (for example
+  through another service, as `people` does with `auth.endSessions`) joins that
+  transaction instead of waiting behind it, so it cannot deadlock.

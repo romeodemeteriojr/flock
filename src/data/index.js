@@ -1,5 +1,6 @@
 // The data layer interface. This is the ONLY place the app gets data from, and
-// the adapters behind it (src/data/sqlite/*) are the only files that contain SQL.
+// the adapters behind it (src/data/sqlite/*) plus src/db.js and src/migrations
+// are the only files that contain SQL.
 //
 // Every method returns a Promise, even though node:sqlite is synchronous, so a
 // PostgreSQL adapter can later implement the same interface and pass the same
