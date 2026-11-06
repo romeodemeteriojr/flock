@@ -203,3 +203,42 @@ test('login-level and admin-level routes', async () => {
     assert.equal((await app.request('GET', '/api/health')).status, 200);
   } finally { await app.close(); }
 });
+
+test('per-IP throttle: successful logins do not count', async () => {
+  const { app, db } = await boot();
+  try {
+    await addPerson(db, { name: 'Ann', username: 'ann' });
+    for (let i = 0; i < 31; i++) assert.equal((await login(app, 'ann', 'test-pass-1')).status, 200);
+  } finally { await app.close(); }
+});
+
+test('per-IP throttle: failures over the limit are throttled', async () => {
+  const { app } = await boot();
+  try {
+    for (let i = 0; i < 20; i++) assert.equal((await login(app, `f${i}`, 'whatever1')).status, 401);
+    assert.equal((await login(app, 'f99', 'whatever1')).status, 429);
+  } finally { await app.close(); }
+});
+
+test('proxy headers are ignored when FLOCK_TRUST_PROXY is off', async () => {
+  const { app } = await boot();
+  try {
+    for (let i = 0; i < 20; i++) await login(app, `s${i}`, 'whatever1', { 'Fly-Client-IP': `9.9.9.${i}` });
+    assert.equal((await login(app, 's99', 'whatever1', { 'X-Forwarded-For': '8.8.8.8' })).status, 429);
+  } finally { await app.close(); }
+});
+
+test('proxy headers are honoured when FLOCK_TRUST_PROXY is on, per IP', async () => {
+  const config = { ...loadConfig({ FLOCK_TRUST_PROXY: '1' }), dbPath: ':memory:' };
+  const { app } = await boot({ config });
+  try {
+    for (let i = 0; i < 20; i++) assert.equal((await login(app, `p${i}`, 'whatever1', { 'Fly-Client-IP': '1.1.1.1', 'X-Forwarded-For': '5.5.5.5' })).status, 401);
+    assert.equal((await login(app, 'p99', 'whatever1', { 'Fly-Client-IP': '1.1.1.1' })).status, 429);
+    assert.equal((await login(app, 'p99', 'whatever1', { 'Fly-Client-IP': '2.2.2.2' })).status, 401);
+    // no Fly header: first X-Forwarded-For entry
+    assert.equal((await login(app, 'p99', 'whatever1', { 'X-Forwarded-For': '3.3.3.3, 10.0.0.1' })).status, 401);
+    for (let i = 0; i < 19; i++) await login(app, `q${i}`, 'whatever1', { 'X-Forwarded-For': '3.3.3.3' });
+    assert.equal((await login(app, 'q99', 'whatever1', { 'X-Forwarded-For': '3.3.3.3, 10.9.9.9' })).status, 429);
+    assert.equal((await login(app, 'q99', 'whatever1', { 'X-Forwarded-For': '4.4.4.4' })).status, 401);
+  } finally { await app.close(); }
+});

@@ -13,13 +13,34 @@ function textOrNone(value) {
 }
 const field = (body, key) => (body !== null && typeof body === 'object' ? body[key] : undefined);
 
+// Behind a trusted proxy (Fly.io) the real client is in a header; otherwise
+// those headers are ignored so a client cannot pick its own IP.
+export function clientIp(req, config) {
+  if (config?.trustProxy) {
+    const one = (h) => (Array.isArray(h) ? h[0] : h);
+    const fly = String(one(req.headers?.['fly-client-ip']) ?? '').trim();
+    if (fly) return fly;
+    const xff = String(one(req.headers?.['x-forwarded-for']) ?? '').split(',')[0].trim();
+    if (xff) return xff;
+  }
+  return req.socket?.remoteAddress ?? 'unknown';
+}
+
 export function register(router, ctx) {
   const auth = ctx.services.auth;
   const throttle = createIpThrottle({ clock: ctx.clock, windowMs: 5 * 60 * 1000, max: 20 });
 
   router.add('POST', '/api/login', async ({ req, body }) => {
-    if (throttle.hit(req.socket?.remoteAddress ?? 'unknown')) throw new TooManyRequestsError(LOCKED_MESSAGE, 60);
-    const { person, token } = await auth.login(textOrNone(field(body, 'username')), textOrNone(field(body, 'password')));
+    const ip = clientIp(req, ctx.config);
+    if (throttle.isLimited(ip)) throw new TooManyRequestsError(LOCKED_MESSAGE, 60);
+    let result;
+    try {
+      result = await auth.login(textOrNone(field(body, 'username')), textOrNone(field(body, 'password')));
+    } catch (e) {
+      throttle.fail(ip); // only failures count toward the per-IP limit
+      throw e;
+    }
+    const { person, token } = result;
     return {
       status: 200,
       headers: { 'Set-Cookie': sessionCookie(req, ctx, token) },

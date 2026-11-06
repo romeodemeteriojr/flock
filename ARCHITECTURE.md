@@ -102,6 +102,13 @@ environment is read only at the edge: `bin/flock.js` hands `process.env` to
 `FLOCK_LOG_LEVEL` for `serve`); `createContainer()` with no `config` calls
 `loadConfig` itself. The one other reader is `src/infra/hasher.js`, which
 checks `NODE_ENV` so the fast test hasher refuses to run in production.
+`FLOCK_TRUST_PROXY=1` (config `trustProxy`, default off) makes the login
+throttle use the `Fly-Client-IP` header, else the first `X-Forwarded-For`
+entry, as the client IP; when off those headers are ignored and the socket
+address is used. Turn it on only behind a proxy that sets them (Fly.io), where
+every user otherwise shares one IP. The per-IP limit (20 per 5 minutes) counts
+failed logins only; the per-account lockout is separate and unchanged.
+
 `createContainer()` builds, in order: config, clock (system), random (secure),
 hasher (scrypt), logger (JSON lines to stderr), the database (it creates the
 folder, then `openDb(config.dbPath, { clock })`) and the data layer, then

@@ -5,7 +5,7 @@ import { startTestApp } from './helpers/app.js';
 
 test('config defaults', () => {
   assert.deepEqual(loadConfig({}), {
-    port: 8080, dbPath: './data/flock.db', secureCookies: false, unansweredDays: 3, sessionDays: 14,
+    port: 8080, dbPath: './data/flock.db', secureCookies: false, trustProxy: false, unansweredDays: 3, sessionDays: 14,
   });
 });
 

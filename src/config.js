@@ -4,6 +4,7 @@ export function loadConfig(env = process.env) {
     port: Number.isInteger(port) && port >= 0 && port < 65536 ? port : 8080,
     dbPath: env.FLOCK_DB || './data/flock.db',
     secureCookies: env.FLOCK_SECURE_COOKIES === '1',
+    trustProxy: env.FLOCK_TRUST_PROXY === '1',
     unansweredDays: 3,
     sessionDays: 14,
   });
@@ -32,6 +33,7 @@ export function validateConfig(config) {
   if (!intIn(config.sessionDays, 1, 90)) problems.push('sessionDays must be a whole number from 1 to 90');
   if (!intIn(config.unansweredDays, 0, 30)) problems.push('unansweredDays must be a whole number from 0 to 30');
   if (typeof config.secureCookies !== 'boolean') problems.push('secureCookies must be true or false (FLOCK_SECURE_COOKIES)');
+  if (config.trustProxy !== undefined && typeof config.trustProxy !== 'boolean') problems.push('trustProxy must be true or false (FLOCK_TRUST_PROXY)');
   if (problems.length) throw new ConfigError(problems);
   return config;
 }

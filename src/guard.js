@@ -46,6 +46,19 @@ function cookieString(req, ctx, value, maxAge) {
 export function createIpThrottle({ clock, windowMs = 5 * 60 * 1000, max = 20 }) {
   const attempts = new Map(); // ip -> array of ms timestamps
   return {
+    // True when the IP already has `max` failures in the window. Counts nothing.
+    isLimited(ip = 'unknown') {
+      const nowMs = clock.now().getTime();
+      const list = (attempts.get(ip) ?? []).filter((t) => t > nowMs - windowMs);
+      return list.length >= max;
+    },
+    // Records one failed attempt for the IP.
+    fail(ip = 'unknown') {
+      const nowMs = clock.now().getTime();
+      const list = (attempts.get(ip) ?? []).filter((t) => t > nowMs - windowMs);
+      list.push(nowMs);
+      attempts.set(ip, list);
+    },
     hit(ip = 'unknown') {
       const nowMs = clock.now().getTime();
       for (const [k, list] of attempts) {
