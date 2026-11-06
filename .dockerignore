@@ -1,0 +1,11 @@
+.git
+node_modules
+data
+*.db
+*.db-wal
+*.db-shm
+test
+docs
+.github
+*.md
+!CHANGELOG.md
