@@ -380,7 +380,7 @@ test('nav escapes the person name', () => {
 });
 
 test('stub views say Coming soon and mount does nothing', async () => {
-  for (const name of ['my-schedule', 'my-blockouts', 'admin-people', 'admin-teams', 'admin-services', 'admin-schedule', 'admin-gaps']) {
+  for (const name of ['my-schedule', 'my-blockouts', 'admin-services', 'admin-schedule', 'admin-gaps']) {
     const v = await import(`../web/views/${name}.js`);
     assert.equal(typeof v.title, 'string');
     assert.match(v.render({ user: member }), /Coming soon/);
