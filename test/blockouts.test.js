@@ -1,7 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { openDb } from '../src/db.js';
-import { isBlocked, blockedPersonIds, conflictsFor } from '../src/blockouts.js';
+import { createData } from '../src/data/index.js';
+import { createBlockoutsService } from '../src/services/blockouts-service.js';
+import { fixedClock } from '../src/infra/clock.js';
 import { startTestApp } from './helpers/app.js';
 import { addPerson, seedAdminAndMember } from './helpers/seed.js';
 
@@ -21,6 +23,12 @@ function addSlot(db, pid, date, status, time = '09:00') {
     .run(sv, pos.id, pid, status).lastInsertRowid);
 }
 
+// The blockout helpers now live in the blockouts service (async, on the data layer).
+function helpers(db) {
+  const svc = createBlockoutsService({ data: createData(db), clock: fixedClock(new Date('2025-01-05T12:00:00')) });
+  return { isBlocked: svc.isBlocked, blockedPersonIds: svc.blockedPersonIds, conflictsFor: svc.conflictsFor };
+}
+
 async function boot() {
   const db = openDb();
   const app = await startTestApp({ db, now: () => new Date('2025-01-05T12:00:00') });
@@ -30,35 +38,37 @@ async function boot() {
 
 test('helpers: single day, range edges, adjacent ranges', async () => {
   const db = openDb();
+  const { isBlocked, blockedPersonIds, conflictsFor } = helpers(db);
   const p = await addPerson(db, { name: 'Pat', username: 'pat' });
   const q = await addPerson(db, { name: 'Quinn', username: 'quinn' });
   addBlock(db, p, '2025-03-10', '2025-03-10');
   addBlock(db, p, '2025-03-11', '2025-03-12');
   addBlock(db, q, '2025-03-12', '2025-03-14');
-  assert.equal(isBlocked(db, p, '2025-03-09'), false);
-  assert.equal(isBlocked(db, p, '2025-03-10'), true);
-  assert.equal(isBlocked(db, p, '2025-03-11'), true);
-  assert.equal(isBlocked(db, p, '2025-03-12'), true);
-  assert.equal(isBlocked(db, p, '2025-03-13'), false);
-  assert.deepEqual([...blockedPersonIds(db, '2025-03-12')].sort(), [p, q].sort());
-  assert.deepEqual([...blockedPersonIds(db, '2025-03-10')], [p]);
-  assert.equal(blockedPersonIds(db, '2025-03-15').size, 0);
+  assert.equal(await isBlocked(p, '2025-03-09'), false);
+  assert.equal(await isBlocked(p, '2025-03-10'), true);
+  assert.equal(await isBlocked(p, '2025-03-11'), true);
+  assert.equal(await isBlocked(p, '2025-03-12'), true);
+  assert.equal(await isBlocked(p, '2025-03-13'), false);
+  assert.deepEqual([...(await blockedPersonIds('2025-03-12'))].sort(), [p, q].sort());
+  assert.deepEqual([...(await blockedPersonIds('2025-03-10'))], [p]);
+  assert.equal((await blockedPersonIds('2025-03-15')).size, 0);
   const a = addSlot(db, p, '2025-03-10', 'accepted');
   addSlot(db, p, '2025-03-13', 'pending');
-  assert.deepEqual(conflictsFor(db, p, '2025-03-10', '2025-03-10').map((c) => c.slotId), [a]);
-  assert.equal(conflictsFor(db, p, '2025-03-10', '2025-03-13').length, 2);
-  assert.equal(conflictsFor(db, p, '2025-03-11', '2025-03-12').length, 0);
+  assert.deepEqual((await conflictsFor(p, '2025-03-10', '2025-03-10')).map((c) => c.slotId), [a]);
+  assert.equal((await conflictsFor(p, '2025-03-10', '2025-03-13')).length, 2);
+  assert.equal((await conflictsFor(p, '2025-03-11', '2025-03-12')).length, 0);
 });
 
 test('conflicts only pending/accepted and own', async () => {
   const db = openDb();
+  const { conflictsFor } = helpers(db);
   const p = await addPerson(db, { name: 'Pat', username: 'pat' });
   const q = await addPerson(db, { name: 'Quinn', username: 'quinn' });
   addSlot(db, p, '2025-04-06', 'declined', '08:00');
   addSlot(db, p, '2025-04-06', 'open', '10:00');
   const ok = addSlot(db, p, '2025-04-06', 'pending', '11:00');
   addSlot(db, q, '2025-04-06', 'accepted', '12:00');
-  const c = conflictsFor(db, p, '2025-04-01', '2025-04-30');
+  const c = await conflictsFor(p, '2025-04-01', '2025-04-30');
   assert.deepEqual(c, [{ slotId: ok, date: '2025-04-06', time: '11:00', serviceTitle: 'Sunday', positionName: 'Drums', teamName: 'Band', status: 'pending' }]);
 });
 
