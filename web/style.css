@@ -487,6 +487,11 @@ input[type="checkbox"], input[type="radio"] { width: 1.4rem; height: 1.4rem; acc
 }
 .icon-btn:hover { background: var(--surface-3); }
 .icon-btn:active { transform: scale(0.94); }
+/* Keyboard focus is always visible, even where the global ring would be hidden. */
+.icon-btn:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
+.icon-btn-danger { color: var(--danger); background: var(--danger-bg); }
+.icon-btn-danger:hover { background: color-mix(in srgb, var(--danger-bg) 70%, var(--danger)); }
+.icon-btn:disabled { opacity: 0.55; cursor: wait; transform: none; }
 
 /* ---------- segmented control ---------- */
 .segmented {
@@ -506,7 +511,7 @@ input[type="checkbox"], input[type="radio"] { width: 1.4rem; height: 1.4rem; acc
 .segment[aria-pressed="true"] { background: var(--surface); color: var(--text); box-shadow: var(--shadow-1); cursor: default; }
 .segment[aria-pressed="true"]::before { content: "✓ "; }
 
-/* ---------- status chips: a word + a symbol, never colour alone ---------- */
+/* ---------- status chips: a word + an icon, never colour alone ---------- */
 .chip {
   display: inline-flex; align-items: center; gap: 0.3em;
   padding: 0.2rem 0.7rem;
@@ -515,6 +520,9 @@ input[type="checkbox"], input[type="radio"] { width: 1.4rem; height: 1.4rem; acc
   font-variant-numeric: tabular-nums;
 }
 .chip::before { font-weight: 900; }
+/* Status chips carry a real SVG icon (slotpanel.js); the old text symbol stays
+   in the CSS as the no-JS fallback and is hidden once the icon slot exists. */
+.chip:has([data-icon])::before { content: ""; }
 .chip-ok { color: var(--success); background: var(--success-bg); }
 .chip-ok::before { content: "✓"; }
 .chip-wait { color: var(--warning); background: var(--warning-bg); border-style: dashed; }
@@ -526,7 +534,9 @@ input[type="checkbox"], input[type="radio"] { width: 1.4rem; height: 1.4rem; acc
 .chip-info { color: var(--on-accent-soft); background: var(--accent-soft); border-color: transparent; }
 .chip-today { color: var(--on-accent); background: var(--accent); border-color: var(--accent); font-size: var(--fs-xs); }
 .chip-today::before { content: "●"; }
-.chip-icon { width: 1em; height: 1em; }
+.chip-icon { width: 1em; height: 1em; flex: none; }
+/* Compact chip: the icon only, with the word kept as visually hidden text. */
+.chip-compact { padding: 0.35rem; }
 
 /* ---------- cards and lists ---------- */
 .card {
@@ -760,7 +770,17 @@ th, td { text-align: left; padding: var(--s-2) var(--s-3); border-bottom: 1px so
 .stat-wait { background: var(--warning-bg); border-color: var(--warning); color: var(--warning); }
 .stat-wait .stat-num { color: var(--warning); }
 .gap-group { margin-bottom: var(--s-6); }
-.gap-title { margin-bottom: var(--s-1); }
+.gap-title {
+  display: flex; align-items: center; gap: var(--s-2);
+  margin-bottom: var(--s-1); font-size: var(--fs-lg); font-weight: var(--weight-head);
+}
+.gap-icon { flex: none; width: 1.25em; height: 1.25em; color: var(--text); }
+.gap-label { flex: 1; }
+.gap-count {
+  flex: none; padding: 0.2em 0.65em; border-radius: var(--radius-full);
+  font-size: var(--fs-sm); font-weight: 700; line-height: 1.4;
+  color: var(--danger); background: var(--danger-bg);
+}
 .gap-list > li { border: 0; padding: 0; }
 .reminders-card { margin-top: var(--s-8); }
 .reminder-list { margin-top: var(--s-3); }
@@ -940,6 +960,7 @@ th, td { text-align: left; padding: var(--s-2) var(--s-3); border-bottom: 1px so
 .gallery-section { padding: var(--s-6) 0; border-bottom: 1px solid var(--line); }
 .gallery-h { margin-top: 0; }
 .gallery-note { margin-bottom: var(--s-4); }
+.icon-meaning { margin: 0; }
 .gallery-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-3); margin: 0 0 var(--s-3); }
 .gallery-swatches, .gallery-icons {
   list-style: none; margin: 0; padding: 0;

@@ -33,6 +33,15 @@ const PATHS = {
   sparkle: '<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M18.5 16.5l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z"/>',
   more: '<circle cx="5.5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="18.5" cy="12" r="1.3"/>',
   info: '<circle cx="12" cy="12" r="8.5"/><path d="M12 11v5.5M12 7.5v.01"/>',
+  key: '<circle cx="8" cy="16" r="4.5"/><path d="M11 13L20 4M17 7l3 3M14.5 9.5l2 2"/>',
+  shield: '<path d="M12 3.5l7.5 2.8v5.4c0 4.6-3 8-7.5 9.3-4.5-1.3-7.5-4.7-7.5-9.3V6.3z"/><path d="M8.5 12l2.5 2.5 4.5-4.5"/>',
+  'user-off': '<circle cx="10" cy="8" r="4"/><path d="M3.5 20.5c1.1-3.6 3.4-5.5 6.5-5.5M12 20.5c-.3-1.6-1-2.9-2-3.9"/><path d="M5 5l14 14"/>',
+  'user-check': '<circle cx="9.5" cy="8" r="4"/><path d="M3 20.5c1.1-3.6 3.4-5.5 6.5-5.5 1.2 0 2.3.3 3.2.8"/><path d="M14.5 17l2.3 2.3 4.7-4.8"/>',
+  'list-check': '<path d="M10.5 6h10M10.5 12h10M10.5 18h10"/><path d="M3.5 6l1.7 1.7L8 4.9M3.5 12l1.7 1.7L8 10.9M3.5 18l1.7 1.7L8 16.9"/>',
+  send: '<path d="M20.5 3.5L11 13"/><path d="M20.5 3.5L14 20.5l-3-7.5-7.5-3z"/>',
+  refresh: '<path d="M20 12a8 8 0 1 1-2.3-5.6"/><path d="M20 4v4h-4"/>',
+  filter: '<path d="M3.5 5h17l-6.5 8v6l-4 2v-8z"/>',
+  dot: '<circle cx="12" cy="12" r="4.5" fill="currentColor" stroke="none"/>',
 };
 
 // Empty-state pictures: 120 x 96, soft shapes in theme colours (classes in style.css).

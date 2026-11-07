@@ -62,6 +62,24 @@ test('schedule: pending has both buttons, confirmed does not; chips have words',
   assert.match(root.innerHTML, /data-banner>You&#39;re serving this Sunday as Sound at 9:00 am/);
 });
 
+test('status chip compact: each of the four statuses has an accessible name, and the icons differ', async () => {
+  const { root } = await setup(sched, {
+    'GET /api/me/schedule': data([item(), item({ slotId: 2, status: 'accepted', date: '2026-11-15' })]),
+  });
+  // the schedule page shows full chips (icon + visible word), never colour alone
+  assert.match(root.innerHTML, /chip-wait[^>]*>.*Please answer/s);
+  assert.match(root.innerHTML, /chip-ok[^>]*>.*Confirmed/s);
+  const { statusChip } = await import('../web/lib/slotpanel.js');
+  const names = ['open', 'pending', 'accepted', 'declined'].map((s) => String(statusChip(s, { compact: true })));
+  for (const [i, st] of ['open', 'pending', 'accepted', 'declined'].entries()) {
+    const name = [...names[i].matchAll(/aria-label="([^"]+)"/g)].map((m) => m[1]);
+    assert.equal(name.length, 1, st);
+    assert.ok(name[0].trim() !== '', `${st} has an accessible name`);
+  }
+  const icons = names.map((s) => [...s.matchAll(/data-icon="([^"]+)"/g)].map((m) => m[1]));
+  assert.equal(new Set(icons.flat()).size, 4, 'the four statuses use four distinct icons');
+});
+
 test('schedule: co-volunteers listed and escaped', async () => {
   const { root } = await setup(sched, {
     'GET /api/me/schedule': data([item({ coVolunteers: [{ name: '<b>x</b>', positionName: 'Drums' }, { name: 'Ana', positionName: 'Keys' }] })]),
