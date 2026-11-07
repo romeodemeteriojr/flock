@@ -51,13 +51,18 @@ export const panelSlot = (slot, svc) => ({ ...slot, date: svc.date, time: svc.ti
 
 function slotButton(slot) {
   const has = slot.personId !== null && slot.personId !== undefined;
-  return html`<button type="button" class="slot-btn${has ? '' : ' is-open'}" data-action="slot-open" data-id="${slot.id}">
-    <span class="slot-who">${has ? slot.personName : 'Nobody yet'}</span>
-    ${statusChip(statusOf(slot))}
+  if (has) {
+    return html`<button type="button" class="slot-btn" data-action="slot-open" data-id="${slot.id}">
+      <span class="slot-who">${slot.personName}</span>
+      ${statusChip(statusOf(slot), { compact: true })}
+    </button>`;
+  }
+  return html`<button type="button" class="slot-btn is-open" data-action="slot-open" data-id="${slot.id}" aria-label="Nobody yet, choose someone">
+    ${iconSlot('plus', 'icon-sm')}
   </button>`;
 }
 
-const todayChip = html` <span class="chip chip-today">Today</span>`;
+const todayContent = html` ${iconSlot('dot', 'icon-today')}<span class="visually-hidden">Today</span>`;
 
 function grid(s, today) {
   return html`<div class="table-wrap sched-grid">
@@ -68,7 +73,7 @@ function grid(s, today) {
         <tr>${s.columns.map((c) => c.positions.map((p) => html`<th scope="col" class="sched-pos">${p.name}</th>`))}</tr>
       </thead>
       <tbody>${s.rows.map((r) => html`<tr data-row="${r.service.id}"${r.service.date === today ? html` class="is-today"` : ''}>
-        <th scope="row" class="sched-date"><span class="sched-day num">${formatDate(r.service.date)}</span>${r.service.date === today ? todayChip : ''}<br><span class="num">${formatTime(r.service.time)}</span><br><span class="hint">${r.service.title}</span></th>
+        <th scope="row" class="sched-date"><span class="sched-day num">${formatDate(r.service.date)}</span>${r.service.date === today ? todayContent : ''}<br><span class="num">${formatTime(r.service.time)}</span><br><span class="hint">${r.service.title}</span></th>
         ${s.columns.map((c) => c.positions.map((p) => {
     const slots = r.cells.get(p.id) ?? [];
     return html`<td>${slots.length ? slots.map(slotButton) : html`<span class="hint not-needed">Not needed</span>`}</td>`;
@@ -80,7 +85,7 @@ function grid(s, today) {
 
 function cards(s, today) {
   return html`<ul class="cards sched-cards">${s.rows.map((r) => html`<li class="card sched-card${r.service.date === today ? ' is-today' : ''}" data-card="${r.service.id}">
-    <h2 class="num">${formatDate(r.service.date)} at ${formatTime(r.service.time)}${r.service.date === today ? todayChip : ''}</h2>
+    <h2 class="num">${formatDate(r.service.date)} at ${formatTime(r.service.time)}${r.service.date === today ? todayContent : ''}</h2>
     <p class="hint">${r.service.title}</p>
     ${s.columns.filter((c) => c.positions.some((p) => r.cells.has(p.id))).map((c) => html`<h3 class="team-title">${c.teamName}</h3>
       <ul class="list slot-list">${c.positions.filter((p) => r.cells.has(p.id)).map((p) => html`<li>

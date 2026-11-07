@@ -5,6 +5,7 @@ import { html } from '../lib/html.js';
 import { formatDate, formatTime, todayString } from '../lib/dates.js';
 import { createSlotPanel, copyText } from '../lib/slotpanel.js';
 import { createSheet } from '../lib/sheet.js';
+import { flashCopied } from '../lib/copyflash.js';
 import { iconSlot } from '../lib/icons.js';
 import { avatar } from '../lib/avatar.js';
 import { toasts } from '../lib/toast.js';
@@ -96,11 +97,11 @@ function reminders(m) {
   if (r.loading) body = skeleton('Loading…', 'list', 2);
   else if (r.list) {
     body = r.list.length
-      ? html`<div class="btn-row"><button type="button" class="btn btn-primary" data-action="copy-all">${iconSlot('copy')} Copy all</button></div>
+      ? html`<div class="btn-row"><button type="button" class="btn btn-primary" data-action="copy-all" data-copy-key="all">${iconSlot('copy')} Copy all</button></div>
         <ul class="list reminder-list" data-reminders>${r.list.map((x) => html`<li class="reminder" data-reminder="${x.personId}">
           <p class="reminder-who">${avatar(x.name, 'sm')}<strong>${x.name}</strong></p>
           <p class="reminder-text">${x.message}</p>
-          <div class="btn-row"><button type="button" class="btn btn-sm" data-action="copy-one" data-id="${x.personId}">${iconSlot('copy')} Copy</button></div>
+          <div class="btn-row"><button type="button" class="btn btn-sm" data-action="copy-one" data-id="${x.personId}" data-copy-key="${x.personId}">${iconSlot('copy')} Copy</button></div>
         </li>`)}</ul>`
       : emptyState('Nobody is scheduled that week.', 'art-calendar');
   }
@@ -143,6 +144,7 @@ export function createScreen({ api, root, today = todayString(), win = globalThi
     loading: true, error: '', notice: '', summary: {}, items: [],
     reminders: { weekOf: today, list: null, loading: false, error: '', notice: '' },
   };
+  const hold = { timer: null, key: null };
   let reminderSeq = 0;
   const paint = () => {
     sheet.before();
@@ -188,10 +190,11 @@ export function createScreen({ api, root, today = todayString(), win = globalThi
     paint();
   }
 
-  async function copy(text) {
+  async function copy(text, target, label, key) {
     const ok = await copyText(win, text);
     m.reminders.notice = ok ? 'Copied. Paste it into your messages app.' : 'Could not copy. Please select the text and copy it by hand.';
     paint();
+    if (ok) flashCopied(win, root, target, label, hold, key);
   }
 
   root.addEventListener('click', (e) => {
@@ -207,10 +210,10 @@ export function createScreen({ api, root, today = todayString(), win = globalThi
       sheet.opened(id);
       return panel.open(gapSlot(it));
     }
-    if (action === 'copy-all') return copy(allRemindersText(m.reminders.list));
+    if (action === 'copy-all') return copy(allRemindersText(m.reminders.list), el, 'Copy all', 'all');
     if (action === 'copy-one') {
       const x = (m.reminders.list ?? []).find((y) => y.personId === id);
-      return x ? copy(x.message) : undefined;
+      return x ? copy(x.message, el, 'Copy', String(id)) : undefined;
     }
     const r = panel.handle(action, id);
     return r === true || r === false ? undefined : r;

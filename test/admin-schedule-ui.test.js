@@ -243,11 +243,33 @@ test('schedule: grid and cards, each slot shows person and status words', async 
   assert.match(h, /class="table-wrap sched-grid"/);
   assert.match(h, /class="cards sched-cards"/);
   assert.match(h, /colspan="2" class="sched-team">Band</);
-  for (const w of ['Ann Lee', 'Bo Diaz', 'Cy Fox', 'Nobody yet', '>Open<', '>Waiting for answer<', '>Confirmed<', '>Declined<']) assert.ok(h.includes(w), w);
+  for (const w of ['Ann Lee', 'Bo Diaz', 'Cy Fox', 'Nobody yet', '>Waiting for answer<', '>Confirmed<', '>Declined<']) assert.ok(h.includes(w), w);
+  // empty slot: icon with accessible name (Open text moved to aria-label)
+  assert.ok(h.includes('aria-label="Nobody yet, choose someone"'), 'empty slot aria-label');
   assert.match(h, /Not needed/);
   assert.ok(!/style=/.test(h));
   const empty = await schedSetup({ [SCHED_PATH]: [] });
   assert.match(empty.root.innerHTML, /No services in the next 8 weeks/);
+});
+
+test('schedule: empty slot shows plus icon with accessible name', async () => {
+  const { root } = await schedSetup();
+  const h = root.innerHTML;
+  // Empty slots have the plus icon and aria-label, not visible text
+  assert.ok(h.includes('aria-label="Nobody yet, choose someone"'), 'aria-label present');
+  assert.ok(h.includes('data-icon="plus"'), 'plus icon data-icon');
+  assert.ok(h.includes('class="slot-btn is-open"'), 'is-open class for empty slots');
+});
+
+test('schedule: today row has dot icon and visually hidden Today', async () => {
+  const { root: rootToday } = await schedSetup({ [SCHED_PATH]: [
+    { id: 10, date: TODAY, time: '10:00', title: 'Today service', slots: [{ id: 100, positionId: 10, positionName: 'Drums', teamId: 1, teamName: 'Band', status: 'open', personId: null, personName: null }] },
+  ] });
+  const hToday = rootToday.innerHTML;
+  // Dot icon beside the date
+  assert.ok(hToday.includes('data-icon="dot"'), 'dot icon present');
+  // Today as visually hidden text
+  assert.ok(hToday.includes('<span class="visually-hidden">Today</span>'), 'visually-hidden Today');
 });
 
 test('every class the schedule page emits is defined in style.css', async () => {
@@ -532,4 +554,32 @@ test('views render a heading and mount safely without a screen element', () => {
     assert.match(v.render({}), /<h1 tabindex="-1">/);
     assert.equal(v.mount({}, {}), undefined);
   }
+});
+
+test('reminders: copy button shows a check SVG, then the copy SVG after 1.5s', async () => {
+  const timers = [];
+  const cleared = [];
+  const win = {
+    navigator: { clipboard: { writeText: async () => {} } },
+    setTimeout: (fn, ms) => { timers.push({ fn, ms }); return timers.length; },
+    clearTimeout: (id) => cleared.push(id),
+  };
+  const { root } = await gapsSetup({ 'GET /api/admin/reminders?weekOf=2026-11-08': REMINDERS }, win);
+  root.submit('reminders', { weekOf: '2026-11-08' });
+  await flush();
+  const CHECK = '<path d="M4.5 12.5l5 5 10-11"/>';
+  const btn = { innerHTML: '', dataset: { action: 'copy-one', id: '8' } };
+  btn.closest = (sel) => (sel === 'button' || sel === '[data-action]' ? btn : null);
+  await root.fire('click', btn);
+  await flush();
+  assert.match(btn.innerHTML, /<svg[^>]*>.*M4\.5 12\.5l5 5 10-11.*<\/svg> Copy$/);
+  assert.equal(timers.length, 1);
+  assert.equal(timers[0].ms, 1500);
+  await root.fire('click', btn);
+  await flush();
+  assert.deepEqual(cleared, [1]);
+  assert.equal(timers.length, 2);
+  timers[1].fn();
+  assert.ok(!btn.innerHTML.includes(CHECK));
+  assert.match(btn.innerHTML, /<svg[^>]*>.*rect.*<\/svg> Copy$/);
 });

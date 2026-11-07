@@ -208,6 +208,7 @@ h2:focus-visible { outline: 3px solid var(--focus); }
 .icon-svg { width: 100%; height: 100%; }
 .icon-sm { width: 1.05em; height: 1.05em; }
 .icon-lg { width: 2rem; height: 2rem; }
+.icon-today { width: 1.2em; height: 1.2em; }
 
 /* ---------- avatars: initials in a circle, 12 palette colours ---------- */
 .avatar {

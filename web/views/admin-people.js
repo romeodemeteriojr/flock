@@ -3,6 +3,8 @@
 // shows a plain "Are you sure?" step; nothing is sent until the person says yes.
 import { html, raw } from '../lib/html.js';
 import { iconSlot } from '../lib/icons.js';
+import { flashCopied } from '../lib/copyflash.js';
+import { iconButton } from '../lib/iconbutton.js';
 import { avatar } from '../lib/avatar.js';
 import { toasts } from '../lib/toast.js';
 import { skeleton, emptyState, pageHead } from '../lib/ui.js';
@@ -68,7 +70,7 @@ function passwordBox(secret) {
       <h2 id="secret-head">${iconSlot('lock', 'icon-sm')} Password for ${secret.name}</h2>
       <p class="lead">Give this to ${secret.name}: <strong data-secret>${secret.password}</strong>. It is only shown once, and ${secret.name} will choose their own password at first login.</p>
       <div class="btn-row">
-        <button type="button" class="btn btn-primary" data-action="copy">${iconSlot('copy')} Copy</button>
+        <button type="button" class="btn btn-primary" data-action="copy" data-copy-key="secret">${iconSlot('copy')} Copy</button>
         <button type="button" class="btn" data-action="done">Done</button>
       </div>
     </section>`;
@@ -138,7 +140,8 @@ function personRow(p, m) {
   }
   const roleButton = !p.active ? ''
     : p.id === m.me ? html`<span class="hint">That's you</span>`
-      : html`<button type="button" class="btn btn-sm" data-action="role-ask" data-id="${p.id}">${nextRole(p) === 'admin' ? 'Make scheduler' : 'Make volunteer'}</button>`;
+      : iconButton('shield', nextRole(p) === 'admin' ? 'Make scheduler' : 'Make volunteer', { dataAction: 'role-ask', dataId: p.id });
+  const activeButton = iconButton(p.active ? 'user-off' : 'user-check', p.active ? 'Deactivate' : 'Reactivate', { dataAction: 'active-ask', dataId: p.id, danger: p.active });
   return html`<li data-person="${p.id}">
     <div class="person${p.active ? '' : ' is-inactive'}">
       ${avatar(p.name)}
@@ -150,10 +153,10 @@ function personRow(p, m) {
     </div>
     <div class="btn-row btn-row-compact">
       ${roleButton}
-      <button type="button" class="btn btn-sm" data-action="edit" data-id="${p.id}">Edit name</button>
-      <button type="button" class="btn btn-sm" data-action="positions" data-id="${p.id}">What can they do?</button>
-      <button type="button" class="btn btn-sm" data-action="reset-ask" data-id="${p.id}">Reset password</button>
-      <button type="button" class="btn btn-sm ${p.active ? 'btn-danger' : ''}" data-action="active-ask" data-id="${p.id}">${p.active ? 'Deactivate' : 'Reactivate'}</button>
+      ${iconButton('edit', 'Edit name', { dataAction: 'edit', dataId: p.id })}
+      ${iconButton('list-check', 'What can they do?', { dataAction: 'positions', dataId: p.id })}
+      ${iconButton('key', 'Reset password', { dataAction: 'reset-ask', dataId: p.id })}
+      ${activeButton}
     </div>
     ${extra}
   </li>`;
@@ -215,6 +218,7 @@ export function createScreen({ api, root, ctx = {}, win = globalThis }) {
     people: [], teams: [], query: '', loading: true, adding: false, newName: '',
     panel: null, secret: null, error: '', notice: '', me: null,
   };
+  const hold = { timer: null, key: null };
   const me = () => ctx.state?.user?.id ?? null;
   let busy = false;
 
@@ -267,15 +271,18 @@ export function createScreen({ api, root, ctx = {}, win = globalThis }) {
       const pid = Number(el.dataset.position);
       if (el.checked) m.panel.checked.add(pid); else m.panel.checked.delete(pid);
     },
-    copy: async () => {
+    copy: async (_id, el) => {
+      let ok = false;
       try {
         if (!win.navigator?.clipboard?.writeText) throw new Error('no clipboard');
         await win.navigator.clipboard.writeText(m.secret.password);
         m.notice = 'Copied.';
+        ok = true;
       } catch {
         m.notice = 'Could not copy. Please select the password and copy it by hand.';
       }
       paint();
+      if (ok) flashCopied(win, root, el, 'Copy', hold, 'secret');
     },
     'reset-yes': (id) => attempt(async () => {
       const p = find(id);

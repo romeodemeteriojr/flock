@@ -197,6 +197,25 @@ test('copy button guards a missing clipboard and uses it when present', async ()
   assert.match(root2.innerHTML, /Could not copy/);
 });
 
+test('password copy button shows a check SVG, then the copy SVG after 1.5s', async () => {
+  const api = fakeApi({ 'GET /api/people': PEOPLE, 'GET /api/teams': TEAMS, 'POST /api/people/2/reset-password': { tempPassword: 'a-b-1' } });
+  const timers = [];
+  const win = { navigator: { clipboard: { writeText: async () => {} } }, setTimeout: (fn, ms) => { timers.push({ fn, ms }); return timers.length; }, clearTimeout() {} };
+  const root = fakeRoot();
+  const s = people.createScreen({ api, root, win });
+  await s.ready;
+  root.click('reset-ask', 2); root.click('reset-yes', 2); await flush();
+  const CHECK = 'M4.5 12.5l5 5 10-11';
+  const btn = { innerHTML: '', dataset: { action: 'copy' } };
+  btn.closest = () => btn;
+  root.fire('click', btn); await flush();
+  assert.match(btn.innerHTML, /<svg[^>]*>.*M4\.5 12\.5l5 5 10-11.*<\/svg> Copy$/);
+  assert.equal(timers[0].ms, 1500);
+  timers[0].fn();
+  assert.ok(!btn.innerHTML.includes(CHECK));
+  assert.match(btn.innerHTML, /<svg[^>]*>.*rect.*<\/svg> Copy$/);
+});
+
 test('view render/mount shape', () => {
   assert.match(people.render({}), /<h1 tabindex="-1">People<\/h1>/);
   assert.equal(people.mount({ querySelector: () => null }, {}), undefined);
@@ -302,9 +321,9 @@ test('each row shows a text level badge and the matching role button', async () 
   const ann = rowOf(root, 1);
   const sam = rowOf(root, 2);
   assert.match(ann, /chip-plain">Scheduler</);
-  assert.match(ann, />Make volunteer</);
+  assert.match(ann, /aria-label="Make volunteer"/);
   assert.match(sam, /chip-plain">Volunteer</);
-  assert.match(sam, />Make scheduler</);
+  assert.match(sam, /aria-label="Make scheduler"/);
 });
 
 test('own row has no role button and says That\'s you', async () => {
@@ -325,6 +344,55 @@ test('deactivated row shows its level but no role button', async () => {
   assert.match(joe, /Deactivated/);
   assert.ok(!joe.includes('role-ask'));
   assert.ok(!joe.includes('Make scheduler'));
+});
+
+test('toolbar buttons: every one has an accessible name, and each action opens its panel', async () => {
+  const { root } = await setupAs(9);
+  const ann = rowOf(root, 1);
+  // Every toolbar button in an active row is named.
+  const buttons = [...ann.matchAll(/<button[^>]*>/g)].map((m) => m[0]);
+  assert.ok(buttons.length >= 4, `expected at least four toolbar buttons, found ${buttons.length}: ${ann}`);
+  for (const b of buttons) assert.match(b, /aria-label="[^"]+"/, `a toolbar button has no accessible name: ${b}`);
+  // The five actions still exist with their data-action names.
+  for (const [action, name] of [['role-ask', 'Make volunteer'], ['edit', 'Edit name'], ['positions', 'What can they do?'], ['reset-ask', 'Reset password'], ['active-ask', 'Deactivate']]) {
+    const re = new RegExp(`data-action="${action}"`);
+    const btns = buttons.filter((b) => re.test(b));
+    assert.equal(btns.length, 1, `expected exactly one ${action} button: ${ann}`);
+    assert.ok(btns[0].includes(`aria-label="${name}"`), `the ${action} button is misnamed: ${btns[0]}`);
+  }
+  // Each action opens the same panel as before.
+  root.click('edit', 1);
+  assert.match(root.innerHTML, /data-form="edit-name" data-id="1"/);
+  root.click('cancel');
+  root.click('positions', 1);
+  assert.match(root.innerHTML, /What can Ann Admin do\?/);
+  root.click('cancel');
+  root.click('reset-ask', 1);
+  assert.match(root.innerHTML, /Yes, reset it/);
+  root.click('cancel');
+  root.click('role-ask', 1);
+  assert.match(root.innerHTML, /Make Ann Admin a volunteer\?/);
+  root.click('cancel');
+  root.click('active-ask', 1);
+  assert.match(root.innerHTML, /Deactivate <strong>Ann Admin<\/strong>\?/);
+});
+
+test('deactivated row: the active button says Reactivate, and its actions still open their panels', async () => {
+  const { root } = await setupAs(9);
+  const joe = rowOf(root, 3);
+  assert.match(joe, /aria-label="Reactivate"[^>]*data-action="active-ask"/);
+  assert.ok(!joe.includes('icon-btn-danger'), 'a reactivate button is not a danger button');
+  root.click('edit', 3);
+  assert.match(root.innerHTML, /data-form="edit-name" data-id="3"/);
+  root.click('cancel');
+  root.click('positions', 3);
+  assert.match(root.innerHTML, /What can Old Joe do\?/);
+  root.click('cancel');
+  root.click('reset-ask', 3);
+  assert.match(root.innerHTML, /Yes, reset it/);
+  root.click('cancel');
+  root.click('active-ask', 3);
+  assert.match(root.innerHTML, /Reactivate <strong>Old Joe<\/strong>\?/);
 });
 
 test('role confirm panel names the person and the right level', async () => {
