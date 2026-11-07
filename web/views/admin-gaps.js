@@ -71,6 +71,15 @@ function summary(sum) {
 // Colour family per kind (the label words always go with it).
 const GAP_TONE = { open: 'bad', declined: 'bad', unanswered: 'wait', blocked: 'wait', inactive: 'wait' };
 
+// Status icon per gap kind (mirrors the slotpanel STATUS icons where they overlap).
+const GAP_ICONS = Object.freeze({
+  open: 'plus',
+  declined: 'x',
+  unanswered: 'clock',
+  blocked: 'user-off',
+  inactive: 'user-off',
+});
+
 function gapItem(it) {
   return html`<li>
     <button type="button" class="slot-btn gap-btn" data-action="slot-open" data-id="${it.slotId}">
@@ -103,7 +112,7 @@ function reminders(m) {
     <form class="form form-inline" data-form="reminders" novalidate>
       <div class="field"><label for="week-of">Week starting</label>
         <input id="week-of" name="weekOf" type="date" required value="${r.weekOf}"></div>
-      <button type="submit" class="btn btn-primary">Show messages</button>
+      <button type="submit" class="btn btn-primary">${iconSlot('send')} Show messages</button>
     </form>
     ${body}
   </section>`;
@@ -119,7 +128,7 @@ export function renderScreen(m, panelHtml = '') {
     <h2 class="section-title">Next 4 weeks</h2>
     ${summary(m.summary)}
     ${groups.length ? groups.map((g) => html`<section class="gap-group" data-gap-group="${g.type}">
-      <h3 class="gap-title"><span class="chip chip-${GAP_TONE[g.type]}">${g.label} (${g.items.length})</span></h3>
+      <h3 class="gap-title"><span class="gap-icon">${iconSlot(GAP_ICONS[g.type])}</span> <span class="gap-label">${g.label}</span> <span class="gap-count" role="img" data-gap-count="${g.type}" aria-label="${g.items.length} ${g.type}">${g.items.length}</span></h3>
       <p class="hint">${GAP_HINTS[g.type]}</p>
       <ul class="list gap-list">${g.items.map(gapItem)}</ul>
     </section>`) : emptyState('No gaps. Every position has someone.', 'art-done')}

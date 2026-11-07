@@ -430,9 +430,26 @@ test('gaps: summary counts and groups in a fixed order with plain labels', async
   const h = root.innerHTML;
   assert.match(h, /data-count="open">2<\/strong> Nobody yet/);
   assert.match(h, /data-count="inactive">0<\/strong> No longer active/);
-  const order = ['Nobody yet (2)', 'Said no (1)', 'Hasn&#39;t answered (1)', 'Now away (1)'].map((t) => h.indexOf(t));
-  assert.ok(order.every((i) => i > 0), order.join());
-  assert.deepEqual([...order].sort((a, b) => a - b), order);
+  // Group headers: icon + label + count badge, in the correct order
+  const labels = ['Nobody yet', 'Said no', "Hasn&#39;t answered", 'Now away'];
+  const types = ['open', 'declined', 'unanswered', 'blocked'];
+  // Each group must appear in the fixed GAP_ORDER; positions must be strictly ascending.
+  const positions = types.map((t) => [h.indexOf(`data-gap-group="${t}"`), h.indexOf(`data-gap-count="${t}"`)]);
+  assert.ok(positions.every(([i]) => i > 0), 'all group markers present');
+  // Orders: first-group < first-of-next-group < ...
+  const firstPositions = positions.map(([i]) => i);
+  for (let i = 1; i < firstPositions.length; i++) {
+    assert.ok(firstPositions[i] > firstPositions[i - 1], `group order: ${types[i - 1]} before ${types[i]}`);
+  }
+  // Each count badge has a correct aria-label like "1 declined" (role="img").
+  const badgeRegex = /data-gap-count="(\w+)" aria-label="(\d+) (\w+)"/g;
+  const badges = [...h.matchAll(badgeRegex)];
+  assert.equal(badges.length, 4, 'exactly 4 count badges');
+  for (const [_, type, n, label] of badges) {
+    assert.equal(n, String(GAPS.summary[type]), `badge count for ${type}`);
+    assert.equal(label, type, `badge type for ${type}`);
+    assert.ok(n !== '0', `${type} badge is visible (count > 0)`);
+  }
   assert.ok(!h.includes('data-gap-group="inactive"'));
   assert.deepEqual(gaps.groupGaps(GAPS.items).map((g) => g.label), ['Nobody yet', 'Said no', "Hasn't answered", 'Now away']);
   const empty = await gapsSetup({ 'GET /api/admin/gaps': { summary: {}, items: [] } });
