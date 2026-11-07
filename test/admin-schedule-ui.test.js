@@ -70,6 +70,32 @@ test('status chip shows words for every status (symbol comes from CSS class)', (
   for (const sel of ['.chip-open::before', '.chip-wait::before', '.chip-ok::before', '.chip-bad::before']) assert.ok(css.includes(sel), sel);
 });
 
+test('status chip: the four statuses have four distinct icons', () => {
+  const iconOf = (s) => [...String(statusChip(s)).matchAll(/data-icon="([^"]+)"/g)].map((m) => m[1]);
+  const icons = ['open', 'pending', 'accepted', 'declined'].map(iconOf);
+  for (const st of ['open', 'pending', 'accepted', 'declined']) assert.equal(iconOf(st).length, 1, st);
+  const want = { open: 'plus', pending: 'clock', accepted: 'check', declined: 'x' };
+  for (const [st, name] of Object.entries(want)) assert.equal(iconOf(st)[0], name, st);
+  const seen = new Set(icons.flat());
+  assert.equal(seen.size, 4, `expected 4 distinct icons, got ${[...seen].join(', ')}`);
+});
+
+test('status chip compact: icon only, with the word as accessible name', () => {
+  for (const [st, [word]] of Object.entries({ open: ['Open'], pending: ['Waiting for answer'], accepted: ['Confirmed'], declined: ['Declined'] })) {
+    const s = String(statusChip(st, { compact: true }));
+    assert.match(s, /chip-compact/, st);
+    assert.match(s, new RegExp(`aria-label="${word}"`), st);
+    assert.ok(s.includes('visually-hidden'), st);
+    assert.match(s, new RegExp(`>\s*${word}<\/span>`), st);
+    assert.ok(!/chip-compact[^>]*>\s*<span/.test(s.replace(/<span class="visually-hidden"[^>]*>[^<]*<\/span>/, '').replace(/<span class="icon[^"]*"[^>]*>[^<]*<\/span>/, '')), st);
+  }
+  // the full chip is not compact and has no aria-label (the word is visible)
+  const full = String(statusChip('accepted'));
+  assert.doesNotMatch(full, /chip-compact/);
+  assert.doesNotMatch(full, /aria-label/);
+  assert.match(full, />Confirmed</);
+});
+
 test('conflict messages are plain, and inactive/past are never overridable', () => {
   assert.equal(conflictMessage('blocked', 'Sam'), 'Sam is away on that date. Assign anyway?');
   assert.equal(conflictMessage('not_qualified', 'Sam', 'Drums'), 'Sam is not trained for Drums. Assign anyway?');

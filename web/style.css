@@ -511,7 +511,7 @@ input[type="checkbox"], input[type="radio"] { width: 1.4rem; height: 1.4rem; acc
 .segment[aria-pressed="true"] { background: var(--surface); color: var(--text); box-shadow: var(--shadow-1); cursor: default; }
 .segment[aria-pressed="true"]::before { content: "✓ "; }
 
-/* ---------- status chips: a word + a symbol, never colour alone ---------- */
+/* ---------- status chips: a word + an icon, never colour alone ---------- */
 .chip {
   display: inline-flex; align-items: center; gap: 0.3em;
   padding: 0.2rem 0.7rem;
@@ -520,6 +520,9 @@ input[type="checkbox"], input[type="radio"] { width: 1.4rem; height: 1.4rem; acc
   font-variant-numeric: tabular-nums;
 }
 .chip::before { font-weight: 900; }
+/* Status chips carry a real SVG icon (slotpanel.js); the old text symbol stays
+   in the CSS as the no-JS fallback and is hidden once the icon slot exists. */
+.chip:has([data-icon])::before { content: ""; }
 .chip-ok { color: var(--success); background: var(--success-bg); }
 .chip-ok::before { content: "✓"; }
 .chip-wait { color: var(--warning); background: var(--warning-bg); border-style: dashed; }
@@ -531,7 +534,9 @@ input[type="checkbox"], input[type="radio"] { width: 1.4rem; height: 1.4rem; acc
 .chip-info { color: var(--on-accent-soft); background: var(--accent-soft); border-color: transparent; }
 .chip-today { color: var(--on-accent); background: var(--accent); border-color: var(--accent); font-size: var(--fs-xs); }
 .chip-today::before { content: "●"; }
-.chip-icon { width: 1em; height: 1em; }
+.chip-icon { width: 1em; height: 1em; flex: none; }
+/* Compact chip: the icon only, with the word kept as visually hidden text. */
+.chip-compact { padding: 0.35rem; }
 
 /* ---------- cards and lists ---------- */
 .card {

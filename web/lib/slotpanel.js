@@ -7,7 +7,7 @@
 //   if (panel.handle(action, id)) return;   -> inside the screen's click handler
 //   panel.open(slot)                        -> show it for a slot
 // `changed(notice)` runs after an assign or remove worked, so the screen can reload.
-import { html } from './html.js';
+import { html, attr } from './html.js';
 import { formatDate, formatTime } from './dates.js';
 import { iconSlot } from './icons.js';
 import { avatar } from './avatar.js';
@@ -16,10 +16,10 @@ import { skeleton, emptyState } from './ui.js';
 // ---------- status chip ----------
 
 export const STATUS = Object.freeze({
-  open: { label: 'Open', cls: 'chip-plain chip-open' },
-  pending: { label: 'Waiting for answer', cls: 'chip-wait' },
-  accepted: { label: 'Confirmed', cls: 'chip-ok' },
-  declined: { label: 'Declined', cls: 'chip-bad' },
+  open: { label: 'Open', cls: 'chip-plain chip-open', icon: 'plus' },
+  pending: { label: 'Waiting for answer', cls: 'chip-wait', icon: 'clock' },
+  accepted: { label: 'Confirmed', cls: 'chip-ok', icon: 'check' },
+  declined: { label: 'Declined', cls: 'chip-bad', icon: 'x' },
 });
 
 export function statusOf(slot) {
@@ -29,10 +29,15 @@ export function statusOf(slot) {
   return STATUS[slot.status] ? slot.status : 'pending';
 }
 
-// The chip shows a symbol (from the CSS) and words, never colour alone.
-export function statusChip(status) {
+// The chip shows an icon and words, never colour alone. With { compact: true }
+// it shows the icon only; the word stays as aria-label and visually hidden
+// text, so the chip keeps an accessible name.
+export function statusChip(status, { compact = false } = {}) {
   const s = STATUS[status] ?? STATUS.open;
-  return html`<span class="chip ${s.cls}" data-status="${status in STATUS ? status : 'open'}">${s.label}</span>`;
+  if (compact) {
+    return html`<span class="chip ${s.cls} chip-compact" data-status="${status in STATUS ? status : 'open'}" aria-label="${attr(s.label)}">${iconSlot(s.icon, 'chip-icon')}<span class="visually-hidden">${s.label}</span></span>`;
+  }
+  return html`<span class="chip ${s.cls}" data-status="${status in STATUS ? status : 'open'}">${iconSlot(s.icon, 'chip-icon')}${s.label}</span>`;
 }
 
 // ---------- 409 explanations ----------
