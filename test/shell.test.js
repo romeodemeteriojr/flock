@@ -26,7 +26,7 @@ async function webFiles(dir = WEB) {
 }
 const rel = (f) => '/' + path.relative(WEB, f).split(path.sep).join('/');
 
-const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css' };
+const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.woff2': 'font/woff2' };
 
 const member = { id: 2, name: 'Mary', role: 'member', mustChangePassword: false };
 const admin = { id: 1, name: 'Ann', role: 'admin', mustChangePassword: false };
@@ -47,10 +47,10 @@ test('every web file is served with the right content type', async () => {
     for (const f of files) {
       const type = TYPES[path.extname(f)];
       assert.ok(type, `unexpected file type ${rel(f)}`);
-      const r = await t.request('GET', rel(f));
+      const r = await fetch(t.url + rel(f));
       assert.equal(r.status, 200, rel(f));
-      assert.ok(r.headers['content-type'].startsWith(type), `${rel(f)}: ${r.headers['content-type']}`);
-      assert.equal(r.text, await readFile(f, 'utf8'));
+      assert.ok(r.headers.get('content-type').startsWith(type), `${rel(f)}: ${r.headers.get('content-type')}`);
+      assert.deepEqual(Buffer.from(await r.arrayBuffer()), await readFile(f));
     }
     const root = await t.request('GET', '/');
     assert.equal(root.status, 200);
@@ -69,7 +69,7 @@ test('index.html has lang, viewport, title, #app, module script and stylesheet',
 });
 
 test('no external URLs, inline scripts, inline handlers or inline styles in web files', async () => {
-  for (const f of await webFiles()) {
+  for (const f of (await webFiles()).filter((p) => !p.endsWith('.woff2'))) {
     const s = await readFile(f, 'utf8');
     const name = rel(f);
     assert.doesNotMatch(s, /https?:\/\//i, `${name}: has an http(s) URL`);
@@ -89,9 +89,10 @@ test('no external URLs, inline scripts, inline handlers or inline styles in web 
 
 test('style.css has the basics', async () => {
   const s = await readFile(path.join(WEB, 'style.css'), 'utf8');
-  assert.match(s, /font-size:\s*18px/);
+  assert.match(s, /font-size:\s*16\.2px/);
   assert.match(s, /system-ui/);
-  assert.match(s, /min-height:\s*48px/);
+  assert.match(s, /--control-size:\s*48px/);
+  assert.match(s, /min-height:\s*var\(--control-size\)/);
   assert.match(s, /:focus-visible/);
   assert.match(s, /max-width:\s*960px/);
   assert.match(s, /@media print/);

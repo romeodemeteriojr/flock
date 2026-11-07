@@ -5,11 +5,12 @@ FROM node:${NODE_VERSION}-slim
 
 WORKDIR /app
 
-# Only what the app needs (no tests, docs, .git or data).
+# Only what the app needs, plus bundled font licenses (no tests, .git or data).
 COPY package.json CHANGELOG.md ./
 COPY bin ./bin
 COPY src ./src
 COPY web ./web
+COPY licenses ./licenses
 
 # The built-in "node" user is not root. It owns /data, where the database lives.
 RUN mkdir -p /data && chown node:node /data

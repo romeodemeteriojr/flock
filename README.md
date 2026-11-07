@@ -115,6 +115,11 @@ delete `data/demo.db`.
 
 ## Look and feel
 
+Flock uses a compact, neutral light/dark design inspired by the oMLX dashboard,
+with Inter bundled locally (license: `licenses/Inter-OFL.txt`). Text and
+mouse/trackpad controls are 10% smaller; touch targets stay at least 48px.
+No fonts or other assets are fetched from outside services.
+
 Flock follows your phone or computer's light or dark setting by itself (dark
 mode), and turns off animations if you have asked your device for less
 motion. On phones the main pages sit in a tab bar at the bottom; on wider

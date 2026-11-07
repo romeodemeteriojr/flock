@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### UI styling
+
+- Neutral oMLX-inspired light and dark palettes, flatter buttons and subtler cards.
+- Locally bundled Inter font; text and mouse/trackpad controls are 10% smaller.
+- Touch targets remain at least 48px, including devices with both touch and a mouse.
+- Existing mobile navigation, responsive schedules, contrast checks and print layouts stay intact.
+
 ## 0.1.0
 
 First release, built card by card.

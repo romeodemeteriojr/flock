@@ -66,7 +66,9 @@ const PAIRS = [
   ['--on-accent', '--accent-2', 4.5, 'primary button text (gradient end)'],
   ['--on-accent-soft', '--accent-soft', 4.5, 'current tab, info chips and notices, date tiles'],
   ['--on-hero', '--hero-from', 4.5, 'hero card text (gradient start)'],
-  ['--on-hero', '--hero-to', 4.5, 'hero card text (gradient end)'],
+  ['--on-hero', '--hero-to', 4.5, 'hero card text'],
+  ['--on-hero', '--surface-3', 4.5, 'hero badge and gallery links'],
+  ['--on-accent', '--accent', 3, 'empty-state check mark'],
   ['--success', '--success-bg', 4.5, 'success chip text'],
   ['--warning', '--warning-bg', 4.5, 'warning chip text'],
   ['--danger', '--danger-bg', 4.5, 'danger chip text and form errors'],
@@ -115,7 +117,7 @@ test('contrast: the dark theme really changes the surfaces and text', () => {
 
 // ---------- the stylesheet ----------
 
-test('style.css: dark theme, reduced motion and print rules; no @import or outside URLs', () => {
+test('style.css: dark theme, reduced motion and print rules; only a bundled font URL', () => {
   assert.match(CSS, /@media\s*\(prefers-color-scheme:\s*dark\)/);
   const rm = CSS.slice(CSS.search(/@media\s*\(prefers-reduced-motion:\s*reduce\)/));
   assert.ok(rm.length < CSS.length, 'has prefers-reduced-motion');
@@ -126,22 +128,27 @@ test('style.css: dark theme, reduced motion and print rules; no @import or outsi
   assert.match(print, /\.sched-grid\s*\{\s*display:\s*block/);
   assert.match(print, /#000/);
   assert.doesNotMatch(CSS, /@import/i);
-  assert.doesNotMatch(CSS, /url\(/i);
   assert.doesNotMatch(CSS, /https?:|\/\/[a-z0-9]/i);
-  assert.doesNotMatch(CSS, /@font-face/i);
+  const urls = [...CSS.matchAll(/url\(["']?([^"')]+)["']?\)/g)].map((m) => m[1]);
+  assert.deepEqual(urls, ['/fonts/inter.woff2']);
+  assert.equal(readFileSync(path.join(WEB, 'fonts/inter.woff2')).subarray(0, 4).toString(), 'wOF2');
+  assert.match(CSS, /@font-face\s*\{[^}]*font-display:\s*swap/);
+  assert.match(CSS, /font-weight:\s*100 900/);
+  assert.match(readFileSync(path.join(WEB, '../licenses/Inter-OFL.txt'), 'utf8'), /SIL OPEN FONT LICENSE/);
 });
 
-test('style.css: system font stack, tabular numbers, big rounded corners, 4px spacing, short transitions', () => {
-  assert.match(CSS, /--font:\s*ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto/);
+test('style.css: Inter with system fallback, neutral rounded controls, 4px spacing, short transitions', () => {
+  assert.match(CSS, /--font:\s*"Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto/);
   assert.match(CSS, /font-variant-numeric:\s*tabular-nums/);
   const px = (name) => Number((new RegExp(`${name}:\\s*(\\d+)px`).exec(CSS) ?? [])[1]);
-  assert.ok(px('--radius') >= 14 && px('--radius-lg') <= 20, 'radius 14-20px');
+  assert.deepEqual(['--radius-sm', '--radius', '--radius-lg'].map(px), [8, 12, 16]);
   for (let i = 1; i <= 6; i++) assert.equal(px(`--s-${i}`), i * 4, `--s-${i}`);
   const ms = [...CSS.matchAll(/--(fast|med):\s*(\d+)ms/g)].map((m) => Number(m[2]));
   assert.ok(ms.length === 2 && ms.every((n) => n >= 120 && n <= 200), `transitions ${ms}`);
   assert.match(CSS, /\.btn:active\s*\{[^}]*scale\(0\.9\d\)/, 'press scales down slightly');
-  assert.match(CSS, /\.btn-primary\s*\{[^}]*linear-gradient/, 'primary button gradient');
-  assert.match(CSS, /\.hero\s*\{[^}]*linear-gradient/, 'hero gradient');
+  assert.match(CSS, /\.btn-primary\s*\{[^}]*background:\s*var\(--accent\)/, 'flat primary button');
+  assert.match(CSS, /\.hero\s*\{[^}]*background:\s*var\(--hero-from\)/, 'neutral hero');
+  assert.doesNotMatch(CSS, /linear-gradient\(135deg/);
   assert.match(CSS, /backdrop-filter/, 'blurred top bar');
   assert.match(CSS, /@keyframes shimmer/, 'skeleton shimmer');
 });
@@ -149,17 +156,33 @@ test('style.css: system font stack, tabular numbers, big rounded corners, 4px sp
 // Flattened rules: { sel: ['a', 'b'], body } (rules inside @media included).
 const RULES = [...CSS.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/([^{}]+)\{([^{}]*)\}/g)]
   .map((m) => ({ sel: m[1].trim().split(',').map((s) => s.trim()), body: m[2] }));
-const toPx = (v) => (v.endsWith('rem') ? parseFloat(v) * 18 : parseFloat(v));
+function toPx(v) {
+  if (v.startsWith('var(')) v = resolveToken(palettes(CSS).light, v.slice(4, -1));
+  return v.endsWith('rem') ? parseFloat(v) * 16.2 : parseFloat(v);
+}
+
+test('density: fonts and fine-pointer controls shrink by 10%; touch and hybrid targets do not', () => {
+  const fontSize = Number(/html\s*\{\s*font-size:\s*([\d.]+)px/.exec(CSS)?.[1]);
+  assert.equal(fontSize, 18 * 0.9);
+  const fine = /@media \(hover: hover\) and \(pointer: fine\)\s*\{([^]*?)\n\}/.exec(CSS);
+  const coarse = /@media \(any-pointer: coarse\)\s*\{([^]*?)\n\}/.exec(CSS);
+  assert.ok(fine && coarse && coarse.index > fine.index, 'touch override follows mouse density');
+  assert.equal(Number(/--control-size:\s*([\d.]+)px/.exec(fine[1])?.[1]), 48 * 0.9);
+  assert.equal(Number(/--control-lg-size:\s*([\d.]+)px/.exec(fine[1])?.[1]), 56 * 0.9);
+  assert.match(coarse[1], /--control-size:\s*48px/);
+  assert.match(coarse[1], /--control-lg-size:\s*56px/);
+});
 
 test('tap targets: buttons, tabs, segments, fields and checkboxes are at least 48px tall', () => {
   for (const sel of ['.btn', '.nav-list a', '.nav-more', '.segment', '.icon-btn', '.toast-close', '.check', '.slot-btn',
     '.brand', 'input[type="text"]', 'input[type="date"]', 'select', '.gallery-toc a']) {
     const rule = RULES.find((r) => r.sel.includes(sel) && /(min-)?height:/.test(r.body));
     assert.ok(rule, `no size rule for ${sel}`);
-    const v = /(?:min-height|(?<![-\w])height):\s*([\d.]+(?:px|rem))/.exec(rule.body);
+    const v = /(?:min-height|(?<![-\w])height):\s*([\d.]+(?:px|rem)|var\(--[\w-]+\))/.exec(rule.body);
     assert.ok(v && toPx(v[1]) >= 48, `${sel} is ${v?.[1]}`);
   }
-  assert.ok(RULES.some((r) => r.sel.includes('.icon-btn') && /width:\s*48px/.test(r.body)), 'icon buttons are 48px wide');
+  assert.ok(RULES.some((r) => r.sel.includes('.icon-btn') && /width:\s*var\(--control-size\)/.test(r.body)), 'icon buttons use the shared target size');
+  assert.equal(toPx('var(--control-size)'), 48);
 });
 
 test('focus ring is always visible and status never relies on colour alone', () => {
@@ -301,7 +324,7 @@ test('every view still escapes: no raw tags from hostile data, and no SVG in vie
 // ---------- web files ----------
 
 test('no style= attribute, no on* attribute and no inline script in any web file', () => {
-  for (const f of webFiles()) {
+  for (const f of webFiles().filter((p) => !p.endsWith('.woff2'))) {
     const s = readFileSync(f, 'utf8');
     assert.doesNotMatch(s, /\sstyle\s*=/i, `${rel(f)} has a style attribute`);
     assert.doesNotMatch(s, /<[a-z][^>]*\son[a-z]+\s*=/i, `${rel(f)} has an on* attribute`);
