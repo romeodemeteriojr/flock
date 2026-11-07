@@ -905,13 +905,11 @@ th, td { text-align: left; padding: var(--s-2) var(--s-3); border-bottom: 1px so
   :root { --control-size: 48px; --control-lg-size: 56px; }
 }
 
-@media (max-width: 380px) {
-  .nav-who { display: none; }
-  .field-pair { grid-template-columns: 1fr; }
-}
 @media (max-width: 560px) {
-  .nav-who { max-width: 7rem; }
+  .nav-who { display: none; }
   .nav-logout-label { display: none; }
+  /* iOS date/time pickers need more room than a 1fr side-by-side column. */
+  .field-pair { grid-template-columns: 1fr; }
 }
 
 /* ---------- reduced motion: no movement anywhere ----------
