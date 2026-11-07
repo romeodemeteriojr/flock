@@ -137,10 +137,10 @@ test('days off: form is prefilled, validated, and posts', async () => {
   assert.match(root.innerHTML, /Please pick/);
   await root.submit('blockout', { from: '2026-11-10', to: '2026-11-09', reason: '' });
   assert.match(root.innerHTML, /be before the/);
-  assert.equal(api.calls.length, 1);
+  assert.deepEqual(api.calls, ['GET /api/me/availability', 'GET /api/me/blockouts']);
 
   await root.submit('blockout', { from: '2026-11-10', to: '2026-11-12', reason: 'Trip' });
-  assert.equal(api.calls[1], 'POST /api/me/blockouts {"startDate":"2026-11-10","endDate":"2026-11-12","reason":"Trip"}');
+  assert.equal(api.calls[2], 'POST /api/me/blockouts {"startDate":"2026-11-10","endDate":"2026-11-12","reason":"Trip"}');
   assert.match(root.innerHTML, /Saved/);
   assert.doesNotMatch(root.innerHTML, /data-conflicts/);
 });
@@ -162,6 +162,35 @@ test('days off: conflict notice, list, remove, errors', async () => {
   const bad = await setup(off, { 'GET /api/me/blockouts': { blockouts: [] }, 'POST /api/me/blockouts': new Error('That is too long.') });
   await bad.root.submit('blockout', { from: '2026-11-08', to: '2026-11-08', reason: '' });
   assert.match(bad.root.innerHTML, /That is too long\./);
+});
+
+test('how often: shows the default, then saves a choice with PUT', async () => {
+  const { root, api } = await setup(off, {
+    'GET /api/me/blockouts': { blockouts: [] },
+    'GET /api/me/availability': { availability: { everyWeeks: 2, isDefault: true, updatedAt: null } },
+    'PUT /api/me/availability': { availability: { everyWeeks: 4, isDefault: false, updatedAt: '2026-11-04T10:00:00.000Z' } },
+  });
+  assert.match(root.innerHTML, /How often can you serve\?/);
+  assert.match(root.innerHTML, /<option value="2" selected>Every 2 weeks<\/option>/);
+  assert.match(root.innerHTML, /You have not chosen yet/);
+  await root.submit('availability', { everyWeeks: '4' });
+  assert.equal(api.calls.at(-1), 'PUT /api/me/availability {"everyWeeks":4}');
+  assert.match(root.innerHTML, /<option value="4" selected>Every 4 weeks<\/option>/);
+  assert.match(root.innerHTML, /Saved\. Every 4 weeks at most\./);
+  assert.doesNotMatch(root.innerHTML, /You have not chosen yet/);
+  assert.equal(api.calls.filter((c) => c.startsWith('POST')).length, 0, 'saving how often never adds a day off');
+});
+
+test('how often: pause, and a failed save shows the server message', async () => {
+  const ok = await setup(off, {
+    'GET /api/me/blockouts': { blockouts: [] },
+    'PUT /api/me/availability': { availability: { everyWeeks: 0, isDefault: false, updatedAt: 'x' } },
+  });
+  await ok.root.submit('availability', { everyWeeks: '0' });
+  assert.match(ok.root.innerHTML, /Saved\. Flock will not ask you for now\./);
+  const bad = await setup(off, { 'GET /api/me/blockouts': { blockouts: [] }, 'PUT /api/me/availability': new Error('How often must be one of 0, 1, 2, 3, 4, 6 or 8 weeks') });
+  await bad.root.submit('availability', { everyWeeks: '5' });
+  assert.match(bad.root.innerHTML, /How often must be one of/);
 });
 
 test('mounting twice on the same root leaves one set of handlers', async () => {

@@ -43,5 +43,5 @@ export function fakeApi(routes) {
     if (r instanceof Error) throw r;
     return r ?? {};
   };
-  return { calls, get: (p) => run('GET', p), post: (p, b = {}) => run('POST', p, b), del: (p) => run('DELETE', p) };
+  return { calls, get: (p) => run('GET', p), post: (p, b = {}) => run('POST', p, b), put: (p, b = {}) => run('PUT', p, b), del: (p) => run('DELETE', p) };
 }

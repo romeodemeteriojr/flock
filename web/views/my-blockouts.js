@@ -18,6 +18,34 @@ export function checkForm({ from, to }) {
   return '';
 }
 
+// How often a volunteer can serve; the values match EVERY_WEEKS_CHOICES on the server.
+export const FREQUENCIES = Object.freeze([
+  [1, 'Every week'],
+  [2, 'Every 2 weeks'],
+  [3, 'Every 3 weeks'],
+  [4, 'Every 4 weeks'],
+  [6, 'Every 6 weeks'],
+  [8, 'Every 8 weeks'],
+  [0, 'Not right now (pause)'],
+]);
+
+export function frequencyLabel(n) {
+  return FREQUENCIES.find(([v]) => v === n)?.[1] ?? '';
+}
+
+function availabilityCard(a, busy) {
+  const current = a?.everyWeeks ?? 2;
+  return html`<form class="form card form-card" data-form="availability" novalidate>
+      <h2 class="card-title">How often can you serve?</h2>
+      <div class="field">
+        <label for="av-every">I can serve</label>
+        <select id="av-every" name="everyWeeks">${FREQUENCIES.map(([v, label]) => html`<option value="${v}"${v === current ? html` selected` : ''}>${label}</option>`)}</select>
+      </div>
+      <p class="hint">${a && !a.isDefault ? 'Flock uses this when it fills the schedule.' : 'You have not chosen yet, so Flock asks you at most every 2 weeks.'}</p>
+      <button type="submit" class="btn btn-primary btn-block" ${busy}>Save</button>
+    </form>`;
+}
+
 export function conflictLine(c) {
   return `You are already scheduled on ${formatDate(c.date)} as ${c.positionName}. Please tell your scheduler.`;
 }
@@ -52,6 +80,7 @@ export function render(state, view = { loading: true }) {
     ${conflicts.length ? html`<div class="notice notice-warn" role="alert" data-conflicts>
       ${iconSlot('warning', 'notice-icon')}<div class="notice-body"><ul>${conflicts.map((c) => html`<li>${conflictLine(c)}</li>`)}</ul></div>
     </div>` : ''}
+    ${availabilityCard(view.availability, busy)}
     <form class="form card form-card" data-form="blockout" novalidate>
       <h2 class="card-title">Add days off</h2>
       <div class="field-pair">
@@ -89,6 +118,34 @@ export function mount(main, ctx) {
       view.error = err?.message || GENERIC;
     }
     view.loading = false;
+    paint();
+  }
+
+  async function loadAvailability() {
+    try {
+      const r = await ctx.api.get('/api/me/availability');
+      view.availability = r?.availability ?? null;
+    } catch {
+      view.availability = null; // the form still shows the default
+    }
+    paint();
+  }
+
+  async function saveAvailability(form) {
+    const everyWeeks = Number(form.everyWeeks?.value);
+    view.message = null;
+    view.problem = null;
+    view.conflicts = [];
+    view.busy = true;
+    paint();
+    try {
+      const r = await ctx.api.put('/api/me/availability', { everyWeeks });
+      view.availability = r?.availability ?? null;
+      view.message = everyWeeks === 0 ? 'Saved. Flock will not ask you for now.' : `Saved. ${frequencyLabel(everyWeeks)} at most.`;
+    } catch (err) {
+      view.problem = err?.message || GENERIC;
+    }
+    view.busy = false;
     paint();
   }
 
@@ -142,12 +199,13 @@ export function mount(main, ctx) {
     if (el.dataset.action === 'retry') { view.loading = true; paint(); return load(); }
   });
   root.addEventListener('submit', (e) => {
-    const form = e.target?.closest?.('form[data-form="blockout"]');
+    const form = e.target?.closest?.('form[data-form]');
     if (!form) return;
     e.preventDefault();
+    if (form.dataset.form === 'availability') return saveAvailability(form.elements);
     return add(form.elements);
   });
 
   paint();
-  return load();
+  return Promise.all([loadAvailability(), load()]);
 }
