@@ -1,6 +1,6 @@
 # 5. Auto-fill: fair weekly assignments and how often volunteers serve
 
-Status: accepted (not yet built)
+Status: accepted
 
 ## TL;DR
 

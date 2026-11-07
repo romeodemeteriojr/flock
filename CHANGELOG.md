@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Fill open positions and how often volunteers serve
+
+- Volunteers choose how often they can serve (every week, every 2, 3, 4, 6 or 8 weeks, or a pause) on "Days I can't serve". The default is every 2 weeks.
+- Schedulers preview and then apply a fair plan for the open positions of 1 to 8 weeks on the Schedule page (`POST /api/admin/autofill`).
+- New table `availability` (migration `0002_availability.sql`).
+
 ## 0.2.0
 
 ### Invite links

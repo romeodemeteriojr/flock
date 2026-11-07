@@ -94,7 +94,10 @@ Everyone sees:
 - **Days I can't serve** is where you add the dates you are away (up to a
   year at a time), with a reason if you like. Flock will not suggest you to
   the scheduler for those days. If you are already scheduled on one of those days,
-  Flock tells you so you can let your scheduler know.
+  Flock tells you so you can let your scheduler know. At the top of the same
+  page, **How often can you serve?** lets you choose every week, every 2, 3,
+  4, 6 or 8 weeks, or a pause. Until you choose, Flock asks you at most every
+  2 weeks.
 
 Schedulers also see:
 
@@ -109,6 +112,14 @@ Schedulers also see:
   away, and have not served too often lately. It warns you about clashes
   (away that day, not set up for that position, already serving that
   morning). You can still go ahead if you really mean to.
+  **Fill open positions** plans one to 8 weeks at a time: it puts someone in
+  every empty position it can, fairly, and shows you the plan first. Flock
+  only picks people who are set up for the position, are not away, and have
+  not served more often than they said they can. Among those it picks whoever
+  has served least for how often they offered, then whoever served longest
+  ago. Nobody is asked until you choose **Ask these people**; then they see it
+  in My schedule as waiting for their answer. Positions nobody can fill stay
+  empty and show on the Gaps page.
 - **Gaps** shows the next 4 weeks of positions that still need attention:
   empty, declined, not answered, held by someone who is away, or by someone
   who is no longer active. It also writes **reminder messages** for a chosen
