@@ -243,11 +243,33 @@ test('schedule: grid and cards, each slot shows person and status words', async 
   assert.match(h, /class="table-wrap sched-grid"/);
   assert.match(h, /class="cards sched-cards"/);
   assert.match(h, /colspan="2" class="sched-team">Band</);
-  for (const w of ['Ann Lee', 'Bo Diaz', 'Cy Fox', 'Nobody yet', '>Open<', '>Waiting for answer<', '>Confirmed<', '>Declined<']) assert.ok(h.includes(w), w);
+  for (const w of ['Ann Lee', 'Bo Diaz', 'Cy Fox', 'Nobody yet', '>Waiting for answer<', '>Confirmed<', '>Declined<']) assert.ok(h.includes(w), w);
+  // empty slot: icon with accessible name (Open text moved to aria-label)
+  assert.ok(h.includes('aria-label="Nobody yet, choose someone"'), 'empty slot aria-label');
   assert.match(h, /Not needed/);
   assert.ok(!/style=/.test(h));
   const empty = await schedSetup({ [SCHED_PATH]: [] });
   assert.match(empty.root.innerHTML, /No services in the next 8 weeks/);
+});
+
+test('schedule: empty slot shows plus icon with accessible name', async () => {
+  const { root } = await schedSetup();
+  const h = root.innerHTML;
+  // Empty slots have the plus icon and aria-label, not visible text
+  assert.ok(h.includes('aria-label="Nobody yet, choose someone"'), 'aria-label present');
+  assert.ok(h.includes('data-icon="plus"'), 'plus icon data-icon');
+  assert.ok(h.includes('class="slot-btn is-open"'), 'is-open class for empty slots');
+});
+
+test('schedule: today row has dot icon and visually hidden Today', async () => {
+  const { root: rootToday } = await schedSetup({ [SCHED_PATH]: [
+    { id: 10, date: TODAY, time: '10:00', title: 'Today service', slots: [{ id: 100, positionId: 10, positionName: 'Drums', teamId: 1, teamName: 'Band', status: 'open', personId: null, personName: null }] },
+  ] });
+  const hToday = rootToday.innerHTML;
+  // Dot icon beside the date
+  assert.ok(hToday.includes('data-icon="dot"'), 'dot icon present');
+  // Today as visually hidden text
+  assert.ok(hToday.includes('<span class="visually-hidden">Today</span>'), 'visually-hidden Today');
 });
 
 test('every class the schedule page emits is defined in style.css', async () => {
