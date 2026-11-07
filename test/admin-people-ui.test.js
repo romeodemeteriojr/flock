@@ -197,6 +197,25 @@ test('copy button guards a missing clipboard and uses it when present', async ()
   assert.match(root2.innerHTML, /Could not copy/);
 });
 
+test('password copy button shows a check SVG, then the copy SVG after 1.5s', async () => {
+  const api = fakeApi({ 'GET /api/people': PEOPLE, 'GET /api/teams': TEAMS, 'POST /api/people/2/reset-password': { tempPassword: 'a-b-1' } });
+  const timers = [];
+  const win = { navigator: { clipboard: { writeText: async () => {} } }, setTimeout: (fn, ms) => { timers.push({ fn, ms }); return timers.length; }, clearTimeout() {} };
+  const root = fakeRoot();
+  const s = people.createScreen({ api, root, win });
+  await s.ready;
+  root.click('reset-ask', 2); root.click('reset-yes', 2); await flush();
+  const CHECK = 'M4.5 12.5l5 5 10-11';
+  const btn = { innerHTML: '', dataset: { action: 'copy' } };
+  btn.closest = () => btn;
+  root.fire('click', btn); await flush();
+  assert.match(btn.innerHTML, /<svg[^>]*>.*M4\.5 12\.5l5 5 10-11.*<\/svg> Copy$/);
+  assert.equal(timers[0].ms, 1500);
+  timers[0].fn();
+  assert.ok(!btn.innerHTML.includes(CHECK));
+  assert.match(btn.innerHTML, /<svg[^>]*>.*rect.*<\/svg> Copy$/);
+});
+
 test('view render/mount shape', () => {
   assert.match(people.render({}), /<h1 tabindex="-1">People<\/h1>/);
   assert.equal(people.mount({ querySelector: () => null }, {}), undefined);

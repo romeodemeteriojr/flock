@@ -555,3 +555,31 @@ test('views render a heading and mount safely without a screen element', () => {
     assert.equal(v.mount({}, {}), undefined);
   }
 });
+
+test('reminders: copy button shows a check SVG, then the copy SVG after 1.5s', async () => {
+  const timers = [];
+  const cleared = [];
+  const win = {
+    navigator: { clipboard: { writeText: async () => {} } },
+    setTimeout: (fn, ms) => { timers.push({ fn, ms }); return timers.length; },
+    clearTimeout: (id) => cleared.push(id),
+  };
+  const { root } = await gapsSetup({ 'GET /api/admin/reminders?weekOf=2026-11-08': REMINDERS }, win);
+  root.submit('reminders', { weekOf: '2026-11-08' });
+  await flush();
+  const CHECK = '<path d="M4.5 12.5l5 5 10-11"/>';
+  const btn = { innerHTML: '', dataset: { action: 'copy-one', id: '8' } };
+  btn.closest = (sel) => (sel === 'button' || sel === '[data-action]' ? btn : null);
+  await root.fire('click', btn);
+  await flush();
+  assert.match(btn.innerHTML, /<svg[^>]*>.*M4\.5 12\.5l5 5 10-11.*<\/svg> Copy$/);
+  assert.equal(timers.length, 1);
+  assert.equal(timers[0].ms, 1500);
+  await root.fire('click', btn);
+  await flush();
+  assert.deepEqual(cleared, [1]);
+  assert.equal(timers.length, 2);
+  timers[1].fn();
+  assert.ok(!btn.innerHTML.includes(CHECK));
+  assert.match(btn.innerHTML, /<svg[^>]*>.*rect.*<\/svg> Copy$/);
+});
