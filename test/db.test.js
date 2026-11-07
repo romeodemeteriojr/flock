@@ -29,6 +29,7 @@ test('schema has all tables and columns', () => {
     slots: ['id', 'service_id', 'position_id', 'person_id', 'status', 'assigned_at', 'responded_at'],
     blockouts: ['id', 'person_id', 'start_date', 'end_date', 'reason', 'created_at'],
     audit: ['id', 'at', 'actor_id', 'action', 'detail'],
+    availability: ['person_id', 'every_weeks', 'updated_at'],
   };
   for (const [t, c] of Object.entries(want)) assert.deepEqual(cols(db, t).sort(), [...c].sort(), t);
 });
@@ -41,12 +42,24 @@ test('migrations are idempotent on a file db', () => {
     person(db);
     db.close();
     db = openDb(f);
-    assert.equal(db.prepare('SELECT COUNT(*) n FROM schema_migrations').get().n, 1);
+    assert.equal(db.prepare('SELECT COUNT(*) n FROM schema_migrations').get().n, 2);
     assert.equal(db.prepare('SELECT COUNT(*) n FROM people').get().n, 1);
     db.close();
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test('availability only takes the listed choices and a real person', () => {
+  const db = openDb();
+  const a = person(db);
+  for (const n of [0, 1, 2, 3, 4, 6, 8]) {
+    db.prepare('INSERT OR REPLACE INTO availability (person_id,every_weeks,updated_at) VALUES (?,?,?)').run(a, n, T);
+  }
+  for (const n of [-1, 5, 7, 9]) {
+    assert.throws(() => db.prepare('INSERT OR REPLACE INTO availability (person_id,every_weeks,updated_at) VALUES (?,?,?)').run(a, n, T), /CHECK/);
+  }
+  assert.throws(() => db.prepare('INSERT INTO availability (person_id,every_weeks,updated_at) VALUES (?,?,?)').run(999, 2, T), /FOREIGN KEY/);
 });
 
 test('foreign keys enforced', () => {
@@ -65,10 +78,11 @@ test('cascades and set null', () => {
   db.prepare('INSERT INTO sessions (token_hash,person_id,expires_at,created_at) VALUES (?,?,?,?)').run('t', a, T, T);
   db.prepare('INSERT INTO blockouts (person_id,start_date,end_date,created_at) VALUES (?,?,?,?)').run(a, '2025-01-01', '2025-01-02', T);
   db.prepare('INSERT INTO person_positions VALUES (?,?)').run(a, t2.p);
+  db.prepare('INSERT INTO availability (person_id,every_weeks,updated_at) VALUES (?,?,?)').run(a, 2, T);
   const s = Number(db.prepare('INSERT INTO services (date,title) VALUES (?,?)').run('2025-01-05', 'Sun').lastInsertRowid);
   db.prepare("INSERT INTO slots (service_id,position_id,person_id,status) VALUES (?,?,?,'declined')").run(s, t2.p, a);
   db.prepare('DELETE FROM people WHERE id=?').run(a);
-  for (const tb of ['sessions', 'blockouts', 'person_positions']) assert.equal(db.prepare(`SELECT COUNT(*) n FROM ${tb}`).get().n, 0, tb);
+  for (const tb of ['sessions', 'blockouts', 'person_positions', 'availability']) assert.equal(db.prepare(`SELECT COUNT(*) n FROM ${tb}`).get().n, 0, tb);
   assert.equal(db.prepare('SELECT person_id FROM slots').get().person_id, null);
   assert.ok(p);
 });
@@ -127,7 +141,7 @@ test('logAudit truncates and stores', () => {
 test('migration time comes from the injected clock (no direct new Date())', () => {
   const clock = { now: () => new Date('2030-02-03T04:05:06.000Z') };
   const db = openDb(':memory:', { clock });
-  assert.deepEqual(db.prepare('SELECT applied_at FROM schema_migrations').all().map((r) => r.applied_at), ['2030-02-03T04:05:06.000Z']);
+  assert.deepEqual(db.prepare('SELECT applied_at FROM schema_migrations').all().map((r) => r.applied_at), ['2030-02-03T04:05:06.000Z', '2030-02-03T04:05:06.000Z']);
   db.close();
   // Without a clock SQLite's own clock records a valid ISO time.
   const plain = openDb();

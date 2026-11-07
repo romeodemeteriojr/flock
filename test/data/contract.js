@@ -704,6 +704,37 @@ export function runContract(name, makeData) {
       });
     });
 
+    // ---------- availability ----------
+    describe('availability', () => {
+      test('get, set (insert then update), mapAll', async () => {
+        await fresh();
+        const w = await world();
+        assert.equal(await data.availability.get(w.ann.id), null);
+        const a1 = await data.availability.set(w.ann.id, { everyWeeks: 2, updatedAt: T });
+        assert.deepEqual(a1, { personId: w.ann.id, everyWeeks: 2, updatedAt: T });
+        clean(a1, 'availability.set');
+        const T2 = '2025-02-01T00:00:00.000Z';
+        assert.deepEqual(await data.availability.set(w.ann.id, { everyWeeks: 0, updatedAt: T2 }), { personId: w.ann.id, everyWeeks: 0, updatedAt: T2 });
+        assert.deepEqual(await data.availability.get(w.ann.id), { personId: w.ann.id, everyWeeks: 0, updatedAt: T2 });
+        await data.availability.set(w.cy.id, { everyWeeks: 4, updatedAt: T });
+        const map = await data.availability.mapAll();
+        assert.ok(map instanceof Map);
+        assert.deepEqual([...map.entries()], [[w.ann.id, 0], [w.cy.id, 4]]);
+      });
+
+      test('set refuses an unknown person and a value outside the choices, and changes nothing', async () => {
+        await fresh();
+        const w = await world();
+        const plain = (e) => e instanceof Error && !(e instanceof DuplicateError) && !(e instanceof InUseError);
+        await assert.rejects(data.availability.set(9999, { everyWeeks: 2, updatedAt: T }), plain);
+        for (const bad of [5, 7, 9, -1]) {
+          await assert.rejects(data.availability.set(w.ann.id, { everyWeeks: bad, updatedAt: T }), plain);
+        }
+        assert.equal(await data.availability.get(w.ann.id), null);
+        assert.equal((await data.availability.mapAll()).size, 0);
+      });
+    });
+
     // ---------- audit ----------
     describe('audit', () => {
       test('log truncates detail and list returns newest first', async () => {

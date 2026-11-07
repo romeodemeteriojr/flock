@@ -246,6 +246,21 @@ export { DuplicateError, InUseError } from './errors.js';
  */
 
 /**
+ * @typedef {object} Availability  How often a person is willing to serve.
+ * @property {number} personId
+ * @property {number} everyWeeks  0 = paused, else at most once every N weeks (1, 2, 3, 4, 6 or 8)
+ * @property {string} updatedAt  ISO time
+ */
+
+/**
+ * @typedef {object} AvailabilityRepo
+ * @property {(personId: number) => Promise<Availability|null>} get  null when the person never chose.
+ * @property {(personId: number, a: {everyWeeks: number, updatedAt: string}) => Promise<Availability>} set
+ *   Insert or replace the person's choice. Error for an unknown person or a value outside 0, 1, 2, 3, 4, 6, 8.
+ * @property {() => Promise<Map<number, number>>} mapAll  personId -> everyWeeks, for everyone who chose.
+ */
+
+/**
  * @typedef {object} AuditEntry
  * @property {number} id
  * @property {string} at
@@ -280,6 +295,7 @@ export { DuplicateError, InUseError } from './errors.js';
  * @property {ServicesRepo} services
  * @property {SlotsRepo} slots
  * @property {BlockoutsRepo} blockouts
+ * @property {AvailabilityRepo} availability
  * @property {AuditRepo} audit
  * @property {MaintenanceRepo} maintenance
  * @property {<T>(fn: (d: Data) => T | Promise<T>) => Promise<T>} tx

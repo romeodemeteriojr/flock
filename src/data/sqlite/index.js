@@ -9,6 +9,7 @@ import { qualificationsRepo } from './qualifications.js';
 import { servicesRepo } from './services.js';
 import { slotsRepo } from './slots.js';
 import { blockoutsRepo } from './blockouts.js';
+import { availabilityRepo } from './availability.js';
 import { auditRepo } from './audit.js';
 import { maintenanceRepo } from './maintenance.js';
 
@@ -45,6 +46,7 @@ export function createSqliteData(db) {
       services: servicesRepo(ctx),
       slots: slotsRepo(ctx),
       blockouts: blockoutsRepo(ctx),
+      availability: availabilityRepo(ctx),
       audit: auditRepo(ctx),
       maintenance: maintenanceRepo(ctx),
     };

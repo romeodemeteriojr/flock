@@ -45,6 +45,12 @@ export function todayStr(now) {
   return `${p(now.getFullYear(), 4)}-${p(now.getMonth() + 1)}-${p(now.getDate())}`;
 }
 
+// The Monday on or before the date (weeks run Monday to Sunday).
+export function mondayOf(dateStr) {
+  const dow = new Date(need(dateStr)).getUTCDay(); // 0 = Sunday
+  return addDays(dateStr, -((dow + 6) % 7));
+}
+
 export function weekdayName(dateStr) { return DAYS[new Date(need(dateStr)).getUTCDay()]; }
 
 export function compareDates(a, b) { return a < b ? -1 : a > b ? 1 : 0; }

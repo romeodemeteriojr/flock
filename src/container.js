@@ -24,6 +24,8 @@ import { createCalendarService } from './services/calendar-service.js';
 import { createBlockoutsService } from './services/blockouts-service.js';
 import { createAssignmentsService } from './services/assignments-service.js';
 import { createGapsService } from './services/gaps-service.js';
+import { createAvailabilityService } from './services/availability-service.js';
+import { createAutofillService } from './services/autofill-service.js';
 
 /** Infrastructure every service may ask for. */
 export const CORE_DEPS = Object.freeze(['data', 'clock', 'random', 'hasher', 'logger', 'config']);
@@ -41,6 +43,8 @@ export const SERVICE_SPECS = Object.freeze({
   blockouts: { factory: createBlockoutsService, needs: [...CORE] },
   assignments: { factory: createAssignmentsService, needs: [...CORE, 'people', 'teams', 'calendar', 'blockouts'] },
   gaps: { factory: createGapsService, needs: [...CORE, 'teams', 'calendar', 'blockouts', 'assignments'] },
+  availability: { factory: createAvailabilityService, needs: [...CORE] },
+  autofill: { factory: createAutofillService, needs: [...CORE, 'assignments'] },
 });
 
 export class ContainerError extends Error {
