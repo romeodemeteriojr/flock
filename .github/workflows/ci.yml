@@ -23,7 +23,7 @@ jobs:
     steps:
       # Major version tags are used for readability. Pinning to full commit SHAs
       # is stricter, and Dependabot (see .github/dependabot.yml) keeps them updated.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
       - uses: actions/setup-node@v4

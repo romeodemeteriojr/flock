@@ -31,7 +31,7 @@ jobs:
             exit 1
           fi
       # Major version tags; pinning to full commit SHAs is stricter and Dependabot keeps them updated.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.tag }}
           persist-credentials: false
