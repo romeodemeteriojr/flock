@@ -2,12 +2,17 @@ CREATE TABLE people (
   id INTEGER PRIMARY KEY,
   name TEXT NOT NULL,
   username TEXT NOT NULL UNIQUE COLLATE NOCASE,
-  password_hash TEXT NOT NULL,
+  password_hash TEXT,
   role TEXT NOT NULL CHECK(role IN ('admin','member')),
-  must_change_password INTEGER NOT NULL DEFAULT 1,
   active INTEGER NOT NULL DEFAULT 1,
   failed_logins INTEGER NOT NULL DEFAULT 0,
   locked_until TEXT,
+  created_at TEXT NOT NULL
+);
+CREATE TABLE invites (
+  person_id INTEGER PRIMARY KEY REFERENCES people(id) ON DELETE CASCADE,
+  token_hash TEXT NOT NULL UNIQUE,
+  expires_at TEXT NOT NULL,
   created_at TEXT NOT NULL
 );
 CREATE TABLE sessions (

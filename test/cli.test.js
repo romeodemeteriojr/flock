@@ -11,6 +11,7 @@ import { loadConfig } from '../src/config.js';
 import { createApp } from '../src/server.js';
 import { silentLogger } from '../src/infra/logger.js';
 import { csvCell } from '../src/cli/csv.js';
+import { tokenFromLink } from './helpers/client.js';
 
 const BIN = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'bin', 'flock.js');
 
@@ -19,9 +20,10 @@ function tmp() {
   return { dir, db: path.join(dir, 'test.db'), done: () => rmSync(dir, { recursive: true, force: true }) };
 }
 
-function flock(dir, args, { db } = {}) {
+function flock(dir, args, { db, publicUrl } = {}) {
   const env = { PATH: process.env.PATH, HOME: dir };
   if (db) env.FLOCK_DB = db;
+  if (publicUrl) env.FLOCK_PUBLIC_URL = publicUrl;
   const r = spawnSync(process.execPath, [BIN, ...args], { env, encoding: 'utf8', cwd: dir });
   return { code: r.status, out: r.stdout, err: r.stderr };
 }
@@ -35,29 +37,31 @@ async function withContainer(db, fn) {
   try { return await fn(c); } finally { c.close(); }
 }
 
-const tempPasswordOf = (out) => out.match(/Temporary password: (\S+)/)[1];
+const inviteLinkOf = (out) => out.match(/Invite link \([^\n]+\): (\S+)/)[1];
 
-test('create-admin prints a temporary password once and the account can log in', async () => {
+test('create-admin prints an invite once and the account can join', async () => {
   const t = tmp();
   try {
     const r = flock(t.dir, ['create-admin', 'pastor.test', 'Pat Test', '--db', t.db]);
     assert.equal(r.code, 0, r.err);
-    const pw = tempPasswordOf(r.out);
-    assert.equal(r.out.split(pw).length - 1, 1, 'password printed exactly once');
-    assert.match(r.out, /Log in with this, then choose your own password/);
-    assert.ok(!r.err.includes(pw));
+    const link = inviteLinkOf(r.out);
+    const token = tokenFromLink(link);
+    assert.equal(r.out.split(link).length - 1, 1, 'invite printed exactly once');
+    assert.match(token, /^[A-Za-z0-9_-]{43}$/);
+    assert.match(r.out, /works once, for 7 days/);
+    assert.ok(!r.err.includes(token));
     await withContainer(t.db, async (c) => {
       const app = createApp({ container: c });
       const port = await app.listen(0);
       try {
-        const res = await fetch(`http://127.0.0.1:${port}/api/login`, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username: 'pastor.test', password: pw }),
+        const res = await fetch(`http://127.0.0.1:${port}/api/welcome`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Flock': '1' },
+          body: JSON.stringify({ token, password: 'my own password 1' }),
         });
         assert.equal(res.status, 200);
         const body = await res.json();
         assert.equal(body.person?.role ?? body.role, 'admin');
-        assert.equal(body.person?.mustChangePassword ?? body.mustChangePassword, true);
+        assert.equal(body.person.hasPassword, true);
       } finally {
         await app.close();
       }
@@ -72,7 +76,7 @@ test('create-admin refuses an existing username and never takes a password', () 
     const dup = flock(t.dir, ['create-admin', 'PAT.test', 'Other Person'], { db: t.db });
     assert.notEqual(dup.code, 0);
     assert.match(dup.err, /already exists/);
-    assert.ok(!/Temporary password/.test(dup.out));
+    assert.ok(!/Invite link/.test(dup.out));
     const withPw = flock(t.dir, ['create-admin', 'x.user', 'X User', 'secret123'], { db: t.db });
     assert.notEqual(withPw.code, 0);
     const bad = flock(t.dir, ['create-admin', 'x.user', 'X User', '--password', 'secret123'], { db: t.db });
@@ -86,12 +90,12 @@ test('demo seeds valid fake data and refuses a non-empty database', async () => 
     const r = flock(t.dir, ['demo'], { db: t.db });
     assert.equal(r.code, 0, r.err);
     assert.match(r.out, /demo-admin/);
-    assert.ok(tempPasswordOf(r.out).length >= 6);
+    assert.match(tokenFromLink(inviteLinkOf(r.out)), /^[A-Za-z0-9_-]{43}$/);
     await withContainer(t.db, async ({ data, services }) => {
       const people = await data.people.list();
       assert.equal(people.length, 13);
       assert.equal(people.filter((p) => p.name.startsWith('Demo ')).length, 13);
-      assert.ok(people.some((p) => p.username === 'demo-admin' && p.role === 'admin' && p.mustChangePassword));
+      assert.ok(people.some((p) => p.username === 'demo-admin' && p.role === 'admin' && !p.hasPassword));
       const teams = await data.teams.list();
       assert.deepEqual(teams.map((x) => x.name).sort(), ['Band', 'Greeters', 'Kids', 'Sound']);
       const positionIds = new Set(teams.flatMap((x) => x.positions.map((p) => p.id)));
@@ -113,6 +117,15 @@ test('demo seeds valid fake data and refuses a non-empty database', async () => 
     const again = flock(t.dir, ['demo'], { db: t.db });
     assert.notEqual(again.code, 0);
     assert.match(again.err, /already has people/);
+  } finally { t.done(); }
+});
+
+test('CLI invite links honor FLOCK_PUBLIC_URL', () => {
+  const t = tmp();
+  try {
+    const r = flock(t.dir, ['create-admin', 'pat.test', 'Pat Test'], { db: t.db, publicUrl: 'https://flock.example.org/' });
+    assert.equal(r.code, 0, r.err);
+    assert.ok(inviteLinkOf(r.out).startsWith('https://flock.example.org/#/welcome?token='));
   } finally { t.done(); }
 });
 
@@ -250,7 +263,7 @@ test('help, version and unknown commands', () => {
     const h = flock(t.dir, ['help']);
     assert.equal(h.code, 0);
     for (const w of ['create-admin', 'demo', 'backup', 'export', 'serve', 'version']) assert.ok(h.out.includes(w), w);
-    assert.equal(flock(t.dir, ['version']).out.trim(), 'flock 0.1.0');
+    assert.equal(flock(t.dir, ['version']).out.trim(), 'flock 0.2.0');
     const u = flock(t.dir, ['frobnicate']);
     assert.notEqual(u.code, 0);
     assert.match(u.err, /Unknown command: frobnicate/);

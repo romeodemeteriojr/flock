@@ -2,8 +2,8 @@
 // Application service: all business rules for this area live here. It never
 // sees HTTP objects and never runs SQL; it talks to the data layer through
 // `deps.data` and throws AppErrors (src/errors.js). Built once by
-// src/container.js. Passwords and sessions go through the injected auth
-// service; no secret is ever written to the audit log or the logger.
+// src/container.js. Invites and session ending use the injected auth service;
+// no secret is ever written to the audit log or the logger.
 import { ConflictError, NotFoundError, ValidationError } from '../errors.js';
 
 export const USERNAME_RE = /^[A-Za-z0-9._-]{3,30}$/;
@@ -29,7 +29,7 @@ export function personView(p) {
     username: p.username,
     role: p.role,
     active: !!p.active,
-    mustChangePassword: !!p.mustChangePassword,
+    joined: !!p.hasPassword,
     positionIds: p.positionIds ?? [],
   };
 }
@@ -39,9 +39,8 @@ export function personView(p) {
  * @param {import("../data/index.js").Data} deps.data  The data layer.
  * @param {{now: () => Date}} deps.clock
  * @param {object} [deps.logger]  Structured logger (never log secrets).
- * @param {{newTempCredentials: () => Promise<{tempPassword: string, passwordHash: string}>,
- *          endSessions: (personId: number) => Promise<unknown>,
- *          issueTempPassword: (personId: number) => Promise<string>}} deps.auth  The auth service.
+ * @param {{newInvite: () => {token: string, tokenHash: string, expiresAt: string, createdAt: string},
+ *          endSessions: (personId: number) => Promise<unknown>}} deps.auth  The auth service.
  * @returns {object}
  */
 export function createPeopleService(deps) {
@@ -65,8 +64,7 @@ export function createPeopleService(deps) {
     },
 
     /**
-     * Add a person. Returns { person, tempPassword }; the temporary password is
-     * shown only this once and is never stored or logged in clear.
+     * Add a person with a one-time invite. Only the token hash is stored.
      * @param {{id: number}} actor
      * @param {{name: string, username?: string|null, role?: 'admin'|'member'}} input
      */
@@ -77,23 +75,24 @@ export function createPeopleService(deps) {
         if (typeof username !== 'string' || !USERNAME_RE.test(username.trim())) throw new ValidationError(USERNAME_ERR);
         wanted = username.trim().toLowerCase();
       }
-      const { tempPassword, passwordHash } = await auth.newTempCredentials();
+      const inv = auth.newInvite();
       const person = await data.tx(async (d) => {
         const uname = wanted ?? (await freeUsername(d, name));
         if (await d.people.findAuthByUsername(uname)) throw new ConflictError(USERNAME_TAKEN);
         let created;
         try {
           created = await d.people.create({
-            name, username: uname, passwordHash, role, mustChangePassword: true, createdAt: clock.now().toISOString(),
+            name, username: uname, role, createdAt: clock.now().toISOString(),
           });
         } catch (e) {
           if (e?.name === 'DuplicateError') throw new ConflictError(USERNAME_TAKEN);
           throw e;
         }
+        await d.invites.replace({ personId: created.id, tokenHash: inv.tokenHash, expiresAt: inv.expiresAt, createdAt: inv.createdAt });
         await audit(d, actor, 'person.create', `person ${created.id} (${uname}) role ${role}`);
         return created;
       });
-      return { person: personView(person), tempPassword };
+      return { person: personView(person), invite: { token: inv.token, expiresAt: inv.expiresAt } };
     },
 
     /**
@@ -110,7 +109,7 @@ export function createPeopleService(deps) {
         if (id === actor?.id && !newActive && cur.active) {
           throw new ConflictError('You cannot deactivate your own account');
         }
-        const wasActiveAdmin = cur.role === 'admin' && cur.active;
+        const wasActiveAdmin = cur.role === 'admin' && cur.active && cur.hasPassword;
         const stillActiveAdmin = newRole === 'admin' && newActive;
         if (wasActiveAdmin && !stillActiveAdmin && (await d.people.countActiveAdmins()) <= 1) {
           throw new ConflictError('There must always be at least one active admin');
@@ -127,12 +126,30 @@ export function createPeopleService(deps) {
       return personView(person);
     },
 
-    /** Give a person a new temporary password (ends their sessions). Returns it once. */
+    /** Replace an unjoined person's invite; the old link stops working. */
+    async invite(actor, id) {
+      return data.tx(async (d) => {
+        const p = await d.people.findById(id);
+        if (!p) throw new NotFoundError(NOT_FOUND);
+        if (!p.active) throw new ValidationError(`${p.name} is deactivated. Reactivate them first.`);
+        if (p.hasPassword) throw new ValidationError(`${p.name} has already joined. Use Reset password instead.`);
+        const inv = auth.newInvite();
+        await d.invites.replace({ personId: id, tokenHash: inv.tokenHash, expiresAt: inv.expiresAt, createdAt: inv.createdAt });
+        await audit(d, actor, 'person.invite', `person ${id}`);
+        return { person: personView(p), invite: { token: inv.token, expiresAt: inv.expiresAt } };
+      });
+    },
+
+    /** Clear the password and every session, and return a one-time invite. */
     async resetPassword(actor, id) {
-      if (!(await data.people.findById(id))) throw new NotFoundError(NOT_FOUND);
-      const tempPassword = await auth.issueTempPassword(id);
-      await audit(data, actor, 'person.reset_password', `person ${id}`);
-      return { tempPassword };
+      return data.tx(async (d) => {
+        if (!(await d.people.setPassword(id, null))) throw new NotFoundError(NOT_FOUND);
+        const inv = auth.newInvite();
+        await d.sessions.deleteForPerson(id);
+        await d.invites.replace({ personId: id, tokenHash: inv.tokenHash, expiresAt: inv.expiresAt, createdAt: inv.createdAt });
+        await audit(d, actor, 'person.reset_password', `person ${id}`);
+        return { person: personView(await d.people.findById(id)), invite: { token: inv.token, expiresAt: inv.expiresAt } };
+      });
     },
   };
 }

@@ -1,6 +1,6 @@
 # 4. Invite links replace temporary passwords
 
-Status: accepted (not yet built)
+Status: accepted (built)
 
 ## Context
 
@@ -29,7 +29,8 @@ Flock could claim an account before its owner did.
 - **Removed completely**: temporary passwords, `must_change_password`, and the
   forced change-password step. Voluntary "change my password" stays.
 - **No upgrade handling.** Flock is not live, so `0001_init.sql` is edited in
-  place (see "Schema"). Delete any local `data/*.db` after pulling.
+  place (see "Schema"). Use a fresh database after pulling; preserve existing
+  files and backups rather than overwriting real data.
 
 ## Implementation guide
 
@@ -75,13 +76,17 @@ CREATE TABLE invites (
 
 ```js
 // loadConfig: add
-publicUrl: env.FLOCK_PUBLIC_URL ? env.FLOCK_PUBLIC_URL.replace(/\/+$/, '') : undefined,
+publicUrl: env.FLOCK_PUBLIC_URL ? env.FLOCK_PUBLIC_URL.trim().replace(/\/+$/, '') : undefined,
 
 // validateConfig: add
 if (config.publicUrl !== undefined) {
   let ok = false;
-  try { const u = new URL(config.publicUrl); ok = u.protocol === 'https:' || u.protocol === 'http:'; } catch {}
-  if (!ok) problems.push('publicUrl must be a full http:// or https:// address (FLOCK_PUBLIC_URL)');
+  try {
+    const u = new URL(config.publicUrl);
+    ok = typeof config.publicUrl === 'string' && (u.protocol === 'https:' || u.protocol === 'http:')
+      && !u.username && !u.password && !u.search && !u.hash;
+  } catch {}
+  if (!ok) problems.push('publicUrl must be a full http:// or https:// address without credentials, a query or a fragment (FLOCK_PUBLIC_URL)');
 }
 ```
 
@@ -99,6 +104,9 @@ add `src/data/sqlite/invites.js` modelled on `sessions.js`.
 - `people.setPassword(id, passwordHashOrNull)`: drop the `mustChange`
   argument. It still resets `failed_logins` and `locked_until`, and returns
   true if a row changed.
+- Last-admin protection counts only **joined active admins**: an unclaimed
+  invite is not a usable backup scheduler. Demoting/deactivating an unjoined
+  admin does not reduce that count.
 - New `InvitesRepo`:
 
 ```js
@@ -124,7 +132,7 @@ export const INVITE_DAYS = 7;
 export const INVITE_GONE_MESSAGE =
   'This link has expired or was already used. Ask your scheduler for a new one.';
 
-/** Pure: the link a person taps. The token sits after '#', so browsers never send it to the server or in a Referer. */
+/** Pure: the token stays after '#', outside navigation URLs and Referer headers. The welcome API receives it only in POST bodies. */
 export function inviteLink(baseUrl, token) {
   return `${baseUrl.replace(/\/+$/, '')}/#/welcome?token=${token}`;
 }
@@ -157,17 +165,17 @@ async acceptInvite(token, newPassword) {
   const err = validatePassword(newPassword, { username: found.person.username });
   if (err) throw new ValidationError(err);
   const hash = await hasher.hash(newPassword);
-  await data.tx(async (d) => {
-    const again = await d.invites.findByTokenHash(tokenHash(token));
-    if (!again || again.personId !== found.person.id) throw new NotFoundError(INVITE_GONE_MESSAGE); // used concurrently
+  const result = await data.tx(async (d) => {
+    const again = await findLiveInvite(d, token); // rechecks expiry, replacement and active after hashing
+    if (!again || again.person.id !== found.person.id) throw new NotFoundError(INVITE_GONE_MESSAGE);
     await d.people.setPassword(found.person.id, hash);
     await d.invites.deleteForPerson(found.person.id);
     await d.sessions.deleteForPerson(found.person.id);
+    const sessionToken = await createSession(found.person.id); // joins this transaction
+    return { person: publicPerson(await d.people.findById(found.person.id)), token: sessionToken };
   });
   logger.info('invite accepted', { personId: found.person.id });  // never log the token
-  const sessionToken = await createSession(found.person.id);
-  const person = publicPerson(await data.people.findById(found.person.id));
-  return { person, token: sessionToken };
+  return result;
 },
 
 // private helper (module or closure level)
@@ -183,7 +191,10 @@ async function findLiveInvite(data, token) {
 
 Change `login`: if `found.passwordHash` is null, call `burn(...)` and throw
 `invalid('no_password')`, the same message and timing as a wrong password.
-Do not count it as a failed login.
+Do not count it as a failed login. Successful login's session creation also
+belongs inside its password-check transaction, so a racing reset cannot
+create an old-credential session afterwards. `authenticate` requires an
+active person with a password.
 
 `changePassword` stays as it is, but calls `setPassword(personId, hash)` with
 no third argument.
@@ -206,16 +217,16 @@ const person = await data.tx(async (d) => {
 return { person: personView(person), invite: { token: inv.token, expiresAt: inv.expiresAt } };
 
 // invite(actor, id): "Copy new invite" for someone who has not joined
-const p = await data.people.findById(id);
-if (!p) throw new NotFoundError('That person was not found');
-if (!p.active) throw new ValidationError(`${p.name} is deactivated. Reactivate them first.`);
-if (p.hasPassword) throw new ValidationError(`${p.name} has already joined. Use Reset password instead.`);
-const inv = auth.newInvite();
-await data.tx(async (d) => {
-  await d.invites.replace({ personId: id, ...inv without token });
+return data.tx(async (d) => {
+  const p = await d.people.findById(id);
+  if (!p) throw new NotFoundError('That person was not found');
+  if (!p.active) throw new ValidationError(`${p.name} is deactivated. Reactivate them first.`);
+  if (p.hasPassword) throw new ValidationError(`${p.name} has already joined. Use Reset password instead.`);
+  const inv = auth.newInvite();
+  await d.invites.replace({ personId: id, tokenHash: inv.tokenHash, expiresAt: inv.expiresAt, createdAt: inv.createdAt });
   await audit(d, actor, 'person.invite', `person ${id}`);
+  return { person: personView(p), invite: { token: inv.token, expiresAt: inv.expiresAt } };
 });
-return { person: personView(p), invite: { token: inv.token, expiresAt: inv.expiresAt } };
 
 // resetPassword(actor, id): same return shape
 const inv = auth.newInvite();
@@ -334,7 +345,7 @@ mount:
     buttons **Copy message** (`data-action="copy" data-copy-key="invite"`)
     and **Done**.
   - The `copy` action writes `inviteMessage(...)` (not the password) to
-    `win.navigator.clipboard.writeText` and calls
+    the shared `copyText(win, text)` helper (Clipboard API or HTTP fallback) and calls
     `flashCopied(win, root, target, 'Copy message', hold, 'invite')` from
     `web/lib/copyflash.js`. Keep the existing "no clipboard" fallback
     message.

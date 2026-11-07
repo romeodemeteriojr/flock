@@ -1,6 +1,5 @@
 // Thin HTTP adapter over services.auth: reads the session cookie, enforces the
-// auth level declared on each route, the must-change-password gate and the CSRF
-// header. It never touches data itself.
+// auth level declared on each route and the CSRF header. It never touches data itself.
 import { send } from './http.js';
 
 export const COOKIE_NAME = 'flock_session';
@@ -74,8 +73,6 @@ export function createIpThrottle({ clock, windowMs = 5 * 60 * 1000, max = 20 }) 
   };
 }
 
-const ALLOWED_WHEN_MUST_CHANGE = new Set(['GET /api/me', 'POST /api/password', 'POST /api/logout']);
-
 export function createGuard() {
   return async function guard({ req, res, route, ctx }) {
     const method = req.method.toUpperCase();
@@ -94,10 +91,6 @@ export function createGuard() {
       return null;
     }
     req.sessionToken = token;
-    if (user.mustChangePassword && !ALLOWED_WHEN_MUST_CHANGE.has(`${method} ${route.pattern}`)) {
-      send(res, 403, { error: 'Please choose a new password first', code: 'must_change_password' });
-      return null;
-    }
     if (route.auth === 'admin' && user.role !== 'admin') {
       send(res, 403, { error: 'Only the scheduler can do that' });
       return null;

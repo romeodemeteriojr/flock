@@ -11,13 +11,14 @@ import { AppError } from '../errors.js';
 import { parseArgs, UsageError } from './args.js';
 import { csvLine } from './csv.js';
 import { seedDemo } from './demo.js';
+import { inviteLink } from '../services/auth-service.js';
 
 export const HELP = `Usage: flock <command> [options]
 
 Commands:
   serve                      Start the web app
   create-admin <username> 'Full Name'
-                             Create the first scheduler (prints a temporary password once)
+                             Create the first scheduler (prints an invite link)
   demo                       Fill an empty database with fake demo data
   backup <file>              Copy the database to a new file (never overwrites)
   export <file.csv> [--from YYYY-MM-DD --to YYYY-MM-DD]
@@ -113,12 +114,12 @@ export const commands = {
     const { positionals, options } = args(argv);
     exactly(positionals, 2, "create-admin <username> 'Full Name'");
     const [username, name] = positionals;
-    return withContainer(options, env, async ({ services, data }) => {
+    return withContainer(options, env, async ({ services, data, config }) => {
       if (await data.people.findAuthByUsername(username)) throw new Refusal(`The username "${username}" already exists.`);
-      const { person, tempPassword } = await services.people.create(null, { name, username, role: 'admin' });
+      const { person, invite } = await services.people.create(null, { name, username, role: 'admin' });
+      const base = config.publicUrl ?? `http://localhost:${config.port}`;
       console.log(`Created the scheduler "${person.username}" (${person.name}).`);
-      console.log(`Temporary password: ${tempPassword}`);
-      console.log('Log in with this, then choose your own password. It is shown only once.');
+      console.log(`Invite link (works once, for 7 days): ${inviteLink(base, invite.token)}`);
       return 0;
     });
   },
@@ -130,12 +131,12 @@ export const commands = {
       if ((await container.data.maintenance.personCount()) > 0) {
         throw new Refusal('This database already has people, so flock will not add demo data. Use a new, empty database.');
       }
-      const { tempPassword, counts } = await seedDemo(container);
+      const { invite, counts } = await seedDemo(container);
       console.log(`Demo data added: ${counts.people} people, ${counts.teams} teams, ${counts.services} services, ${counts.blockouts} blockouts.`);
       console.log('Everything here is fake.');
       console.log('Admin username: demo-admin');
-      console.log(`Temporary password: ${tempPassword}`);
-      console.log('Log in with this, then choose your own password. It is shown only once.');
+      const base = container.config.publicUrl ?? `http://localhost:${container.config.port}`;
+      console.log(`Invite link (works once, for 7 days): ${inviteLink(base, invite.token)}`);
       return 0;
     });
   },

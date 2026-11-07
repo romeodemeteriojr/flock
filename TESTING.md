@@ -25,6 +25,14 @@ test sleeps for more than 50 ms: time moves only through the injected clock
 (double booking, blockouts, the 366-day limit, lockouts, at least one admin...)
 with the service built from fakes or `makeContainer()`.
 
+**Invite links** (`test/invites-service.test.js`, `test/welcome-routes.test.js`,
+`test/welcome-ui.test.js`, `test/invite-message.test.js`). One-time use, exact
+seven-day expiry, replacement, reset/session revocation, deactivation, weak
+password retries, no-password login refusal, and expiry/replacement races
+while hashing. Session-write failures roll back the whole claim. Tests also
+cover the public URL, POST-only token handling, throttling, welcome UI,
+clipboard fallback and accessible action controls.
+
 **Repository contract tests** (`test/data/contract.js`, run by
 `test/data/sqlite.test.js`). What any data adapter must do, run against SQLite
 in memory. A future PostgreSQL adapter must pass the same file.
@@ -41,11 +49,13 @@ Scans the source: layers only depend downward, no import cycles, no SQL
 outside the data layer, no `Date.now()`/`Math.random`/`process.env` outside the
 allowed places.
 
-**Security** (`test/security.test.js`). Every route needs a login (except
-login and health). Member/scheduler access is checked for every route, and so
+**Security** (`test/security.test.js`). Every route needs a login except
+login, health and the token-protected welcome POST routes. Member/scheduler access is checked for every route, and so
 is the CSRF header. Also: cookie flags, session fixation, lockout and per-IP
 throttle, the body size limit, path traversal, security headers, stored XSS,
-and that no password, hash or token reaches a response, audit row or log line.
+and that no password, hash or session token reaches a response, audit row or
+log line. Invite tokens appear only in their one-time scheduler handoff
+responses, never logs or HTTP URLs.
 
 **End to end** (`test/e2e.test.js`). The whole life of a volunteer, from
 `create-admin` on the command line to deactivation, over HTTP. Also: the same
@@ -108,20 +118,19 @@ the way the README says (copy the file, point `FLOCK_DB` at the copy, start).
 It proves:
 - every table's row count matches the original;
 - the key relationships match: who is in which slot with which status,
-  qualifications, blockouts, sessions, people, the audit log and the applied
-  migrations;
-- old session cookies and stored password hashes (including a temporary
-  password) still work over HTTP;
+  qualifications, blockouts, sessions, people, invites, the audit log and the
+  applied migrations;
+- old session cookies, stored password hashes and still-live unused invites
+  work over HTTP after a same-schema restore;
 - a backup with a damaged page, one that is cut short (at half, after one
   page, inside the header, or empty) or a file that is not a database is
   refused by `serve`, `export` and `backup` with one plain sentence, and the
   file is left as it was;
-- the CSV export contains no password hash, session token or temporary
-  password.
+- the CSV export contains no password hash, session token or invite token.
 
-**Upgrades** (`test/upgrade.test.js`). A database at every schema version
-from the oldest the migrations support (today `0001_init.sql` is the only
-migration, so that is the oldest) is filled with data using plain SQL, then
+**Upgrades** (`test/upgrade.test.js`). A database at every supported schema
+version (currently the 0.2.0 `0001_init.sql` schema family) is filled with data
+using plain SQL, then
 opened by the current flock. It proves:
 - every migration is recorded, and the schema equals a fresh install's;
 - every old row and column is unchanged, and an old session and an old
@@ -131,8 +140,10 @@ opened by the current flock. It proves:
   know) is refused with a plain message, by `openDb`, the container and the
   CLI, without touching the file.
 
-When a new migration is added, this test covers the upgrade from every older
-version automatically.
+When a new migration is added, this test covers every earlier supported
+migration. The pre-release 0.1.0 schema was deliberately replaced in place;
+these checks do not promise a 0.1.0 → 0.2.0 upgrade. That change needs a fresh
+database, with existing files/backups preserved.
 
 **Time and calendar edge cases** (`test/calendar-edges.test.js`). With the
 injected clock and the process time zone set per test:

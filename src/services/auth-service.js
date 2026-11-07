@@ -4,10 +4,9 @@
 // `deps.data` and throws AppErrors (src/errors.js). Built once by
 // src/container.js.
 //
-// Secrets: password hashes never leave this service except from
-// newTempCredentials() (for the people service to store). The raw session
-// token is only returned by login() (for the cookie); only its SHA-256 is
-// stored. Neither is ever logged.
+// Secrets: password hashes stay in the data layer. newInvite() returns the
+// raw invite token once; login() and acceptInvite() return session tokens for
+// cookies. Only SHA-256 token hashes are stored, and secrets are never logged.
 import crypto from 'node:crypto';
 import { NotFoundError, TooManyRequestsError, UnauthenticatedError, ValidationError } from '../errors.js';
 
@@ -17,29 +16,22 @@ export const MIN_PASSWORD_LENGTH = 8;
 export const MAX_PASSWORD_LENGTH = 200;
 export const MAX_PASSWORD_INPUT = 1024;
 export const DEFAULT_SESSION_DAYS = 14;
+export const INVITE_DAYS = 7;
+export const INVITE_GONE_MESSAGE = 'This link has expired or was already used. Ask your scheduler for a new one.';
 
 export const INVALID_LOGIN_MESSAGE = 'Wrong username or password';
 export const LOCKED_MESSAGE = 'Too many tries. Please wait a few minutes.';
 
-// Short everyday words that are easy to say and spell over the phone.
-export const TEMP_WORDS = Object.freeze([
-  'apple', 'bread', 'brick', 'cabin', 'candle', 'cedar', 'chair', 'cloud',
-  'coral', 'daisy', 'dove', 'eagle', 'field', 'flame', 'forest', 'garden',
-  'grape', 'green', 'harbor', 'hill', 'honey', 'island', 'jacket', 'lake',
-  'lemon', 'light', 'maple', 'meadow', 'melon', 'moon', 'morning', 'olive',
-  'orange', 'otter', 'panda', 'paper', 'peach', 'pencil', 'piano', 'pine',
-  'pocket', 'pond', 'rabbit', 'rain', 'river', 'robin', 'rock', 'rose',
-  'sand', 'silver', 'snow', 'spring', 'star', 'stone', 'summer', 'sun',
-  'table', 'tiger', 'tulip', 'valley', 'violet', 'water', 'willow', 'window',
-  'winter', 'yellow', 'basket', 'button', 'carrot', 'copper', 'garden', 'kettle',
-  'ladder', 'mitten', 'muffin', 'nickel', 'orchard', 'pepper', 'pillow', 'puppy',
-].filter((w, i, a) => a.indexOf(w) === i));
-
 const TOKEN_RE = /^[A-Za-z0-9_-]{43}$/;
 
-/** SHA-256 of a session token (hex). Only this is stored. */
+/** SHA-256 of an invite or session token (hex). Only this is stored. */
 export function tokenHash(token) {
   return crypto.createHash('sha256').update(token, 'utf8').digest('hex');
+}
+
+/** The invite token stays in the fragment, never in HTTP URLs or Referer headers. */
+export function inviteLink(baseUrl, token) {
+  return `${baseUrl.replace(/\/+$/, '')}/#/welcome?token=${token}`;
 }
 
 /**
@@ -63,7 +55,7 @@ export function validatePassword(pw, { username } = {}) {
 /**
  * The public view of a person: never contains the hash, lockout state or tokens.
  * @param {object|null|undefined} person  A Person or AuthPerson from the data layer.
- * @returns {{id: number, name: string, username: string, role: string, mustChangePassword: boolean, active: boolean}|null}
+ * @returns {{id: number, name: string, username: string, role: string, hasPassword: boolean, active: boolean}|null}
  */
 export function publicPerson(person) {
   if (!person) return null;
@@ -72,7 +64,7 @@ export function publicPerson(person) {
     name: person.name,
     username: person.username,
     role: person.role,
-    mustChangePassword: !!person.mustChangePassword,
+    hasPassword: !!person.hasPassword,
     active: !!person.active,
   };
 }
@@ -115,11 +107,12 @@ export function createAuthService(deps) {
   const dummyHash = () => (dummy ??= hasher.hash(random.token(16)));
   const burn = async (pw) => { await hasher.verify(pw, await dummyHash()); };
 
-  function generateTempPassword() {
-    const w1 = TEMP_WORDS[random.int(TEMP_WORDS.length)];
-    const w2 = TEMP_WORDS[random.int(TEMP_WORDS.length)];
-    const digits = String(random.int(100)).padStart(2, '0');
-    return `${w1}-${w2}-${digits}`;
+  async function findLiveInvite(d, token) {
+    if (typeof token !== 'string' || !TOKEN_RE.test(token)) return null;
+    const invite = await d.invites.findByTokenHash(tokenHash(token));
+    if (!invite || !(Date.parse(invite.expiresAt) > nowDate().getTime())) return null;
+    const person = await d.people.findById(invite.personId);
+    return person && person.active ? { invite, person } : null;
   }
 
   async function createSession(personId) {
@@ -136,21 +129,43 @@ export function createAuthService(deps) {
     validatePassword,
     publicPerson,
 
-    /**
-     * A temporary password like "maple-river-07" (from the injected random source).
-     * @returns {string}
-     */
-    generateTempPassword,
+    /** A new invite; the people service stores only tokenHash in its transaction. */
+    newInvite() {
+      const token = random.token(32);
+      const now = nowDate();
+      return {
+        token, tokenHash: tokenHash(token),
+        expiresAt: new Date(now.getTime() + INVITE_DAYS * 86400000).toISOString(),
+        createdAt: now.toISOString(),
+      };
+    },
 
-    /**
-     * A new temporary password and its hash, for a new person or a reset.
-     * The hash is returned only here, so the people service can store it.
-     * @returns {Promise<{tempPassword: string, passwordHash: string}>}
-     */
-    async newTempCredentials() {
-      const tempPassword = generateTempPassword();
-      const passwordHash = await hasher.hash(tempPassword);
-      return { tempPassword, passwordHash };
+    /** Who a live invite is for, so the welcome page can greet them. */
+    async inviteInfo(token) {
+      const found = await findLiveInvite(data, token);
+      if (!found) throw new NotFoundError(INVITE_GONE_MESSAGE);
+      return { name: found.person.name, username: found.person.username };
+    },
+
+    /** Use an invite once: set a password, end old sessions and log the person in. */
+    async acceptInvite(token, newPassword) {
+      const found = await findLiveInvite(data, token);
+      if (!found) throw new NotFoundError(INVITE_GONE_MESSAGE);
+      const err = validatePassword(newPassword, { username: found.person.username });
+      if (err) throw new ValidationError(err);
+      const hash = await hasher.hash(newPassword);
+      const result = await data.tx(async (d) => {
+        // Hashing takes time: recheck expiry, replacement and deactivation before consuming.
+        const again = await findLiveInvite(d, token);
+        if (!again || again.person.id !== found.person.id) throw new NotFoundError(INVITE_GONE_MESSAGE);
+        await d.people.setPassword(again.person.id, hash);
+        await d.invites.deleteForPerson(again.person.id);
+        await d.sessions.deleteForPerson(again.person.id);
+        const sessionToken = await createSession(again.person.id);
+        return { person: publicPerson(await d.people.findById(again.person.id)), token: sessionToken };
+      });
+      logger.info('invite accepted', { personId: result.person.id });
+      return result;
     },
 
     /**
@@ -169,6 +184,11 @@ export function createAuthService(deps) {
       if (!found) {
         await burn(pwOk ? password : 'x');
         throw invalid('invalid');
+      }
+
+      if (found.passwordHash === null) {
+        await burn(pwOk ? password : 'x');
+        throw invalid('no_password');
       }
 
       const wait = lockedFor(found, nowDate().getTime());
@@ -199,7 +219,7 @@ export function createAuthService(deps) {
         }
         if (!cur.active) return { reason: 'inactive' };
         await d.people.setLoginFailures(cur.id, { failedLogins: 0, lockedUntil: null });
-        return { person: publicPerson(cur) };
+        return { person: publicPerson(cur), token: await createSession(cur.id) };
       });
 
       if (!outcome.person) {
@@ -210,9 +230,8 @@ export function createAuthService(deps) {
         else logger.info('login failed', { personId: found.id, reason: outcome.reason });
         throw invalid(outcome.reason);
       }
-      const token = await createSession(outcome.person.id);
       logger.info('login', { personId: outcome.person.id });
-      return { person: outcome.person, token };
+      return { person: outcome.person, token: outcome.token };
     },
 
     /**
@@ -229,7 +248,7 @@ export function createAuthService(deps) {
         return null;
       }
       const person = await data.people.findById(s.personId);
-      return person && person.active ? publicPerson(person) : null;
+      return person && person.active && person.hasPassword ? publicPerson(person) : null;
     },
 
     /** End one session. Unknown or empty tokens are ignored. */
@@ -254,7 +273,7 @@ export function createAuthService(deps) {
     async changePassword(personId, oldPassword, newPassword, { currentToken } = {}) {
       const person = await data.people.findAuthById(personId);
       if (!person || !person.active) throw new ValidationError('This account cannot be changed.');
-      if (typeof oldPassword !== 'string' || oldPassword.length > MAX_PASSWORD_INPUT
+      if (!person.passwordHash || typeof oldPassword !== 'string' || oldPassword.length > MAX_PASSWORD_INPUT
           || !(await hasher.verify(oldPassword, person.passwordHash))) {
         throw new ValidationError('Your current password is not correct.');
       }
@@ -264,33 +283,16 @@ export function createAuthService(deps) {
       const hash = await hasher.hash(newPassword);
       await data.tx(async (d) => {
         const cur = await d.people.findAuthById(personId);
-        if (!cur || cur.passwordHash !== person.passwordHash) {
+        if (!cur || !cur.active || cur.passwordHash !== person.passwordHash) {
           throw new ValidationError('Your password was changed somewhere else. Please try again.');
         }
-        await d.people.setPassword(personId, hash, false);
+        await d.people.setPassword(personId, hash);
         const keep = typeof currentToken === 'string' && currentToken !== '' ? tokenHash(currentToken) : undefined;
         await d.sessions.deleteForPerson(personId, keep);
       });
       logger.info('password changed', { personId });
     },
 
-    /**
-     * Give a person a new temporary password: they must change it at next login,
-     * any lockout is cleared and all their sessions end.
-     * @returns {Promise<string>} the temporary password (to tell the person)
-     * @throws {NotFoundError} unknown person
-     */
-    async issueTempPassword(personId) {
-      const { tempPassword, passwordHash } = await service.newTempCredentials();
-      await data.tx(async (d) => {
-        if (!(await d.people.setPassword(personId, passwordHash, true))) {
-          throw new NotFoundError('That person was not found');
-        }
-        await d.sessions.deleteForPerson(personId);
-      });
-      logger.info('temporary password issued', { personId });
-      return tempPassword;
-    },
   };
   return service;
 }

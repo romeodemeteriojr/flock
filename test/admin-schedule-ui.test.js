@@ -610,7 +610,7 @@ test('reminders: copy button shows a check SVG, then the copy SVG after 1.5s', a
   btn.closest = (sel) => (sel === 'button' || sel === '[data-action]' ? btn : null);
   await root.fire('click', btn);
   await flush();
-  assert.match(btn.innerHTML, /<svg[^>]*>.*M4\.5 12\.5l5 5 10-11.*<\/svg> Copy$/);
+  assert.match(btn.innerHTML, /^<span class="icon" aria-hidden="true"><svg[^>]*>.*M4\.5 12\.5l5 5 10-11.*<\/svg><\/span> Copy$/);
   assert.equal(timers.length, 1);
   assert.equal(timers[0].ms, 1500);
   await root.fire('click', btn);
@@ -619,5 +619,5 @@ test('reminders: copy button shows a check SVG, then the copy SVG after 1.5s', a
   assert.equal(timers.length, 2);
   timers[1].fn();
   assert.ok(!btn.innerHTML.includes(CHECK));
-  assert.match(btn.innerHTML, /<svg[^>]*>.*rect.*<\/svg> Copy$/);
+  assert.match(btn.innerHTML, /<svg[^>]*>.*rect.*<\/svg><\/span> Copy$/);
 });

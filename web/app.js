@@ -47,17 +47,13 @@ export function createApp({ root, win = globalThis.window, api = createApi() }) 
 
   function setUser(user) { state.user = user; }
 
-  const ctx = { api, state, navigate, showError, showMessage, setUser, rerender: () => render() };
+  const ctx = { api, state, win, navigate, showError, showMessage, setUser, rerender: () => render() };
 
   api.onUnauthorized = () => {
     if (!state.user) return;
     state.user = null;
     pending = { text: 'Please log in again.', kind: 'error' };
     navigate('#/login');
-  };
-  api.onMustChange = () => {
-    if (state.user) state.user = { ...state.user, mustChangePassword: true };
-    navigate('#/password');
   };
 
   function render() {

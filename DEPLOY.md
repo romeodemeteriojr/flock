@@ -18,7 +18,7 @@ This guide is for the person who schedules volunteers. You do not need to be a p
    fly auth login
    ```
 
-2. Open `fly.toml` in a text editor and change `flock-CHANGE-ME` to a name nobody else has used, such as `grace-church-flock`. It must be globally unique. Also replace the `primary_region` placeholder with the region nearest you (`fly platform regions` lists them).
+2. Open `fly.toml` in a text editor and change `flock-CHANGE-ME` to a name nobody else has used, such as `grace-church-flock`. It must be globally unique. Also replace the `primary_region` placeholder with the region nearest you (`fly platform regions` lists them). Under `[env]`, add `FLOCK_PUBLIC_URL = 'https://<app>.fly.dev'` using your app name, so CLI invite links point to the deployed site.
 
 3. Register the app without starting it, keeping our settings:
 
@@ -52,7 +52,7 @@ This guide is for the person who schedules volunteers. You do not need to be a p
    fly ssh console -C "node bin/flock.js create-admin <username> 'Full Name'"
    ```
 
-   A **temporary password is printed once**. Write it down, give it only to that person privately, and have them change it after signing in.
+   A **one-time invite link is printed**, valid for 7 days. Give it only to that person privately. Opening it lets them choose a password and logs them in. Check that it starts with your deployed HTTPS address, not localhost.
 
 8. Visit `https://<app>.fly.dev` (your app name instead of `<app>`).
 
@@ -68,7 +68,9 @@ Fly shows the DNS records to add at your domain provider. HTTPS is set up automa
 
 ## 4. Updating to a new version
 
-Get the new version of the Flock folder, **make a backup first** (section 6), then:
+**The pre-release 0.1.0 → 0.2.0 change needs a fresh database; it does not migrate existing files.** Keep existing files and backups private and safe. Do not deploy 0.2.0 over a real 0.1.0 database expecting an automatic upgrade.
+
+For versions with a compatible schema, get the new Flock folder, **make a backup first** (section 6), then:
 
 ```
 fly deploy
@@ -139,7 +141,7 @@ About **$2.34 a month** for one small machine plus a 1 GB volume. Prices change,
 ## 9. Security checklist
 
 - Only use the `https://` address. Flock is set to refuse plain HTTP.
-- Never share temporary passwords in public chats or group emails.
+- Never share invite links in public chats or group emails; they are one-time credentials.
 - Back up before every upgrade.
 - Run **exactly one machine**. Never run `fly scale count 2`: each machine would have its own, different database.
 - Keep backup files private.
@@ -149,7 +151,8 @@ About **$2.34 a month** for one small machine plus a 1 GB volume. Prices change,
 - **"app name already taken"**: choose a different, more unique name in `fly.toml`.
 - **Deploy says no volume found**: run the `fly volumes create` step with the same region as `fly.toml`.
 - **Site will not load**: run `fly status` and `fly logs`. The health check is `/api/health`.
-- **Lost the temporary password**: run `create-admin` again with a new username, or ask a technical friend to reset it.
+- **Lost or expired first-scheduler invite**: run `create-admin` with a new username. If another scheduler can already log in, ask them to make a new invite instead.
+- **An invite points at localhost**: set `FLOCK_PUBLIC_URL` to the public HTTPS address before creating CLI accounts. On People, browse using that address and choose **Copy new invite**.
 - **Data looks different after a while**: run `fly machine list` and make sure there is only one machine.
 - **`fly` not found**: reinstall flyctl and open a new terminal window.
 

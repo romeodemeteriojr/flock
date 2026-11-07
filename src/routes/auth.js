@@ -1,4 +1,4 @@
-// Login, logout, who am I, change password: thin HTTP adapter over services.auth.
+// Login, invites, logout, who am I, change password: thin HTTP adapter over services.auth.
 import { v, parse } from '../validate.js';
 import { TooManyRequestsError } from '../errors.js';
 import { sessionCookie, clearCookie, createIpThrottle } from '../guard.js';
@@ -29,6 +29,14 @@ export function clientIp(req, config) {
 export function register(router, ctx) {
   const auth = ctx.services.auth;
   const throttle = createIpThrottle({ clock: ctx.clock, windowMs: 5 * 60 * 1000, max: 20 });
+  const welcomeThrottle = createIpThrottle({ clock: ctx.clock, windowMs: 5 * 60 * 1000, max: 20 });
+
+  async function welcomeAttempt(req, fn) {
+    const ip = clientIp(req, ctx.config);
+    if (welcomeThrottle.isLimited(ip)) throw new TooManyRequestsError(LOCKED_MESSAGE, 60);
+    try { return await fn(); }
+    catch (e) { welcomeThrottle.fail(ip); throw e; }
+  }
 
   router.add('POST', '/api/login', async ({ req, body }) => {
     const ip = clientIp(req, ctx.config);
@@ -44,8 +52,20 @@ export function register(router, ctx) {
     return {
       status: 200,
       headers: { 'Set-Cookie': sessionCookie(req, ctx, token) },
-      json: { person: { id: person.id, name: person.name, role: person.role, mustChangePassword: person.mustChangePassword } },
+      json: { person: { id: person.id, name: person.name, role: person.role } },
     };
+  }, { auth: 'none' });
+
+  router.add('POST', '/api/welcome/check', async ({ req, body }) => ({
+    status: 200,
+    json: await welcomeAttempt(req, () => auth.inviteInfo(textOrNone(field(body, 'token')))),
+  }), { auth: 'none' });
+
+  router.add('POST', '/api/welcome', async ({ req, body }) => {
+    const { person, token } = await welcomeAttempt(req, () => auth.acceptInvite(
+      textOrNone(field(body, 'token')), textOrNone(field(body, 'password')),
+    ));
+    return { status: 200, headers: { 'Set-Cookie': sessionCookie(req, ctx, token) }, json: { person } };
   }, { auth: 'none' });
 
   router.add('POST', '/api/logout', async ({ req }) => {

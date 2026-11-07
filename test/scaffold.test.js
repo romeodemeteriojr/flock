@@ -5,7 +5,7 @@ import { startTestApp } from './helpers/app.js';
 
 test('config defaults', () => {
   assert.deepEqual(loadConfig({}), {
-    port: 8080, dbPath: './data/flock.db', secureCookies: false, trustProxy: false, unansweredDays: 3, sessionDays: 14,
+    port: 8080, dbPath: './data/flock.db', secureCookies: false, trustProxy: false, publicUrl: undefined, unansweredDays: 3, sessionDays: 14,
   });
 });
 
@@ -37,15 +37,15 @@ test('home page is served', async () => {
   } finally { await t.close(); }
 });
 
-test('version is 0.1.0 everywhere', async () => {
+test('version is 0.2.0 everywhere', async () => {
   const { readFileSync } = await import('node:fs');
   const { execFileSync } = await import('node:child_process');
   const { VERSION } = await import('../src/config.js');
   const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
-  assert.equal(pkg.version, '0.1.0');
+  assert.equal(pkg.version, '0.2.0');
   assert.equal(VERSION, pkg.version);
   const bin = new URL('../bin/flock.js', import.meta.url).pathname;
   for (const arg of ['version', '--version']) {
-    assert.equal(execFileSync(process.execPath, [bin, arg], { encoding: 'utf8' }).trim(), 'flock 0.1.0');
+    assert.equal(execFileSync(process.execPath, [bin, arg], { encoding: 'utf8' }).trim(), 'flock 0.2.0');
   }
 });

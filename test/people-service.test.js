@@ -9,30 +9,20 @@ import { fastHasher } from '../src/infra/hasher.js';
 import { silentLogger } from '../src/infra/logger.js';
 import { ConflictError, NotFoundError, ValidationError } from '../src/errors.js';
 import { makeData } from './helpers/data.js';
+import { addPerson } from './helpers/seed.js';
+import { createAuthService, tokenHash } from '../src/services/auth-service.js';
 
 const NOW = '2025-01-05T12:00:00.000Z';
 
-function fakeAuth({ data, random, hasher }) {
-  const calls = { endSessions: [], issueTempPassword: [], newTempCredentials: 0 };
-  const generateTempPassword = () => `temp-${random.token(6)}-${random.int(100)}`;
+function fakeAuth(deps) {
+  const calls = { endSessions: [], newInvite: 0 };
+  const base = createAuthService({ ...deps, logger: silentLogger(), config: { sessionDays: 14 } });
   return {
-    calls,
-    generateTempPassword,
-    async newTempCredentials() {
-      calls.newTempCredentials++;
-      const tempPassword = generateTempPassword();
-      return { tempPassword, passwordHash: await hasher.hash(tempPassword) };
-    },
+    ...base, calls,
+    newInvite() { calls.newInvite++; return base.newInvite(); },
     async endSessions(personId) {
       calls.endSessions.push(personId);
-      return data.sessions.deleteForPerson(personId);
-    },
-    async issueTempPassword(personId) {
-      calls.issueTempPassword.push(personId);
-      const t = generateTempPassword();
-      if (!(await data.people.setPassword(personId, await hasher.hash(t), true))) throw new Error('no such person');
-      await data.sessions.deleteForPerson(personId);
-      return t;
+      return base.endSessions(personId);
     },
   };
 }
@@ -42,10 +32,9 @@ async function setup() {
   const clock = fixedClock(NOW);
   const random = seededRandom('people');
   const hasher = fastHasher({ env: {} });
-  const auth = fakeAuth({ data, random, hasher });
+  const auth = fakeAuth({ data, random, hasher, clock });
   const people = createPeopleService({ data, clock, auth, logger: silentLogger() });
-  const add = async (name, username, role = 'member') =>
-    (await data.people.create({ name, username, role, passwordHash: await hasher.hash('pw-123456'), mustChangePassword: false, createdAt: NOW })).id;
+  const add = (name, username, role = 'member') => addPerson({ data, hasher }, { name, username, role, password: 'pw-123456' });
   const adminId = await add('Ada Admin', 'ada', 'admin');
   const memberId = await add('Max Member', 'max');
   const admin = { id: adminId, role: 'admin' };
@@ -57,23 +46,23 @@ test('people service: list is sorted, has positionIds and no secrets', async () 
   const { people } = await setup();
   const list = await people.list();
   assert.deepEqual(list.map((p) => p.name), ['Ada Admin', 'Max Member']);
-  assert.deepEqual(Object.keys(list[0]), ['id', 'name', 'username', 'role', 'active', 'mustChangePassword', 'positionIds']);
+  assert.deepEqual(Object.keys(list[0]), ['id', 'name', 'username', 'role', 'active', 'joined', 'positionIds']);
   assert.doesNotMatch(JSON.stringify(list), /fast\$|hash/i);
 });
 
-test('people service: create returns the temp password once and stores only its hash', async () => {
-  const { people, data, admin, hasher, auth } = await setup();
-  const { person, tempPassword } = await people.create(admin, { name: 'Sam Jones', username: ' Sam_J ' });
+test('people service: create returns an invite once and stores only its hash', async () => {
+  const { people, data, admin, auth } = await setup();
+  const { person, invite } = await people.create(admin, { name: 'Sam Jones', username: ' Sam_J ' });
   assert.equal(person.username, 'sam_j');
   assert.equal(person.role, 'member');
-  assert.equal(person.mustChangePassword, true);
+  assert.equal(person.joined, false);
   assert.equal(person.active, true);
-  assert.equal(auth.calls.newTempCredentials, 1);
+  assert.equal(auth.calls.newInvite, 1);
   const stored = await data.people.findAuthById(person.id);
-  assert.notEqual(stored.passwordHash, tempPassword);
-  assert.ok(await hasher.verify(tempPassword, stored.passwordHash));
+  assert.equal(stored.passwordHash, null);
+  assert.equal((await data.invites.findByTokenHash(tokenHash(invite.token))).personId, person.id);
   assert.equal(stored.createdAt, NOW);
-  assert.ok(!JSON.stringify(await people.list()).includes(tempPassword));
+  assert.ok(!JSON.stringify(await people.list()).includes(invite.token));
   const admin2 = await people.create(admin, { name: 'Bo Boss', role: 'admin' });
   assert.equal(admin2.person.role, 'admin');
 });
@@ -99,7 +88,7 @@ test('people service: create validates username and role', async () => {
   }
   await assert.rejects(people.create(admin, { name: 'A B', role: 'boss' }),
     (e) => e instanceof ValidationError && e.message === 'The role must be admin or member.');
-  assert.equal(auth.calls.newTempCredentials, 0, 'no credentials made for bad input');
+  assert.equal(auth.calls.newInvite, 0, 'no invite made for bad input');
 });
 
 test('people service: update changes name and role and writes an audit row', async () => {
@@ -162,17 +151,18 @@ test('people service: unknown people give NotFoundError', async () => {
   await assert.rejects(people.update(admin, 9999, { name: 'Nope' }),
     (e) => e instanceof NotFoundError && e.message === 'That person was not found');
   await assert.rejects(people.resetPassword(admin, 9999), NotFoundError);
-  assert.deepEqual(auth.calls.issueTempPassword, []);
+  assert.equal(auth.calls.newInvite, 0);
 });
 
-test('people service: resetPassword goes through auth and returns the password once', async () => {
-  const { people, data, admin, memberId, hasher, session } = await setup();
+test('people service: resetPassword clears the password and returns an invite once', async () => {
+  const { people, data, admin, memberId, session } = await setup();
   await session(memberId, 'm1');
   const r = await people.resetPassword(admin, memberId);
-  assert.deepEqual(Object.keys(r), ['tempPassword']);
+  assert.deepEqual(Object.keys(r), ['person', 'invite']);
   const stored = await data.people.findAuthById(memberId);
-  assert.ok(await hasher.verify(r.tempPassword, stored.passwordHash));
-  assert.equal(stored.mustChangePassword, true);
+  assert.equal(stored.passwordHash, null);
+  assert.equal(r.person.joined, false);
+  assert.equal((await data.invites.findByTokenHash(tokenHash(r.invite.token))).personId, memberId);
   assert.equal(await data.sessions.findByTokenHash('hash-m1'), null);
 });
 
@@ -184,10 +174,10 @@ test('people service: audit rows have no secrets', async () => {
   const rows = (await data.audit.list()).reverse();
   assert.deepEqual(rows.map((r) => r.action), ['person.create', 'person.update', 'person.reset_password']);
   assert.equal(rows[0].detail, `person ${c.person.id} (sam.jones) role member`);
-  const hashes = [(await data.people.findAuthById(c.person.id)).passwordHash, (await data.people.findAuthById(memberId)).passwordHash];
+  const hashes = [tokenHash(c.invite.token), tokenHash(rs.invite.token)];
   for (const r of rows) {
     assert.equal(r.actorId, admin.id);
-    for (const secret of [c.tempPassword, rs.tempPassword, ...hashes]) assert.ok(!r.detail.includes(secret));
+    for (const secret of [c.invite.token, rs.invite.token, ...hashes]) assert.ok(!r.detail.includes(secret));
     assert.doesNotMatch(r.detail, /fast\$|scrypt|password/i);
   }
 });

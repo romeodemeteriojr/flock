@@ -17,6 +17,7 @@ import { SHELL } from '../web/app.js';
 import { createSheet } from '../web/lib/sheet.js';
 import * as nav from '../web/views/nav.js';
 import * as login from '../web/views/login.js';
+import * as welcome from '../web/views/welcome.js';
 import * as password from '../web/views/password.js';
 import * as notFound from '../web/views/notfound.js';
 import * as mySchedule from '../web/views/my-schedule.js';
@@ -209,9 +210,9 @@ const SERVICES = [
   { id: 3, date: '2026-11-22', time: '09:00', title: 'Empty', slots: [] },
 ];
 const PEOPLE = [
-  { id: 1, name: 'Ari Admin', username: 'ari', role: 'admin', active: true, positionIds: [] },
-  { id: 2, name: 'Pat Demo', username: 'pat', role: 'member', active: true, positionIds: [10] },
-  { id: 3, name: 'Old Rue', username: 'rue', role: 'member', active: false, positionIds: [] },
+  { id: 1, name: 'Ari Admin', username: 'ari', role: 'admin', active: true, joined: true, positionIds: [] },
+  { id: 2, name: 'Pat Demo', username: 'pat', role: 'member', active: true, joined: true, positionIds: [10] },
+  { id: 3, name: 'Old Rue', username: 'rue', role: 'member', active: false, joined: false, positionIds: [] },
 ];
 const ITEM = (o = {}) => ({ slotId: 1, date: '2026-11-08', time: '09:00', serviceTitle: 'Sunday service', positionName: 'Sound', teamName: 'Tech', status: 'pending', coVolunteers: [{ name: 'Pat Demo', positionName: 'Keys' }], ...o });
 const CANDS = [{ personId: 2, name: 'Pat Demo', qualified: true, reasons: ['Has never served'] }, { personId: 5, name: 'Kit New', qualified: false, reasons: ['Not set up'] }];
@@ -241,11 +242,14 @@ function allViewHtml() {
   const add = (s) => out.push(String(s));
   // Shell, nav, simple pages.
   add(SHELL);
-  for (const user of [{ id: 1, name: 'Ari Admin', role: 'admin' }, { id: 2, name: 'Pat Demo', role: 'member' }, { id: 3, name: 'New', role: 'member', mustChangePassword: true }]) {
+  for (const user of [{ id: 1, name: 'Ari Admin', role: 'admin' }, { id: 2, name: 'Pat Demo', role: 'member' }, { id: 3, name: 'New', role: 'member' }]) {
     for (const hash of ['#/', '#/blockouts', '#/schedule', '#/teams']) add(nav.render({ user }, hash));
   }
   add(login.render({})); add(login.render({}, { error: 'Wrong', username: 'x' }));
-  add(password.render({ user: { mustChangePassword: true } })); add(password.render({ user: {} }, { error: 'No' }));
+  add(password.render({ user: {} })); add(password.render({ user: {} }, { error: 'No' }));
+  add(welcome.render({}));
+  add(welcome.render({}, { info: { name: 'Pat Demo', username: 'pat.demo' } }));
+  add(welcome.render({}, { error: 'This link has expired or was already used.' }));
   add(notFound.render({}));
   // My schedule, every state.
   const ms = (v) => add(mySchedule.render({}, { today: '2026-11-04', loading: false, ...v }));
@@ -260,8 +264,8 @@ function allViewHtml() {
   mb({ error: 'Down' }); mb({ list: [] });
   mb({ list: [{ id: 1, startDate: TODAY, endDate: '2026-11-10', reason: 'Trip' }, { id: 2, startDate: TODAY, endDate: TODAY, reason: '' }], message: 'Saved', problem: 'Bad', conflicts: [{ date: TODAY, positionName: 'Sound' }], busy: true });
   // People.
-  const pm = (x = {}) => people.renderScreen({ people: PEOPLE, teams: TEAMS, query: '', loading: false, adding: false, newName: '', panel: null, secret: null, error: '', notice: '', me: 1, ...x });
-  add(people.render({})); add(pm({ loading: true })); add(pm({ error: 'E', notice: 'N', secret: { name: 'Pat Demo', password: 'a-b-c' } }));
+  const pm = (x = {}) => people.renderScreen({ people: PEOPLE, teams: TEAMS, query: '', loading: false, adding: false, newName: '', panel: null, invite: null, error: '', notice: '', me: 1, ...x });
+  add(people.render({})); add(pm({ loading: true })); add(pm({ error: 'E', notice: 'N', invite: { name: 'Pat Demo', username: 'pat.demo', link: '/#/welcome?token=example', localOnly: true } }));
   add(pm({ adding: true, newName: 'Kit New' })); add(pm({ people: [] })); add(pm({ query: 'zzz' }));
   for (const panel of [{ kind: 'reset', id: 2 }, { kind: 'active', id: 2 }, { kind: 'active', id: 3 }, { kind: 'role', id: 2, role: 'admin' }, { kind: 'role', id: 1, role: 'member' }, { kind: 'edit', id: 2 }, { kind: 'positions', id: 2, checked: new Set([10]) }]) add(pm({ panel }));
   add(pm({ panel: { kind: 'positions', id: 2, checked: new Set() }, teams: [] }));
@@ -589,10 +593,10 @@ test('gallery: loads only local assets and renders every component and page with
 
   const out = renderGallery({ today: TODAY });
   for (const id of ['palette', 'type', 'buttons', 'chips', 'avatars', 'icons', 'segmented', 'toasts', 'skeleton', 'empty', 'forms', 'nav', 'sheet',
-    'p-login', 'p-password', 'p-home', 'p-off', 'p-people', 'p-teams', 'p-services', 'p-schedule', 'p-gaps', 'p-404', 'live']) {
+    'p-login', 'p-welcome', 'p-password', 'p-home', 'p-off', 'p-people', 'p-teams', 'p-services', 'p-schedule', 'p-gaps', 'p-404', 'live']) {
     assert.match(out, new RegExp(`id="g-${id}"`), id);
   }
-  for (const text of ["You&#39;re serving", 'Waiting for answer', 'Nobody yet', 'Copy all', 'Days I have off', 'One-time password']) assert.ok(out.includes(text), text);
+  for (const text of ["You&#39;re serving", 'Waiting for answer', 'Nobody yet', 'Copy all', 'Days I have off', 'Invite message']) assert.ok(out.includes(text), text);
   assert.doesNotMatch(out, /https?:|<script|style=/i);
   // Only made-up demo names.
   const d = demoData(TODAY);

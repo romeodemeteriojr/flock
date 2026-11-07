@@ -19,7 +19,8 @@ const cols = (db, t) => db.prepare(`PRAGMA table_info(${t})`).all().map((c) => c
 test('schema has all tables and columns', () => {
   const db = openDb();
   const want = {
-    people: ['id', 'name', 'username', 'password_hash', 'role', 'must_change_password', 'active', 'failed_logins', 'locked_until', 'created_at'],
+    people: ['id', 'name', 'username', 'password_hash', 'role', 'active', 'failed_logins', 'locked_until', 'created_at'],
+    invites: ['person_id', 'token_hash', 'expires_at', 'created_at'],
     sessions: ['id', 'token_hash', 'person_id', 'expires_at', 'created_at'],
     teams: ['id', 'name', 'sort'],
     positions: ['id', 'team_id', 'name', 'sort'],

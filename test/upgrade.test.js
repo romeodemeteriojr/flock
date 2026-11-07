@@ -49,7 +49,7 @@ function buildAt(file, upto) {
 // Data in the shape of the 0001 schema: the oldest one any later migration must keep working.
 function fillV1(db) {
   const at = '2024-06-01T00:00:00.000Z';
-  const person = db.prepare('INSERT INTO people (name, username, password_hash, role, must_change_password, created_at) VALUES (?, ?, ?, ?, 0, ?)');
+  const person = db.prepare('INSERT INTO people (name, username, password_hash, role, created_at) VALUES (?, ?, ?, ?, ?)');
   const admin = Number(person.run('Old Admin', 'old.admin', 'fast$s1$' + 'a'.repeat(64), 'admin', at).lastInsertRowid);
   const ids = [];
   for (let i = 1; i <= 6; i++) ids.push(Number(person.run(`Old Member ${i}`, `old.member${i}`, 'fast$s1$' + 'b'.repeat(64), 'member', at).lastInsertRowid));

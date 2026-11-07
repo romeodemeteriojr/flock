@@ -13,6 +13,7 @@ import { skeleton, emptyState } from './lib/ui.js';
 import { statusChip, createSlotPanel } from './lib/slotpanel.js';
 import * as nav from './views/nav.js';
 import * as login from './views/login.js';
+import * as welcome from './views/welcome.js';
 import * as password from './views/password.js';
 import * as notFound from './views/notfound.js';
 import * as mySchedule from './views/my-schedule.js';
@@ -55,11 +56,11 @@ export function demoData(today = todayString()) {
     { id: 3, date: addDays(sunday, 14), time: '18:30', title: 'Evening prayer', slots: [slot(8, 12, 8, 'Ada Placeholder', 'pending'), slot(9, 20)] },
   ];
   const PEOPLE = [
-    { id: 1, name: 'Morgan Fictional', username: 'morgan.fictional', role: 'admin', active: true, positionIds: [] },
-    { id: 3, name: 'Priya Demo', username: 'priya.demo', role: 'member', active: true, positionIds: [10] },
-    { id: 5, name: 'Tomás Sample', username: 'tomas.sample', role: 'member', active: true, positionIds: [11] },
-    { id: 6, name: 'Wren Example', username: 'wren.example', role: 'member', active: true, positionIds: [20] },
-    { id: 9, name: 'Old Gus Madeup', username: 'gus.madeup', role: 'member', active: false, positionIds: [] },
+    { id: 1, name: 'Morgan Fictional', username: 'morgan.fictional', role: 'admin', active: true, joined: true, positionIds: [] },
+    { id: 3, name: 'Priya Demo', username: 'priya.demo', role: 'member', active: true, joined: true, positionIds: [10] },
+    { id: 5, name: 'Tomás Sample', username: 'tomas.sample', role: 'member', active: true, joined: false, positionIds: [11] },
+    { id: 6, name: 'Wren Example', username: 'wren.example', role: 'member', active: true, joined: true, positionIds: [20] },
+    { id: 9, name: 'Old Gus Madeup', username: 'gus.madeup', role: 'member', active: false, joined: false, positionIds: [] },
   ];
   const ITEMS = [
     { slotId: 101, date: addDays(sunday, 0), time: '10:00', serviceTitle: 'Sunday service', positionName: 'Sound', teamName: 'Tech', status: 'pending',
@@ -213,7 +214,7 @@ function pages(d) {
   const me = { id: 1, name: 'Morgan Fictional', role: 'admin' };
   const sched = (view) => mySchedule.render({}, { today: d.today, loading: false, ...view });
   const off = (view) => myBlockouts.render({}, { today: d.today, loading: false, ...view });
-  const peopleModel = (extra = {}) => ({ people: d.PEOPLE, teams: d.TEAMS, query: '', loading: false, adding: false, newName: '', panel: null, secret: null, error: '', notice: '', me: 1, ...extra });
+  const peopleModel = (extra = {}) => ({ people: d.PEOPLE, teams: d.TEAMS, query: '', loading: false, adding: false, newName: '', panel: null, invite: null, error: '', notice: '', me: 1, ...extra });
   const teamsModel = (extra = {}) => ({ teams: d.TEAMS, loading: false, panel: null, error: '', notice: '', ...extra });
   const svcModel = (extra = {}) => ({ teams: d.TEAMS, services: d.SERVICES, loading: false, panel: null, error: '', notice: '', today: d.today, draft: null, ...extra });
   const schedModel = (extra = {}) => ({ services: d.SERVICES, teams: d.TEAMS, loading: false, error: '', notice: '', today: d.today, from: d.today, to: addDays(d.today, 55), ...extra });
@@ -222,7 +223,8 @@ function pages(d) {
   const screen = (h1, body) => html`<h1 tabindex="-1">${h1}</h1>${raw(String(body))}`;
   return html`
   ${section('p-login', 'Log in', html`${frame('Empty', login.render({}))}${frame('Wrong password', login.render({}, { error: 'Wrong username or password', username: 'priya.demo' }))}`)}
-  ${section('p-password', 'Choose a password', html`${frame('First login', password.render({ user: { mustChangePassword: true } }))}${frame('With a problem', password.render({ user: {} }, { error: "The two new passwords don't match. Please type them again." }))}`)}
+  ${section('p-welcome', 'Join with an invite', html`${frame('Checking', welcome.render({}))}${frame('Choose a password', welcome.render({}, { info: { name: 'Priya Demo', username: 'priya.demo' } }))}${frame('Link gone', welcome.render({}, { error: 'This link has expired or was already used. Ask your scheduler for a new one.' }))}`)}
+  ${section('p-password', 'Change my password', html`${frame('Change password', password.render({ user: me }))}${frame('With a problem', password.render({ user: me }, { error: "The two new passwords don't match. Please type them again." }))}`)}
   ${section('p-home', 'My schedule (volunteer home)', html`
     ${frame('Loading', mySchedule.render({}, { today: d.today, loading: true }))}
     ${frame('Serving soon, one to answer', sched({ data: { nextServing: d.ITEMS[0], items: d.ITEMS } }))}
@@ -241,7 +243,7 @@ function pages(d) {
     ${frame('Loading', people.render({}))}
     ${frame('List', screen('People', people.renderScreen(peopleModel())))}
     ${frame('Adding someone', screen('People', people.renderScreen(peopleModel({ adding: true, newName: 'Noor Imaginary' }))))}
-    ${frame('One-time password', screen('People', people.renderScreen(peopleModel({ secret: { name: 'Noor Imaginary', password: 'maple-river-42' }, notice: 'Copied.' }))))}
+    ${frame('Invite message', screen('People', people.renderScreen(peopleModel({ invite: { name: 'Noor Imaginary', username: 'noor.imaginary', link: '/#/welcome?token=gallery-example', localOnly: true }, notice: 'Copied.' }))))}
     ${frame('What can they do?', screen('People', people.renderScreen(peopleModel({ panel: { kind: 'positions', id: 3, checked: new Set([10]) } }))))}
     ${frame('Deactivate?', screen('People', people.renderScreen(peopleModel({ panel: { kind: 'active', id: 5 } }))))}
     ${frame('Make a scheduler?', screen('People', people.renderScreen(peopleModel({ panel: { kind: 'role', id: 6, role: 'admin' } }))))}

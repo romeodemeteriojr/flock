@@ -26,6 +26,11 @@ export function createClient(app) {
         if (res.status === 200) b.cookie = cookieFrom(res);
         return res;
       },
+      async welcome(token, password) {
+        const res = await b.call('POST', '/api/welcome', { token, password });
+        if (res.status === 200) b.cookie = cookieFrom(res);
+        return res;
+      },
       get: (path, opts) => b.call('GET', path, undefined, opts),
       post: (path, body = {}, opts) => b.call('POST', path, body, opts),
       put: (path, body = {}, opts) => b.call('PUT', path, body, opts),
@@ -37,6 +42,9 @@ export function createClient(app) {
 
   return { browser, responses };
 }
+
+/** Read the capability from an invite link's fragment, like the welcome page does. */
+export const tokenFromLink = (link) => new URLSearchParams(new URL(link).hash.split('?')[1]).get('token');
 
 /** Fill a route pattern's :params with the given value. */
 export const fillPath = (pattern, value = '1') => pattern.replace(/:[A-Za-z]+/g, value);

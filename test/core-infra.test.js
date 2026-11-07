@@ -41,8 +41,8 @@ test('error classes have the right status and code', () => {
   assert.equal(new TooManyRequestsError('Slow down', 30).retryAfterSec, 30);
   assert.equal(new TooManyRequestsError('Slow down', 2.2).retryAfterSec, 3);
   assert.equal(new TooManyRequestsError('Slow down', -5).retryAfterSec, 1);
-  const f = new ForbiddenError('Please choose a new password first', { code: 'must_change_password', details: { a: 1 } });
-  assert.equal(f.code, 'must_change_password');
+  const f = new ForbiddenError('Operation not allowed', { code: 'operation_forbidden', details: { a: 1 } });
+  assert.equal(f.code, 'operation_forbidden');
   assert.deepEqual(f.details, { a: 1 });
   const base = new AppError(418, 'teapot', 'I am a teapot', { x: 1 });
   assert.equal(base.status, 418);
@@ -394,6 +394,14 @@ test('validateConfig accepts the defaults and lists every problem together', () 
   assert.match(one.message, /a problem/);
 });
 
+test('FLOCK_PUBLIC_URL is a clean HTTP base URL, never credentials or a fragment', () => {
+  assert.equal(loadConfig({ FLOCK_PUBLIC_URL: ' https://flock.example.org/// ' }).publicUrl, 'https://flock.example.org');
+  assert.equal(loadConfig({}).publicUrl, undefined);
+  for (const value of ['ftp://x', 'not a url', 'https://user:password@example.org', 'https://x.org/?query=1', 'https://x.org/#fragment']) {
+    assert.throws(() => loadConfig({ FLOCK_PUBLIC_URL: value }), (e) => e instanceof ConfigError && e.message.includes('FLOCK_PUBLIC_URL'));
+  }
+});
+
 // ---------- HTTP: error mapper, request ids, request log ----------
 
 class DuplicateError extends Error { constructor(m) { super(m); this.name = 'DuplicateError'; } }
@@ -410,7 +418,7 @@ async function withLoggedApp(fn, { random } = {}) {
   const add = (method, p, h) => r.add(method, p, h, { auth: 'none' });
   add('GET', '/api/t/validation', () => { throw new ValidationError('Name is required'); });
   add('GET', '/api/t/unauth', () => { throw new UnauthenticatedError(); });
-  add('GET', '/api/t/forbidden', () => { throw new ForbiddenError('Please choose a new password first', 'must_change_password'); });
+  add('GET', '/api/t/forbidden', () => { throw new ForbiddenError('Operation not allowed', 'operation_forbidden'); });
   add('GET', '/api/t/notfound', () => { throw new NotFoundError('That person does not exist'); });
   add('GET', '/api/t/conflict', () => { throw new ConflictError('That name is already taken', 'duplicate_name'); });
   add('GET', '/api/t/limit', () => { throw new TooManyRequestsError('Too many tries', 42); });
@@ -450,7 +458,7 @@ test('error mapper: each kind of error becomes the right response', () => withLo
   const expect = [
     ['/api/t/validation', 400, { error: 'Name is required' }],
     ['/api/t/unauth', 401, { error: 'Please log in' }],
-    ['/api/t/forbidden', 403, { error: 'Please choose a new password first', code: 'must_change_password' }],
+    ['/api/t/forbidden', 403, { error: 'Operation not allowed', code: 'operation_forbidden' }],
     ['/api/t/notfound', 404, { error: 'That person does not exist' }],
     ['/api/t/conflict', 409, { error: 'That name is already taken', code: 'duplicate_name' }],
     ['/api/t/limit', 429, { error: 'Too many tries' }],
@@ -625,7 +633,7 @@ test('serve logs startup and shuts down cleanly on SIGTERM', { skip: process.pla
     assert.ok(msgs.includes('flock stopping'));
     assert.ok(msgs.includes('flock stopped'));
     const started = events.find((e) => e.msg === 'flock started');
-    assert.equal(started.version, '0.1.0');
+    assert.equal(started.version, '0.2.0');
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

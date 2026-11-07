@@ -24,7 +24,15 @@ terminal.
 
 By default the database is the file `data/flock.db` inside the Flock folder.
 You can choose another file with `FLOCK_DB=/path/to/church.db npm start`, or
-another port with `FLOCK_PORT=3000 npm start`.
+another port with `FLOCK_PORT=3000 npm start`. Set
+`FLOCK_PUBLIC_URL=https://schedule.example.org` when you want invite links to
+use one shared address; otherwise links use the scheduler's current address.
+The command line uses `http://localhost:<port>` if no public URL is set.
+
+**Version 0.2.0 needs a fresh database.** The invite-link schema replaces the
+pre-release schema in place; there is no automatic upgrade from 0.1.0. Keep
+existing files and backups safe, and choose a new `FLOCK_DB` file rather than
+overwriting real data.
 
 ## Creating the first scheduler
 
@@ -35,22 +43,30 @@ node bin/flock.js create-admin pat.smith 'Pat Smith'
 ```
 
 The first word is the username and the quoted part is the full name. Flock
-prints a **temporary password**, and shows it only this once. Log in with
-that username and password. Flock then asks you to choose your own password,
-which must be at least 8 characters long.
+prints a **one-time invite link**, valid for **7 days**. Open that link,
+check the username shown, and choose a password of at least 8 characters.
+Choosing it also logs you in. Use your username and password next time.
+If Flock runs on another computer, set `FLOCK_PUBLIC_URL` before creating the
+account so that the printed link uses the correct address.
 
-## Adding people and their first passwords
+## Adding people
 
-On the **People** page, choose **Add person** and type their name. Flock
-suggests a username, which you can change. When you save, Flock shows a
-temporary password once. Give it to the person in a private way, for example
-in person or in a private message. When they first log in, Flock makes them
-choose their own password.
+On **People**, choose **Add person** and enter their name. Flock suggests a
+username, which you can change. Saving opens an invite message: choose
+**Copy message** and send it privately through your usual messages app.
+The person taps the link, sees their username and chooses a password, which
+also logs them in. The link works once, for 7 days.
 
-If someone forgets their password, open **People** and choose **Reset
-password**. Flock gives you a new temporary password for them. Nobody, not
-even the scheduler, can see a person's own password (see "How passwords work"
-below).
+Someone who has not joined is marked **Not joined yet**. **Copy new invite**
+makes a new link and cancels their previous one. If the message warns about
+localhost, open Flock using its network address or set `FLOCK_PUBLIC_URL`,
+then make a new invite; a localhost link only works on the same computer.
+
+If someone forgets their password, choose **Reset password**. Confirming
+immediately stops their current password and logs them out everywhere,
+then shows a new invite message. Nobody, including the scheduler, can read
+another person's password. To change your own password, use the key button
+at the top (**Change my password**).
 
 On the same page you can mark which positions a person can do, make someone
 a scheduler, or deactivate people who have left. A deactivated person cannot
@@ -65,7 +81,8 @@ that phone. They do not need to install an app.
 While you are trying Flock out, phones on the same Wi-Fi can reach it at the
 running computer's network address, for example `http://192.168.1.20:8080`.
 Before volunteers use it for real, read "Putting it online later" below.
-Over plain `http://`, passwords travel across the network without protection.
+Over plain `http://`, passwords and invite tokens travel across the network
+without protection. Use HTTPS for real people.
 
 ## What each page does
 
@@ -108,8 +125,9 @@ FLOCK_DB=data/demo.db node bin/flock.js demo
 FLOCK_DB=data/demo.db npm start
 ```
 
-Log in as `demo-admin` with the temporary password the `demo` command
-printed. Every name in the demo is fake. Flock refuses to put demo data into
+Open the invite link printed by `demo` and choose a password for
+`demo-admin`. Other demo people have not joined yet; make an invite for them
+on **People** when you want to try their views. Every name in the demo is fake. Flock refuses to put demo data into
 a database that already has people in it. When you are done, stop Flock and
 delete `data/demo.db`.
 
@@ -171,7 +189,12 @@ spreadsheet could mistake for a formula is made safe.
 
 Flock never stores passwords. It stores a scrambled form (a "hash") from
 which the password cannot be worked out. That is why a scheduler can
-**reset** a password but can never **read** one. After 5 wrong passwords in a
+**reset** a password but can never **read** one. A reset removes the old hash
+and all sessions, then creates a new invite. Accounts without a chosen
+password cannot log in. Only hashes of invite and session tokens are stored;
+invite tokens stay in the link fragment and are sent in POST bodies, not
+HTTP URLs. Treat invite links as private credentials.
+After 5 wrong passwords in a
 row, the account waits a few minutes before it can try again, which stops
 guessing.
 

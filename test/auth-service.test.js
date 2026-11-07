@@ -6,7 +6,7 @@ import { fixedClock } from '../src/infra/clock.js';
 import { seededRandom } from '../src/infra/random.js';
 import { fastHasher } from '../src/infra/hasher.js';
 import { createAuthService, tokenHash, LOCKOUT_MS } from '../src/services/auth-service.js';
-import { UnauthenticatedError, TooManyRequestsError, ValidationError, NotFoundError } from '../src/errors.js';
+import { UnauthenticatedError, TooManyRequestsError, ValidationError } from '../src/errors.js';
 import { makeData } from './helpers/data.js';
 
 const T0 = '2025-03-02T09:00:00.000Z';
@@ -27,9 +27,9 @@ async function setup({ sessionDays = 14 } = {}) {
   const auth = createAuthService({ data, clock, random: seededRandom('auth'), hasher, logger, config: { sessionDays } });
   const add = async (username, password, extra = {}) => {
     const p = await data.people.create({
-      name: `Test ${username}`, username, passwordHash: await hasher.hash(password),
-      role: extra.role ?? 'member', mustChangePassword: extra.mustChange ?? false, createdAt: T0,
+      name: `Test ${username}`, username, role: extra.role ?? 'member', createdAt: T0,
     });
+    await data.people.setPassword(p.id, await hasher.hash(password));
     if (extra.active === false) await data.people.update(p.id, { active: false });
     return p.id;
   };
@@ -48,7 +48,7 @@ const rejectsWith = (p, Cls, check) => assert.rejects(p, (e) => {
 test('auth service: login succeeds with a public person and a session token', async () => {
   const s = await setup();
   const r = await s.auth.login('pat', 'pat-secret-1');
-  assert.deepEqual(r.person, { id: s.pat, name: 'Test pat', username: 'pat', role: 'admin', mustChangePassword: false, active: true });
+  assert.deepEqual(r.person, { id: s.pat, name: 'Test pat', username: 'pat', role: 'admin', hasPassword: true, active: true });
   assert.match(r.token, /^[A-Za-z0-9_-]{43}$/);
   const stored = await s.data.sessions.findByTokenHash(tokenHash(r.token));
   assert.equal(stored.personId, s.pat);
@@ -135,24 +135,8 @@ test('auth service: changePassword rules and session handling', async () => {
   assert.equal((await s.auth.login('pat', 'new-secret-9')).person.id, s.pat);
 });
 
-test('auth service: temp password flow and newTempCredentials', async () => {
+test('auth service: ending all sessions revokes every browser', async () => {
   const s = await setup();
-  const before = (await s.auth.login('lee', 'lee-secret-1')).token;
-  const temp = await s.auth.issueTempPassword(s.lee);
-  assert.match(temp, /^[a-z]+-[a-z]+-\d{2}$/);
-  assert.equal(await s.auth.authenticate(before), null, 'sessions ended');
-  await rejectsWith(s.auth.login('lee', 'lee-secret-1'), UnauthenticatedError);
-  const r = await s.auth.login('lee', temp);
-  assert.equal(r.person.mustChangePassword, true);
-  await s.auth.changePassword(s.lee, temp, 'my-own-secret', { currentToken: r.token });
-  assert.equal((await s.auth.authenticate(r.token)).mustChangePassword, false);
-  await rejectsWith(s.auth.issueTempPassword(9999), NotFoundError);
-
-  const creds = await s.auth.newTempCredentials();
-  assert.match(creds.tempPassword, /^[a-z]+-[a-z]+-\d{2}$/);
-  assert.equal(await s.hasher.verify(creds.tempPassword, creds.passwordHash), true);
-  assert.ok(!creds.passwordHash.includes(creds.tempPassword));
-
   const t1 = (await s.auth.login('pat', 'pat-secret-1')).token;
   const t2 = (await s.auth.login('pat', 'pat-secret-1')).token;
   assert.equal(await s.auth.endSessions(s.pat), 2);
@@ -160,11 +144,11 @@ test('auth service: temp password flow and newTempCredentials', async () => {
   assert.equal(await s.auth.authenticate(t2), null);
 });
 
-test('auth service: seeded random makes temp passwords repeatable', async () => {
+test('auth service: seeded random makes invite tokens repeatable', async () => {
   const a = await setup();
   const b = await setup();
-  const seqA = Array.from({ length: 5 }, () => a.auth.generateTempPassword());
-  const seqB = Array.from({ length: 5 }, () => b.auth.generateTempPassword());
+  const seqA = Array.from({ length: 5 }, () => a.auth.newInvite().token);
+  const seqB = Array.from({ length: 5 }, () => b.auth.newInvite().token);
   assert.deepEqual(seqA, seqB);
 });
 
@@ -175,7 +159,7 @@ test('auth service: no hash or raw token is ever returned or logged', async () =
   await s.auth.login('lee', 'lee-secret-1').catch(() => {});
   await s.auth.login('nobody', 'whatever-1').catch(() => {});
   await s.auth.changePassword(s.pat, 'pat-secret-1', 'new-secret-9', { currentToken: token });
-  const temp = await s.auth.issueTempPassword(s.lee);
+  const invite = s.auth.newInvite();
   const me = await s.auth.authenticate(token);
 
   const hashes = s.db.prepare('SELECT password_hash h FROM people').all().map((r) => r.h);
@@ -187,7 +171,7 @@ test('auth service: no hash or raw token is ever returned or logged', async () =
     assert.ok(!logged.includes(h), 'no hash logged');
   }
   assert.doesNotMatch(returned + logged, /passwordHash|fast\$/);
-  for (const secret of [token, tokenHash(token), temp, 'pat-secret-1', 'new-secret-9', 'bad-bad-bad', 'whatever-1']) {
+  for (const secret of [token, tokenHash(token), invite.token, 'pat-secret-1', 'new-secret-9', 'bad-bad-bad', 'whatever-1']) {
     assert.ok(!logged.includes(secret), `logged a secret: ${secret.slice(0, 6)}...`);
   }
   assert.ok(!returned.includes(token));

@@ -7,6 +7,8 @@ import { flashCopied } from '../lib/copyflash.js';
 import { iconButton } from '../lib/iconbutton.js';
 import { avatar } from '../lib/avatar.js';
 import { toasts } from '../lib/toast.js';
+import { inviteMessage } from '../lib/invite.js';
+import { copyText } from '../lib/slotpanel.js';
 import { skeleton, emptyState, pageHead } from '../lib/ui.js';
 
 export const title = 'People';
@@ -64,13 +66,14 @@ function roleConfirmPanel(p, target) {
     </div></div>`;
 }
 
-function passwordBox(secret) {
+function inviteBox(invite) {
   return html`
-    <section class="card secret-box" id="secret-box" role="alert" aria-labelledby="secret-head">
-      <h2 id="secret-head">${iconSlot('lock', 'icon-sm')} Password for ${secret.name}</h2>
-      <p class="lead">Give this to ${secret.name}: <strong data-secret>${secret.password}</strong>. It is only shown once, and ${secret.name} will choose their own password at first login.</p>
+    <section class="card secret-box" id="invite-box" role="alert" aria-labelledby="invite-head">
+      <h2 id="invite-head">${iconSlot('send', 'icon-sm')} Invite for ${invite.name}</h2>
+      <p class="lead" data-invite-text>${inviteMessage(invite)}</p>
+      ${invite.localOnly ? html`<p class="notice">This link uses localhost, so it only works on this computer. Set FLOCK_PUBLIC_URL, or open Flock using this computer's network address, then copy a new invite.</p>` : ''}
       <div class="btn-row">
-        <button type="button" class="btn btn-primary" data-action="copy" data-copy-key="secret">${iconSlot('copy')} Copy</button>
+        <button type="button" class="btn btn-primary" data-action="copy" data-copy-key="invite">${iconSlot('copy')} Copy message</button>
         <button type="button" class="btn" data-action="done">Done</button>
       </div>
     </section>`;
@@ -79,9 +82,9 @@ function passwordBox(secret) {
 function confirmPanel(p, kind) {
   if (kind === 'reset') {
     return html`<div class="confirm" role="alertdialog" aria-label="Confirm">
-      <p>Make a new temporary password for <strong>${p.name}</strong>? Their old password will stop working.</p>
+      <p>Make a new invite link for <strong>${p.name}</strong>? Their current password stops working right away, and they are logged out everywhere.</p>
       <div class="btn-row">
-        <button type="button" class="btn btn-primary" data-action="reset-yes" data-id="${p.id}">Yes, reset it</button>
+        <button type="button" class="btn btn-primary" data-action="reset-yes" data-id="${p.id}">Yes, make a new link</button>
         <button type="button" class="btn" data-action="cancel">No, go back</button>
       </div></div>`;
   }
@@ -148,6 +151,7 @@ function personRow(p, m) {
       <div class="person-text">
         <p class="person-name"><strong>${p.name}</strong> <span class="hint">(${p.username})</span></p>
         <p class="person-chips"><span class="chip chip-plain">${roleWord(p)}</span>
+        ${!p.joined && p.active ? html`<span class="chip chip-plain">Not joined yet</span>` : ''}
         ${p.active ? '' : html`<span class="chip chip-bad">Deactivated</span>`}</p>
       </div>
     </div>
@@ -155,6 +159,7 @@ function personRow(p, m) {
       ${roleButton}
       ${iconButton('edit', 'Edit name', { dataAction: 'edit', dataId: p.id })}
       ${iconButton('list-check', 'What can they do?', { dataAction: 'positions', dataId: p.id })}
+      ${!p.joined && p.active ? iconButton('send', 'Copy new invite', { dataAction: 'invite', dataId: p.id }) : ''}
       ${iconButton('key', 'Reset password', { dataAction: 'reset-ask', dataId: p.id })}
       ${activeButton}
     </div>
@@ -175,7 +180,7 @@ export function renderScreen(m) {
   return String(html`
     ${m.error ? html`<p class="form-error" role="alert">${m.error}</p>` : ''}
     ${toasts([[m.notice, 'ok']])}
-    ${m.secret ? passwordBox(m.secret) : ''}
+    ${m.invite ? inviteBox(m.invite) : ''}
     ${m.adding ? html`
       <form class="form card form-card" data-form="add-person" novalidate>
         <h2 class="card-title">Add person</h2>
@@ -216,7 +221,7 @@ export function renderScreen(m) {
 export function createScreen({ api, root, ctx = {}, win = globalThis }) {
   const m = {
     people: [], teams: [], query: '', loading: true, adding: false, newName: '',
-    panel: null, secret: null, error: '', notice: '', me: null,
+    panel: null, invite: null, error: '', notice: '', me: null,
   };
   const hold = { timer: null, key: null };
   const me = () => ctx.state?.user?.id ?? null;
@@ -257,7 +262,7 @@ export function createScreen({ api, root, ctx = {}, win = globalThis }) {
     'add-open': () => { m.adding = true; m.error = ''; m.notice = ''; paint(); },
     'add-cancel': () => { m.adding = false; m.newName = ''; paint(); },
     cancel: () => { m.panel = null; paint(); },
-    done: () => { m.secret = null; paint(); },
+    done: () => { m.invite = null; paint(); },
     edit: (id) => { m.panel = { kind: 'edit', id }; paint(); },
     'reset-ask': (id) => { m.panel = { kind: 'reset', id }; paint(); },
     'active-ask': (id) => { m.panel = { kind: 'active', id }; paint(); },
@@ -272,23 +277,26 @@ export function createScreen({ api, root, ctx = {}, win = globalThis }) {
       if (el.checked) m.panel.checked.add(pid); else m.panel.checked.delete(pid);
     },
     copy: async (_id, el) => {
-      let ok = false;
-      try {
-        if (!win.navigator?.clipboard?.writeText) throw new Error('no clipboard');
-        await win.navigator.clipboard.writeText(m.secret.password);
-        m.notice = 'Copied.';
-        ok = true;
-      } catch {
-        m.notice = 'Could not copy. Please select the password and copy it by hand.';
-      }
+      if (!m.invite) return;
+      const ok = await copyText(win, inviteMessage(m.invite));
+      m.notice = ok ? 'Copied.' : '';
+      m.error = ok ? '' : 'Could not copy. Please select the message and copy it by hand.';
       paint();
-      if (ok) flashCopied(win, root, el, 'Copy', hold, 'secret');
+      if (ok) flashCopied(win, root, el, 'Copy message', hold, 'invite');
     },
+    invite: (id) => attempt(async () => {
+      const p = find(id);
+      if (!p || p.joined || !p.active) return;
+      const r = await api.post(`/api/people/${p.id}/invite`, {});
+      m.invite = { name: r.person.name, username: r.person.username, ...r.invite };
+      m.panel = null;
+    }),
     'reset-yes': (id) => attempt(async () => {
       const p = find(id);
       if (m.panel?.kind !== 'reset' || m.panel.id !== Number(id) || !p) return;
       const r = await api.post(`/api/people/${p.id}/reset-password`, {});
-      m.secret = { name: p.name, password: r.tempPassword };
+      m.invite = { name: r.person.name, username: r.person.username, ...r.invite };
+      m.people = m.people.map((person) => person.id === p.id ? r.person : person);
       m.panel = null;
     }),
     'role-ask': (id) => {
@@ -339,7 +347,7 @@ export function createScreen({ api, root, ctx = {}, win = globalThis }) {
       if (username) body.username = username;
       if (form.elements.scheduler.checked) body.role = 'admin';
       const r = await api.post('/api/people', body);
-      m.secret = { name: r.person.name, password: r.tempPassword };
+      m.invite = { name: r.person.name, username: r.person.username, ...r.invite };
       m.adding = false;
       m.newName = '';
       await reload();
@@ -406,5 +414,5 @@ export function render(state) { // eslint-disable-line no-unused-vars
 export function mount(root, ctx) {
   const screen = root.querySelector('[data-screen]');
   if (!screen) return undefined;
-  return createScreen({ api: ctx.api, root: screen, ctx }).ready;
+  return createScreen({ api: ctx.api, root: screen, ctx, win: ctx.win ?? globalThis }).ready;
 }

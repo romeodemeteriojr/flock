@@ -8,7 +8,7 @@ export const COPY_FLASH_MS = 1500;
 
 /** Inner HTML of a copy button: the check (done) or copy icon, then the label. */
 export function copyInner(label, done) {
-  return `${icon(done ? 'check' : 'copy')} ${esc(label)}`;
+  return `<span class="icon" aria-hidden="true">${icon(done ? 'check' : 'copy')}</span> ${esc(label)}`;
 }
 
 /**

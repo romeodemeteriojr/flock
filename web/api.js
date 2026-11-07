@@ -31,12 +31,11 @@ export function messageFor(status, body) {
   return 'Something went wrong. Please try again.';
 }
 
-// hooks: { onUnauthorized(err), onMustChange(err) }. They can also be set later:
+// hooks: { onUnauthorized(err) }. They can also be set later:
 //   api.onUnauthorized = () => ...
 export function createApi(fetchFn = (url, init) => globalThis.fetch(url, init), hooks = {}) {
   const api = {
     onUnauthorized: hooks.onUnauthorized ?? null,
-    onMustChange: hooks.onMustChange ?? null,
   };
 
   function callHook(fn, err) {
@@ -76,7 +75,6 @@ export function createApi(fetchFn = (url, init) => globalThis.fetch(url, init), 
     });
     // A wrong password at /api/login is also a 401, but that is not "logged out".
     if (res.status === 401 && path !== '/api/login') callHook(api.onUnauthorized, err);
-    if (err.code === 'must_change_password') callHook(api.onMustChange, err);
     throw err;
   }
 

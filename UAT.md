@@ -29,14 +29,14 @@ Allow about 90 minutes for everything. You can stop after any scenario.
    node bin/flock.js demo --db demo.db
    ```
 
-3. Flock prints something like this. **Write down the temporary password. It is
-   shown only once.**
+3. Flock prints something like this. **Save the invite link privately. It works
+   once, for 7 days.**
 
    ```
    Demo data added: 13 people, 4 teams, 8 services, 4 blockouts.
    Everything here is fake.
    Admin username: demo-admin
-   Temporary password: ladder-winter-48
+   Invite link (works once, for 7 days): http://localhost:8080/#/welcome?token=<one-time-token>
    ```
 
 4. Start Flock:
@@ -65,8 +65,8 @@ has people in it. That is on purpose.
 
 | Name | Username | Can log in with |
 | --- | --- | --- |
-| Demo Admin (a scheduler) | `demo-admin` | the temporary password printed in A1 |
-| Demo Alice, Bob, Carol, Dave, Erin, Frank, Grace, Heidi, Ivan, Judy, Mallory, Niaj | `demo.alice`, `demo.bob`, and so on | nothing yet. Their passwords were not printed. Make one in scenario 14, or add your own person in scenario 3 |
+| Demo Admin (a scheduler) | `demo-admin` | choose a password using the invite printed in A1 |
+| Demo Alice, Bob, Carol, Dave, Erin, Frank, Grace, Heidi, Ivan, Judy, Mallory, Niaj | `demo.alice`, `demo.bob`, and so on | nothing yet. Make an invite on People, or add your own person in scenario 3 |
 
 The demo has four teams (Band, Sound, Kids, Greeters) and eight "Sunday
 service" dates at 10:00 am, starting next Sunday. Some positions are filled,
@@ -101,36 +101,30 @@ passwords.
 
 Use the laptop. Keep the terminal window open.
 
-### 1. First login and the forced password change
+### 1. Join with an invite and change a password voluntarily
 
-1. Go to http://localhost:8080. You should see **Log in to Flock**. The address
-   ends in `#/login`. There is no menu at the top.
-2. Click **Log in** without typing anything. You should see **Please type your
-   username and password.**
-3. Type username `demo-admin` and a wrong password such as `nope`. Click **Log in**.
-   You should see **Wrong username or password**, your username still typed in,
-   and the cursor in the Password box.
-4. Type `demo-admin` and the temporary password from A1. Click **Log in**
-   **twice, quickly**. You should land on a page called **Please choose your
-   own password**, with no menu yet. (It must not log you in twice or show an
-   error.)
-5. Try these mistakes, one at a time, and read each message:
-   - leave "The password you were given" empty: **Please type your current password.**
-   - a new password of `short`: **at least 8 characters**
-   - two new passwords that differ: **The two new passwords don't match.**
-   - the new password the same as the temporary one: **must be different**
-6. Fill it in properly: the temporary password, then a new one of your own
-   (for example `my own password 1`) twice. Click **Save my new password**.
-7. You should see the **My schedule** page, a green **Your new password is
-   saved.** message, **Logged in as Demo Admin** at the top, and a menu with
-   **Schedule, Gaps, People** and **More** (on a wide screen: Schedule, Gaps,
-   People, Teams, Services and so on).
-8. Before you save a new password, you cannot skip ahead. (Optional: log in
-   again as in step 4 and, on the "choose your own password" page, type
-   `localhost:8080/#/people` into the address bar. You should be sent straight
-   back to the password page.)
+1. Go to http://localhost:8080. You should see **Log in to Flock**, with no menu.
+2. Click **Log in** without typing anything: **Please type your username and password.**
+3. Try `demo-admin` with a password you have not chosen. It must say
+   **Wrong username or password**, not let someone claim the account.
+4. Open the invite link printed in A1. **Welcome to Flock** should show the
+   username `demo-admin`. Try mismatched passwords: **The two passwords are
+   not the same.** Try `short`: the message should require at least 8 characters.
+5. Choose your own password twice, such as `my own password 1`, and click
+   **Choose password** twice quickly. You should be logged in once, on
+   **My schedule**, with **Logged in as Demo Admin** and the menu.
+   The address should end in `#/`, with no token left in it.
+6. In a private window open the same invite again. It must say the link was
+   used or expired and offer a link to log in. Log in with the password you chose.
+7. On the original page click the key button at the top (**Change my password**).
+   The page should have Current password, New password and confirmation fields.
+   Try a missing current password, a short new password, mismatches and an
+   unchanged password. Each should show a plain message without leaving the page.
+8. Choose a different valid password and save it. You should return to
+   **My schedule** with **Your new password is saved.** The private window's old
+   session should no longer work; the newly chosen password should log in.
 
-**Remember the new password.** You use it for the rest of this checklist.
+**Remember the latest password.** Use it for the rest of this checklist.
 
 - [ ] Pass   [ ] Fail   Notes: ______________________________
 
@@ -158,12 +152,15 @@ Use the laptop. Keep the terminal window open.
 3. Clear the name and click the **Add person** button inside the form. You should
    see **Please type a name.**
 4. Type `Pat Example` again and click **Add person** (try double-clicking it).
-5. You should see a box **Password for Pat Example** with
-   **Give this to Pat Example: ** followed by a password like `basket-window-28`.
-   **Write it down.** Only one Pat Example should have been added.
-6. Click **Done**. The box, and the password, should disappear for good.
-7. Add a second person called `Quinn Example` the same way. Write down the
-   password too.
+5. You should see **Invite for Pat Example**, a message containing Pat's
+   username and a one-time link, and **Copy message**. Click it and save the
+   message privately. Only one Pat Example should have been added; their row
+   says **Not joined yet**. A localhost warning means this link only works on
+   the laptop: use the laptop's network address from A3 and **Copy new invite**
+   before sending the message to a phone.
+6. Click **Done**. The invite box should disappear. Making another invite
+   cancels the previous link.
+7. Add `Quinn Example` the same way and save their invite message privately.
 8. Try adding a third person named `Someone Else` but with the username
    `pat.example`. You should see **That username is already taken.** Click Cancel.
 9. Type `quinn` in the **Search by name or username** box. Only Quinn Example
@@ -268,10 +265,11 @@ laptop.
 
 ### 9. A volunteer logs in and sees My schedule
 
-1. On the phone, open Flock. Log in as `pat.example` with Pat's temporary
-   password from scenario 3.
-2. You should be asked to **Please choose your own password**. The password boxes
-   show dots, not letters. Choose one and save it.
+1. On the laptop, open Flock using its network address from A3. On Pat's row,
+   choose **Copy new invite**, then **Copy message**. Send it privately to the phone.
+2. On the phone, tap the new link. **Welcome to Flock** should show Pat's
+   username, `pat.example`. Choose a password and type it again. The boxes
+   show dots, not letters. Tap **Choose password**; this also logs Pat in.
 3. You should land on **My schedule**: a big **Next up** box with a sentence
    such as **You're serving this Sunday as Door at 9:00 am** (or **Next time
    you serve: Sun 22 Nov, Door**), then **Coming up** with a card for each of the
@@ -361,20 +359,20 @@ Back on the laptop, logged in as the scheduler.
 
 ### 14. Reset a password
 
-1. On the laptop, on Pat's row click **Reset password**. You should see **Make a
-   new temporary password for Pat Example? Their old password will stop working.**
-2. Click **Yes, reset it** (try double-clicking). You should see a new
-   **Give this to Pat Example: ...** box. Write the new password down, then
-   click **Done**.
+1. On the laptop, on Pat's row click **Reset password**. The confirmation
+   should say that a new invite stops the current password immediately and
+   logs Pat out everywhere.
+2. Click **Yes, make a new link** (try double-clicking). You should see
+   **Invite for Pat Example**. Choose **Copy message**, send it privately,
+   and then choose **Done**.
 3. On the phone tap anything. You should be sent to Log in with **Please log in
    again.**
 4. Pat's old password should now say **Wrong username or password**.
-5. Log in with the new temporary password. You should be asked to choose your
-   own password again.
-6. This is also how you get a password for any **demo** volunteer. Use **Reset
-   password** on Demo Alice, give her the password, and log in as `demo.alice`
-   on the phone to see the demo's own mixed requests. Alice already has a day off
-   from the demo.
+5. Open the new invite link on the phone and choose a new password. Pat
+   should be logged in directly; the old invite must no longer work.
+6. For a **demo** volunteer who has not joined, use **Copy new invite** on
+   People. Send Demo Alice her message and open its link to join as
+   `demo.alice`. Alice already has a day off from the demo.
 
 - [ ] Pass   [ ] Fail   Notes: ______________________________
 
@@ -530,7 +528,7 @@ says why it did not.
 
 | # | Scenario | Pass | Fail |
 | --- | --- | --- | --- |
-| 1 | First login and forced password change | [ ] | [ ] |
+| 1 | Join with an invite and change a password voluntarily | [ ] | [ ] |
 | 2 | Wrong password and lockout | [ ] | [ ] |
 | 3 | Add a person | [ ] | [ ] |
 | 4 | Add a team and positions | [ ] | [ ] |

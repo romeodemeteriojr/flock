@@ -12,6 +12,7 @@ import { addDays, todayStr } from '../src/dates.js';
 import { esc } from '../web/lib/html.js';
 import { routes } from '../web/routes.js';
 import { readFileSync } from 'node:fs';
+import { tokenFromLink } from './helpers/client.js';
 
 const NEW_PASSWORD = 'my own password 1';
 
@@ -48,12 +49,12 @@ async function logIn(page, username, password) {
   await page.submit('login', { username, password });
 }
 
-// The first login: temporary password, then the forced change.
-async function firstLogin(w, username, temp, next = NEW_PASSWORD) {
+// Join through the one-time link, then use an ordinary login afterwards.
+async function joinInvite(w, username, token, next = NEW_PASSWORD) {
   const page = await w.open();
-  await logIn(page, username, temp);
-  assert.equal(page.hash(), '#/password', page.text());
-  await page.submit('password', { oldPassword: temp, newPassword: next, confirm: next });
+  await page.goto(`#/welcome?token=${token}`);
+  assert.ok(page.text().includes(username), page.text());
+  await page.submit('welcome', { password: next, confirm: next });
   assert.equal(page.hash(), '#/', page.text());
   return page;
 }
@@ -69,84 +70,80 @@ function personId(page, name) {
   throw new Error(`no row for ${name}`);
 }
 
-// ---------- UAT 1: first login and forced password change ----------
+// ---------- UAT 1: invite joining and voluntary password change ----------
 
-test('UAT 1: log in with the printed temporary password, then must choose your own', async (t) => {
+test('UAT 1: join with the printed invite, then change a password voluntarily', async (t) => {
   const w = await world(t);
   const page = await w.open();
-
-  // Logged out: any address leads to the login page.
   assert.equal(page.hash(), '#/login');
   assert.equal(page.title(), 'Log in – Flock');
   said(page, /Log in to Flock/);
-  assert.equal(page.has('nav'), false, 'no menu before login');
+  assert.equal(page.has('nav'), false);
   wellBuilt(page);
-
   await page.goto('#/people');
-  assert.equal(page.hash(), '#/login', 'a scheduler page needs a login');
+  assert.equal(page.hash(), '#/login');
 
-  // Empty form: told what to do, nothing sent.
   const before = page.fetchLog.length;
   await page.submit('login', { username: '', password: '' });
   said(page, /Please type your username and password\./);
-  assert.equal(page.fetchLog.length, before, 'nothing was sent');
-  wellBuilt(page, 'login with an error');
-
-  // Wrong password: plain words, the username stays, focus goes to the password box.
+  assert.equal(page.fetchLog.length, before);
   await logIn(page, 'demo-admin', 'not the password');
   said(page, /Wrong username or password/);
   assert.match(page.html(), /value="demo-admin"/);
   assert.equal(page.focused?.attrs.get('id'), 'login-password');
-  assert.equal(page.hash(), '#/login');
 
-  // A double click on "Log in" sends one request, and the button says it is working.
-  const [first, second] = await Promise.all([
-    page.submit('login', { username: 'demo-admin', password: w.demo.tempPassword }),
-    page.submit('login', { username: 'demo-admin', password: w.demo.tempPassword }),
+  const token = w.demo.invite.token;
+  await page.goto(`#/welcome?token=${token}`);
+  said(page, /Your username is demo-admin/);
+  wellBuilt(page, 'welcome');
+  await page.submit('welcome', { password: NEW_PASSWORD, confirm: 'not the same' });
+  said(page, /The two passwords are not the same/);
+  assert.equal(countCalls(page, 'POST', /^\/api\/welcome$/), 0);
+  await page.submit('welcome', { password: 'short', confirm: 'short' });
+  said(page, /at least 8 characters/);
+  await page.submit('welcome', { password: 'demo-admin', confirm: 'demo-admin' });
+  said(page, /same as your username/);
+  const results = await Promise.all([
+    page.submit('welcome', { password: NEW_PASSWORD, confirm: NEW_PASSWORD }),
+    page.submit('welcome', { password: NEW_PASSWORD, confirm: NEW_PASSWORD }),
   ]);
-  assert.deepEqual([first, second], [true, false], 'the second click is ignored');
-  assert.equal(page.fetchLog.filter((c) => c.path === '/api/login' && c.status === 200).length, 1);
-
-  // Straight to the password page; everything else is out of reach until it is done.
-  assert.equal(page.hash(), '#/password');
-  assert.equal(page.has('nav'), false, 'no menu until the password is changed');
-  said(page, /Please choose your own password/);
-  assert.match(page.focusedText(), /Please choose your own password/, 'focus is on the heading');
+  assert.deepEqual(results, [true, false], 'the second click is ignored');
+  assert.equal(page.fetchLog.filter((c) => c.path === '/api/welcome' && c.status === 200).length, 1);
+  assert.equal(page.hash(), '#/');
+  said(page, /Logged in as Demo Admin/);
+  assert.equal(page.has('nav'), true);
   wellBuilt(page);
-  await page.goto('#/people');
-  assert.equal(page.hash(), '#/password');
 
-  // Each mistake is explained.
-  const temp = w.demo.tempPassword;
+  const other = await w.open();
+  await other.goto(`#/welcome?token=${token}`);
+  said(other, /This link has expired or was already used/);
+  await other.goto('#/login');
+  await logIn(other, 'demo-admin', NEW_PASSWORD);
+  assert.equal(other.hash(), '#/');
+
+  await page.goto('#/password');
+  said(page, /Change my password/);
+  const changed = 'my changed password 2';
   const tries = [
-    [{ oldPassword: '', newPassword: NEW_PASSWORD, confirm: NEW_PASSWORD }, /type your current password/],
-    [{ oldPassword: temp, newPassword: 'short', confirm: 'short' }, /at least 8 characters/],
-    [{ oldPassword: temp, newPassword: NEW_PASSWORD, confirm: 'something else 22' }, /don't match/],
-    [{ oldPassword: temp, newPassword: temp, confirm: temp }, /must be different/],
-    [{ oldPassword: 'wrong wrong wrong', newPassword: NEW_PASSWORD, confirm: NEW_PASSWORD }, /current password is not correct/],
+    [{ oldPassword: '', newPassword: changed, confirm: changed }, /type your current password/],
+    [{ oldPassword: NEW_PASSWORD, newPassword: 'short', confirm: 'short' }, /at least 8 characters/],
+    [{ oldPassword: NEW_PASSWORD, newPassword: changed, confirm: 'something else 22' }, /don't match/],
+    [{ oldPassword: NEW_PASSWORD, newPassword: NEW_PASSWORD, confirm: NEW_PASSWORD }, /must be different/],
+    [{ oldPassword: 'wrong wrong wrong', newPassword: changed, confirm: changed }, /current password is not correct/],
   ];
   for (const [fields, re] of tries) {
     await page.submit('password', fields);
     said(page, re);
-    assert.equal(page.hash(), '#/password');
     wellBuilt(page, 'password form with an error');
   }
-  assert.equal(countCalls(page, 'POST', /password/), 1, 'only the wrong-current-password try reached the server');
-
-  // Success: on to My schedule, with a thank-you and the menu.
-  await page.submit('password', { oldPassword: temp, newPassword: NEW_PASSWORD, confirm: NEW_PASSWORD });
+  assert.equal(countCalls(page, 'POST', /^\/api\/password$/), 1);
+  await page.submit('password', { oldPassword: NEW_PASSWORD, newPassword: changed, confirm: changed });
   assert.equal(page.hash(), '#/');
-  assert.ok(page.toasts().some((x) => /Your new password is saved/.test(x)), page.text());
-  said(page, /Logged in as Demo Admin/);
-  assert.equal(page.has('nav'), true);
-  assert.match(page.focusedText(), /My schedule/);
-  wellBuilt(page);
-
-  // The old temporary password no longer works; the new one does.
-  const other = await w.open();
-  await logIn(other, 'demo-admin', temp);
-  said(other, /Wrong username or password/);
+  assert.ok(page.toasts().some((x) => /Your new password is saved/.test(x)));
+  await other.clickButton('Log out');
   await logIn(other, 'demo-admin', NEW_PASSWORD);
+  said(other, /Wrong username or password/);
+  await logIn(other, 'demo-admin', changed);
   assert.equal(other.hash(), '#/');
 });
 
@@ -154,7 +151,7 @@ test('UAT 1: log in with the printed temporary password, then must choose your o
 
 test('UAT 2: five wrong passwords lock the account for a few minutes', async (t) => {
   const w = await world(t);
-  const page = await firstLogin(w, 'demo-admin', w.demo.tempPassword);
+  const page = await joinInvite(w, 'demo-admin', w.demo.invite.token);
   await page.clickButton('Log out');
   assert.equal(page.hash(), '#/login');
 
@@ -173,9 +170,10 @@ test('UAT 2: five wrong passwords lock the account for a few minutes', async (t)
 // ---------- UAT 3 to 8: the scheduler's story ----------
 
 const SERVICE_DATE = addDays(todayStr(new Date()), 2); // inside the "next 4 weeks"
-const tempFrom = (page, name) => {
-  const m = new RegExp(`Give this to ${rx(name)}: (\\S+)\\.`).exec(page.text());
-  assert.ok(m, `no password box for ${name}. ON SCREEN: ${page.text()}`);
+const inviteFrom = (page, name) => {
+  assert.ok(page.text().includes(`Invite for ${name}`), page.text());
+  const m = /Tap this link to choose your password: (\S+) Your username/.exec(page.text());
+  assert.ok(m, `no invite box for ${name}. ON SCREEN: ${page.text()}`);
   return m[1];
 };
 const gapCount = (page, type) => Number(new RegExp(`data-count="${type}">(\\d+)<`).exec(page.html())?.[1]);
@@ -186,7 +184,7 @@ const positionId = async (page, team, name) => {
 
 test('UAT 3 to 8: scheduler adds people, a team, positions, a service, assigns, sees gaps and reminders', async (t) => {
   const w = await world(t);
-  const page = await firstLogin(w, 'demo-admin', w.demo.tempPassword);
+  const page = await joinInvite(w, 'demo-admin', w.demo.invite.token);
   const mutations = () => page.fetchLog.filter((c) => c.method !== 'GET').map((c) => `${c.method} ${c.path}`);
 
   // --- People: add two people ---
@@ -202,16 +200,16 @@ test('UAT 3 to 8: scheduler adds people, a team, positions, a service, assigns, 
   // A double click adds one person, not two.
   await Promise.all([page.submit('add-person', { name: 'Pat Example' }), page.submit('add-person', { name: 'Pat Example' })]);
   assert.equal(countCalls(page, 'POST', /^\/api\/people$/), 1);
-  const patTemp = tempFrom(page, 'Pat Example');
-  assert.match(patTemp, /^[a-z]+-[a-z]+-\d+$/, 'an easy-to-say temporary password');
-  wellBuilt(page, 'the password box');
-  assert.equal(page.has('#secret-box'), true);
+  const patLink = inviteFrom(page, 'Pat Example');
+  assert.match(tokenFromLink(patLink), /^[A-Za-z0-9_-]{43}$/);
+  wellBuilt(page, 'the invite box');
+  assert.equal(page.has('#invite-box'), true);
   await page.clickButton('Done');
-  assert.equal(page.has('#secret-box'), false, 'the password is gone once Done is pressed');
-  notSaid(page, new RegExp(patTemp));
+  assert.equal(page.has('#invite-box'), false, 'the invite is gone once Done is pressed');
+  notSaid(page, new RegExp(rx(patLink)));
   await page.clickButton('Add person');
   await page.submit('add-person', { name: 'Quinn Example' });
-  const quinnTemp = tempFrom(page, 'Quinn Example');
+  inviteFrom(page, 'Quinn Example');
   await page.clickButton('Done');
   said(page, /Pat Example \(pat\.example\)/);
   said(page, /Quinn Example \(quinn\.example\)/);
@@ -317,45 +315,40 @@ test('UAT 3 to 8: scheduler adds people, a team, positions, a service, assigns, 
   assert.deepEqual(mutations().filter((m) => /remind|send|mail|sms/i.test(m)), [], 'nothing was ever sent');
 
   // Everything the scheduler did changed only the expected things.
-  assert.ok(mutations().every((m) => /\/api\/(people|teams|positions|services|slots|password|login)/.test(m)), mutations().join('\n'));
+  assert.ok(mutations().every((m) => /\/api\/(people|teams|positions|services|slots|password|login|welcome)/.test(m)), mutations().join('\n'));
 
-  // Keep these for the volunteer's story.
-  w.pat = { temp: patTemp, id: patId };
-  w.quinn = { temp: quinnTemp, id: quinnId };
 });
 
-// ---------- shared: the scheduler gives someone a temporary password (UAT 12) ----------
+// ---------- shared: the scheduler makes a replacement invite (UAT 12) ----------
 
-// The scheduler resets a volunteer's password on the People page, as UAT.md says
-// (demo volunteers have no printed password). Returns the temporary password.
 async function resetByScheduler(admin, name) {
   await admin.goto('#/people');
   const id = personId(admin, name);
   await admin.click('reset-ask', id);
-  said(admin, new RegExp(`Make a new temporary password for ${rx(name)}\\? Their old password will stop working\\.`));
+  said(admin, new RegExp(`Make a new invite link for ${rx(name)}\\? Their current password stops working right away`));
   const resets = countCalls(admin, 'POST', /reset-password/);
   await Promise.all([admin.click('reset-yes', id), admin.click('reset-yes', id)]);
   assert.equal(countCalls(admin, 'POST', /reset-password/), resets + 1, 'a double click resets once');
-  const temp = tempFrom(admin, name);
+  const token = tokenFromLink(inviteFrom(admin, name));
   await admin.clickButton('Done');
-  return { id, temp };
+  return { id, token };
 }
 
 async function volunteerOnPhone(w, admin, name, username) {
-  const { id, temp } = await resetByScheduler(admin, name);
-  const phone = await firstLogin(w, username, temp);
-  return { phone, id, jar: phone.jar, temp };
+  const { id, token } = await resetByScheduler(admin, name);
+  const phone = await joinInvite(w, username, token);
+  return { phone, id, jar: phone.jar, token };
 }
 
 // ---------- UAT 9 to 11: a volunteer on a phone ----------
 
 test('UAT 9 to 11: volunteer sees My schedule, says yes and no, adds and removes a day off', async (t) => {
   const w = await world(t);
-  const admin = await firstLogin(w, 'demo-admin', w.demo.tempPassword);
+  const admin = await joinInvite(w, 'demo-admin', w.demo.invite.token);
 
   // Give Alice two waiting requests and a confirmed one, so each button has something to act on.
   const services = await admin.api.get(`/api/services?from=${todayStr(new Date())}&to=${addDays(todayStr(new Date()), 60)}`);
-  const { id: aliceId, temp } = await resetByScheduler(admin, 'Demo Alice');
+  const { id: aliceId, token } = await resetByScheduler(admin, 'Demo Alice');
   const free = services.filter((s) => !s.slots.some((x) => x.personId === aliceId) && s.slots.some((x) => x.personId === null));
   const picks = free.slice(0, 3).map((s) => s.slots.find((x) => x.personId === null).id);
   assert.equal(picks.length, 3);
@@ -363,7 +356,7 @@ test('UAT 9 to 11: volunteer sees My schedule, says yes and no, adds and removes
   await w.app.container.services.assignments.respond(aliceId, picks[2], 'accept');
 
   // First login on the phone.
-  const phone = await firstLogin(w, 'demo.alice', temp);
+  const phone = await joinInvite(w, 'demo.alice', token);
   said(phone, /Logged in as Demo Alice/);
   said(phone, /Coming up/);
   said(phone, /Please answer/);
@@ -464,7 +457,7 @@ test('UAT 9 to 11: volunteer sees My schedule, says yes and no, adds and removes
 
 test('UAT 12 to 15: change access level, deactivate, reset password, log out, session expiry', async (t) => {
   const w = await world(t);
-  const admin = await firstLogin(w, 'demo-admin', w.demo.tempPassword);
+  const admin = await joinInvite(w, 'demo-admin', w.demo.invite.token);
   const bob = await volunteerOnPhone(w, admin, 'Demo Bob', 'demo.bob');
   const bobLogin = async () => {
     const p = await w.open();
@@ -543,16 +536,15 @@ test('UAT 12 to 15: change access level, deactivate, reset password, log out, se
   const again = await bobLogin();
   assert.equal(again.hash(), '#/');
 
-  // Reset password: the old password stops working, the new temporary one makes Bob choose again.
+  // Reset password: the old password stops working; the new invite chooses its replacement.
   const reset = await resetByScheduler(admin, 'Demo Bob');
   await again.goto('#/blockouts');
   assert.equal(again.hash(), '#/login', 'a reset ends the old logins');
   const stale = await w.open();
   await logIn(stale, 'demo.bob', NEW_PASSWORD);
   said(stale, /Wrong username or password/);
-  await logIn(stale, 'demo.bob', reset.temp);
-  assert.equal(stale.hash(), '#/password');
-  await stale.submit('password', { oldPassword: reset.temp, newPassword: 'bobs newest password', confirm: 'bobs newest password' });
+  await stale.goto(`#/welcome?token=${reset.token}`);
+  await stale.submit('welcome', { password: 'bobs newest password', confirm: 'bobs newest password' });
   assert.equal(stale.hash(), '#/');
 
   // Log out; the back button and typing an address do not get back in.
@@ -589,7 +581,7 @@ const HOSTILE = {
 
 test('UAT 20 (odd text): hostile and odd text is shown as plain text on every page', async (t) => {
   const w = await world(t);
-  const admin = await firstLogin(w, 'demo-admin', w.demo.tempPassword);
+  const admin = await joinInvite(w, 'demo-admin', w.demo.invite.token);
 
   // Typed in through the forms, like a real (mischievous) scheduler would.
   await admin.goto('#/teams');
@@ -605,7 +597,7 @@ test('UAT 20 (odd text): hostile and odd text is shown as plain text on every pa
   await admin.goto('#/people');
   await admin.clickButton('Add person');
   await admin.submit('add-person', { name: HOSTILE.person });
-  const eveTemp = tempFrom(admin, HOSTILE.person);
+  const eveLink = inviteFrom(admin, HOSTILE.person);
   await admin.clickButton('Done');
   said(admin, /<b onmouseover=alert\(3\)>Eve<\/b>/);
   const eve = personId(admin, HOSTILE.person);
@@ -646,8 +638,10 @@ test('UAT 20 (odd text): hostile and odd text is shown as plain text on every pa
   // The same person's own view: menu, schedule, days off.
   const username = (await admin.api.get('/api/people')).find((p) => p.name === HOSTILE.person).username;
   const phone = await w.open();
-  await logIn(phone, username, eveTemp);
-  await phone.submit('password', { oldPassword: eveTemp, newPassword: NEW_PASSWORD, confirm: NEW_PASSWORD });
+  await phone.goto(`#/welcome?token=${tokenFromLink(eveLink)}`);
+  said(phone, new RegExp(rx(username)));
+  wellBuilt(phone, 'welcome with a hostile name');
+  await phone.submit('welcome', { password: NEW_PASSWORD, confirm: NEW_PASSWORD });
   said(phone, /Logged in as <b onmouseover=alert\(3\)>Eve<\/b>/);
   said(phone, /"><script>alert\(2\)<\/script>/);
   said(phone, /<svg onload=alert\(4\)>Party' & more/);
@@ -671,7 +665,7 @@ test('UAT 20 (odd text): hostile and odd text is shown as plain text on every pa
 
 test('UAT 20: double clicks, odd names, stale tabs, rapid page changes and the back button', async (t) => {
   const w = await world(t);
-  const admin = await firstLogin(w, 'demo-admin', w.demo.tempPassword);
+  const admin = await joinInvite(w, 'demo-admin', w.demo.invite.token);
   const tab2 = await w.open(admin.jar); // the same login in a second tab
 
   // Very long and odd names.
@@ -680,26 +674,26 @@ test('UAT 20: double clicks, odd names, stale tabs, rapid page changes and the b
   assert.match(admin.html(), /id="new-name"[^>]*maxlength="80"/, 'the name box stops at 80 letters');
   const longName = 'L'.repeat(81);
   await admin.submit('add-person', { name: longName });
-  assert.equal(admin.has('#secret-box'), false, 'a too-long name was refused');
+  assert.equal(admin.has('#invite-box'), false, 'a too-long name was refused');
   assert.match(admin.text(), /\S/);
   assert.equal(admin.has('[role="alert"]'), true, 'and a message says so');
   said(admin, /The name must be 1 to 80 characters long\./);
   wellBuilt(admin, 'too-long name');
   const exact = 'M'.repeat(80);
   await admin.submit('add-person', { name: exact });
-  said(admin, new RegExp(`Give this to ${exact}`));
+  said(admin, new RegExp(`Invite for ${exact}`));
   await admin.clickButton('Done');
   said(admin, new RegExp(exact), 'an 80-letter name is shown whole');
   await admin.clickButton('Add person');
   await admin.submit('add-person', { name: '   ' });
   said(admin, /Please type a name\./);
   await admin.submit('add-person', { name: 'Zoë 🎺 Trumpet' });
-  said(admin, /Give this to Zoë 🎺 Trumpet/);
+  said(admin, /Invite for Zoë 🎺 Trumpet/);
   await admin.clickButton('Done');
   said(admin, /Zoë 🎺 Trumpet \(zoe\.trumpet\)/);
   await admin.clickButton('Add person');
   await admin.submit('add-person', { name: '🎺🎺🎺' });
-  said(admin, /Give this to 🎺🎺🎺/, 'a name with no letters still gets a username');
+  said(admin, /Invite for 🎺🎺🎺/, 'a name with no letters still gets a username');
   wellBuilt(admin, 'emoji names');
   await admin.clickButton('Done');
   assert.match(admin.text(), /🎺🎺🎺 \(\S+\)/);
@@ -787,7 +781,7 @@ test('UAT 20: double clicks, odd names, stale tabs, rapid page changes and the b
 
 test('UAT 16 to 19 (what a computer can check): every page has named controls, one heading, one "you are here" and sensible focus', async (t) => {
   const w = await world(t);
-  const admin = await firstLogin(w, 'demo-admin', w.demo.tempPassword);
+  const admin = await joinInvite(w, 'demo-admin', w.demo.invite.token);
   const alice = await volunteerOnPhone(w, admin, 'Demo Alice', 'demo.alice');
 
   for (const [who, page] of [['scheduler', admin], ['volunteer', alice.phone]]) {

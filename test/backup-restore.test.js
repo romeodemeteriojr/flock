@@ -4,7 +4,7 @@
 // app, and every table and relationship is compared. Sessions and password
 // hashes must still work. A damaged, truncated, empty or foreign backup must be
 // refused with a plain message. The CSV export must never contain a password
-// hash, a session token or a temporary password. Temporary folders only.
+// hash, session token or invite token. Temporary folders only.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync, readFileSync, writeFileSync, copyFileSync, existsSync } from 'node:fs';
@@ -54,7 +54,7 @@ async function cli(argv) {
   }
 }
 
-// A church with assignments, answers, blockouts, sessions, temporary passwords and audit entries.
+// A church with assignments, answers, blockouts, sessions, an invite and audit entries.
 async function populate(c) {
   const church = await buildChurch(c, { members: 70, schedulers: 5, sundays: SUNDAYS });
   const { services } = c;
@@ -65,8 +65,8 @@ async function populate(c) {
   const tokens = [];
   for (let i = 1; i <= 10; i++) tokens.push((await services.auth.login(`member${i}`, PASSWORD)).token);
   tokens.push((await services.auth.login('sched1', PASSWORD)).token);
-  const temp = await services.people.resetPassword(church.actor, church.memberIds[69]);
-  return { church, tokens, tempPassword: temp.tempPassword };
+  const reset = await services.people.resetPassword(church.actor, church.memberIds[69]);
+  return { church, tokens, invite: reset.invite };
 }
 
 // Key relationships, in terms that do not depend on row ids.
@@ -81,7 +81,8 @@ function relationships(db) {
       ORDER BY pe.username, t.name, p.name`),
     blockouts: q(`SELECT pe.username, b.start_date, b.end_date, b.reason FROM blockouts b JOIN people pe ON pe.id = b.person_id ORDER BY b.id`),
     sessions: q(`SELECT pe.username, s.token_hash, s.expires_at FROM sessions s JOIN people pe ON pe.id = s.person_id ORDER BY s.id`),
-    people: q('SELECT id, name, username, password_hash, role, must_change_password, active, failed_logins, locked_until, created_at FROM people ORDER BY id'),
+    people: q('SELECT id, name, username, password_hash, role, active, failed_logins, locked_until, created_at FROM people ORDER BY id'),
+    invites: q('SELECT person_id, token_hash, expires_at, created_at FROM invites ORDER BY person_id'),
     audit: q('SELECT * FROM audit ORDER BY id'),
     migrations: q('SELECT name FROM schema_migrations ORDER BY name'),
   };
@@ -146,9 +147,9 @@ test('restore: sessions and password hashes still work in the restored app, over
     for (const username of ['sched1', 'sched5', 'member1', 'member42', 'member69']) {
       assert.equal((await call('POST', '/api/login', { body: { username, password: PASSWORD } })).status, 200, username);
     }
-    const temp = await call('POST', '/api/login', { body: { username: 'member70', password: state.tempPassword } });
-    assert.equal(temp.status, 200, 'a temporary password from before the backup works');
-    assert.equal(temp.json.person.mustChangePassword, true);
+    const joined = await call('POST', '/api/welcome', { body: { token: state.invite.token, password: 'member70 own password' } });
+    assert.equal(joined.status, 200, 'an unused invite from before the backup works');
+    assert.equal(joined.json.person.hasPassword, true);
     assert.equal((await call('POST', '/api/login', { body: { username: 'member1', password: 'not-the-password' } })).status, 401);
     // The schedule is there: member1 declined (i=0), member2 accepted.
     const sched = await call('GET', '/api/me/schedule', { cookie: `${COOKIE_NAME}=${state.tokens[1]}` });
@@ -224,7 +225,7 @@ test('restore: a missing database file is still a new, empty install (unchanged)
 
 // ---------------------------------------------------------------- export
 
-test('export: the CSV holds the schedule and no password hash, session token or temporary password', async () => {
+test('export: the CSV holds the schedule and no password hash, session token or invite token', async () => {
   const csvFile = t.file('schedule.csv');
   const r = await cli(['export', csvFile, '--db', SOURCE]);
   assert.equal(r.code, 0, r.err);
@@ -235,11 +236,12 @@ test('export: the CSV holds the schedule and no password hash, session token or 
   assert.ok(csv.includes('Member 2'), 'names are exported');
 
   const secrets = [
-    ...source.db.prepare('SELECT password_hash FROM people').all().map((x) => x.password_hash),
+    ...source.db.prepare('SELECT password_hash FROM people').all().map((x) => x.password_hash).filter(Boolean),
     ...source.db.prepare('SELECT token_hash FROM sessions').all().map((x) => x.token_hash),
     ...state.tokens,
     ...state.tokens.map(tokenHash),
-    state.tempPassword,
+    state.invite.token,
+    tokenHash(state.invite.token),
   ];
   assert.ok(secrets.length > 80);
   for (const s of secrets) assert.ok(!csv.includes(s), 'a secret is in the export');

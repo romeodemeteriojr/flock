@@ -47,10 +47,11 @@ export function runContract(name, makeData) {
     let data;
     const fresh = async () => { ({ data } = await makeData()); return data; };
 
-    const person = (username, extra = {}) => data.people.create({
-      name: extra.name ?? `P ${username}`, username, passwordHash: 'hash-' + username,
-      role: extra.role ?? 'member', mustChangePassword: extra.mustChangePassword ?? false, createdAt: T,
-    });
+    const person = async (username, extra = {}) => {
+      const p = await data.people.create({ name: extra.name ?? `P ${username}`, username, role: extra.role ?? 'member', createdAt: T });
+      if (extra.passwordHash !== null) await data.people.setPassword(p.id, extra.passwordHash ?? 'hash-' + username);
+      return data.people.findById(p.id);
+    };
 
     async function world() {
       const ann = await person('ann', { name: 'Ann Able', role: 'admin' });
@@ -68,9 +69,10 @@ export function runContract(name, makeData) {
     describe('people', () => {
       test('create returns a public person without secrets', async () => {
         await fresh();
-        const p = await person('ann', { name: 'Ann', role: 'admin', mustChangePassword: true });
+        const p = await person('ann', { name: 'Ann', role: 'admin', passwordHash: null });
         assert.equal(typeof p.id, 'number');
-        assert.deepEqual(p, { id: p.id, name: 'Ann', username: 'ann', role: 'admin', mustChangePassword: true, active: true, createdAt: T, positionIds: [] });
+        assert.deepEqual(p, { id: p.id, name: 'Ann', username: 'ann', role: 'admin', hasPassword: false, active: true, createdAt: T, positionIds: [] });
+        assert.equal((await data.people.findAuthById(p.id)).passwordHash, null);
         noSecrets(p, 'people.create');
       });
 
@@ -139,15 +141,16 @@ export function runContract(name, makeData) {
         let a = await data.people.findAuthById(p.id);
         assert.equal(a.failedLogins, 5);
         assert.equal(a.lockedUntil, '2025-01-01T00:05:00.000Z');
-        assert.equal(await data.people.setPassword(p.id, 'new-hash', true), true);
+        assert.equal(await data.people.setPassword(p.id, 'new-hash'), true);
         a = await data.people.findAuthById(p.id);
         assert.equal(a.passwordHash, 'new-hash');
-        assert.equal(a.mustChangePassword, true);
+        assert.equal(a.hasPassword, true);
         assert.equal(a.failedLogins, 0);
         assert.equal(a.lockedUntil, null);
-        await data.people.setPassword(p.id, 'h2', false);
-        assert.equal((await data.people.findById(p.id)).mustChangePassword, false);
-        assert.equal(await data.people.setPassword(999, 'h', false), false);
+        await data.people.setPassword(p.id, null);
+        assert.equal((await data.people.findById(p.id)).hasPassword, false);
+        assert.equal((await data.people.findAuthById(p.id)).passwordHash, null);
+        assert.equal(await data.people.setPassword(999, 'h'), false);
         assert.equal(await data.people.setLoginFailures(999, { failedLogins: 1, lockedUntil: null }), false);
       });
 
@@ -157,9 +160,40 @@ export function runContract(name, makeData) {
         const a = await person('a', { role: 'admin' });
         await person('b', { role: 'admin' });
         await person('c');
+        await person('pending', { role: 'admin', passwordHash: null });
         assert.equal(await data.people.countActiveAdmins(), 2);
         await data.people.update(a.id, { active: false });
         assert.equal(await data.people.countActiveAdmins(), 1);
+      });
+    });
+
+    // ---------- invites ----------
+    describe('invites', () => {
+      test('replace and find returns one camelCase row; replacement cancels the old hash', async () => {
+        await fresh();
+        const p = await person('ann');
+        const invite = { personId: p.id, tokenHash: 'invite-hash-1', expiresAt: '2025-01-08T00:00:00.000Z', createdAt: T };
+        await data.invites.replace(invite);
+        assert.deepEqual(await data.invites.findByTokenHash(invite.tokenHash), invite);
+        noSnakeCase(await data.invites.findByTokenHash(invite.tokenHash), 'invites.findByTokenHash');
+        const next = { ...invite, tokenHash: 'invite-hash-2', expiresAt: '2025-01-09T00:00:00.000Z' };
+        await data.invites.replace(next);
+        assert.equal(await data.invites.findByTokenHash(invite.tokenHash), null);
+        assert.deepEqual(await data.invites.findByTokenHash(next.tokenHash), next);
+        assert.equal(await data.invites.findByTokenHash('unknown'), null);
+        assert.equal(await data.invites.deleteForPerson(p.id), 1);
+        assert.equal(await data.invites.deleteForPerson(p.id), 0);
+      });
+
+      test('unknown people and duplicate token hashes are rejected without overwriting another invite', async () => {
+        await fresh();
+        const a = await person('ann');
+        const b = await person('bob');
+        const inv = { personId: a.id, tokenHash: 'unique', expiresAt: T, createdAt: T };
+        await data.invites.replace(inv);
+        await assert.rejects(data.invites.replace({ ...inv, personId: b.id }), DuplicateError);
+        await assert.rejects(data.invites.replace({ ...inv, personId: 999, tokenHash: 'other' }));
+        assert.deepEqual(await data.invites.findByTokenHash('unique'), inv);
       });
     });
 

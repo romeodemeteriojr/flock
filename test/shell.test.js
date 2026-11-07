@@ -28,9 +28,8 @@ const rel = (f) => '/' + path.relative(WEB, f).split(path.sep).join('/');
 
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.woff2': 'font/woff2' };
 
-const member = { id: 2, name: 'Mary', role: 'member', mustChangePassword: false };
-const admin = { id: 1, name: 'Ann', role: 'admin', mustChangePassword: false };
-const fresh = { id: 3, name: 'New', role: 'member', mustChangePassword: true };
+const member = { id: 2, name: 'Mary', role: 'member' };
+const admin = { id: 1, name: 'Ann', role: 'admin' };
 
 // ---------- static files ----------
 
@@ -137,7 +136,7 @@ test('attr escapes for attributes and is not escaped twice', () => {
 test('route table has the pages with roles', () => {
   const byPath = Object.fromEntries(routes.map((r) => [r.path, r.role]));
   assert.deepEqual(byPath, {
-    '/login': 'public', '/password': 'any', '/': 'member', '/blockouts': 'member',
+    '/login': 'public', '/welcome': 'open', '/password': 'any', '/': 'member', '/blockouts': 'member',
     '/people': 'admin', '/teams': 'admin', '/services': 'admin', '/schedule': 'admin', '/gaps': 'admin',
   });
   for (const r of routes) {
@@ -163,12 +162,8 @@ test('resolve: logged out goes to login', () => {
   assert.equal(resolve('#/login', null).route.path, '/login');
 });
 
-test('resolve: must change password goes to password page', () => {
-  for (const h of ['', '#/', '#/login', '#/people', '#/nope']) {
-    assert.deepEqual(resolve(h, fresh), { redirect: '#/password' }, h);
-  }
-  assert.equal(resolve('#/password', fresh).route.path, '/password');
-  assert.deepEqual(resolve('#/people', { ...fresh, role: 'admin' }), { redirect: '#/password' });
+test('resolve: welcome is open whether the person is logged in or out', () => {
+  for (const user of [null, member, admin]) assert.equal(resolve('#/welcome?token=example', user).route.path, '/welcome');
 });
 
 test('resolve: member vs admin pages', () => {
@@ -255,12 +250,11 @@ test('api calls onUnauthorized on 401 (but not for a failed login)', async () =>
   assert.equal(later, 1);
 });
 
-test('api calls onMustChange for must_change_password', async () => {
-  let unauth = 0; let must = 0;
-  const api = createApi(fakeFetch(() => ({ status: 403, body: { error: 'Please choose a new password first', code: 'must_change_password' } })),
-    { onUnauthorized: () => unauth++, onMustChange: () => must++ });
-  await assert.rejects(api.get('/api/teams'), (e) => e.status === 403 && e.code === 'must_change_password');
-  assert.equal(must, 1);
+test('api does not treat a forbidden response as being logged out', async () => {
+  let unauth = 0;
+  const api = createApi(fakeFetch(() => ({ status: 403, body: { error: 'Only the scheduler can do that', code: 'forbidden' } })),
+    { onUnauthorized: () => unauth++ });
+  await assert.rejects(api.get('/api/teams'), (e) => e.status === 403 && e.code === 'forbidden');
   assert.equal(unauth, 0);
 });
 
@@ -270,14 +264,14 @@ test('api turns a network failure into a plain message', async () => {
   assert.equal(NETWORK_MESSAGE, "Can't reach the server. Check your internet and try again.");
 });
 
-test('api works against the real server: 401, wrong login, X-Flock, must-change', async () => {
+test('api works against the real server: 401, wrong login, X-Flock and voluntary password change', async () => {
   const db = openDb();
   const t = await startTestApp({
     db,
     setup: (a) => a.router.add('GET', '/api/test-login', () => ({ status: 200, json: { ok: true } })),
   });
   try {
-    await addPerson(db, { name: 'New <Person>', username: 'newbie', mustChange: true });
+    await addPerson(db, { name: 'New <Person>', username: 'newbie' });
     let cookie = '';
     const jarFetch = async (u, init) => {
       const res = await fetch(t.url + u, { ...init, headers: { ...init.headers, ...(cookie ? { Cookie: cookie } : {}) } });
@@ -285,18 +279,17 @@ test('api works against the real server: 401, wrong login, X-Flock, must-change'
       if (set) cookie = set.split(';')[0];
       return res;
     };
-    let unauth = 0; let must = 0;
-    const api = createApi(jarFetch, { onUnauthorized: () => unauth++, onMustChange: () => must++ });
+    let unauth = 0;
+    const api = createApi(jarFetch, { onUnauthorized: () => unauth++ });
     await assert.rejects(api.get('/api/me'), (e) => e.status === 401);
     assert.equal(unauth, 1);
     await assert.rejects(api.post('/api/login', { username: 'newbie', password: 'wrong-password' }),
       (e) => e.status === 401 && e.message === 'Wrong username or password');
     assert.equal(unauth, 1);
     const r = await api.post('/api/login', { username: 'newbie', password: 'test-pass-1' });
-    assert.equal(r.person.mustChangePassword, true);
+    assert.equal(typeof r.person.id, 'number');
     assert.equal((await api.get('/api/me')).person.name, 'New <Person>');
-    await assert.rejects(api.get('/api/test-login'), (e) => e.status === 403 && e.code === 'must_change_password');
-    assert.equal(must, 1);
+    assert.deepEqual(await api.get('/api/test-login'), { ok: true });
     // POST without the client's X-Flock header is refused by the server; the client always sends it.
     assert.deepEqual(await api.post('/api/password', { oldPassword: 'test-pass-1', newPassword: 'apple-river-22' }), { ok: true });
     assert.deepEqual(await api.get('/api/test-login'), { ok: true });
@@ -325,9 +318,9 @@ test('login view escapes error text and username', () => {
   assert.match(s, /role="alert"/);
 });
 
-test('password view: labels, autocomplete, 8-character rule, first-login text', () => {
-  const s = passwordView.render({ user: fresh });
-  assert.match(s, /Please choose your own password/);
+test('password view: labels, autocomplete and the 8-character rule', () => {
+  const s = passwordView.render({ user: member });
+  assert.match(s, /Change my password/);
   assert.match(s, /<label for="pw-old">/);
   assert.match(s, /<input id="pw-old"[^>]*autocomplete="current-password"/);
   assert.match(s, /<label for="pw-new">/);
@@ -335,9 +328,7 @@ test('password view: labels, autocomplete, 8-character rule, first-login text', 
   assert.match(s, /<label for="pw-confirm">/);
   assert.match(s, /<input id="pw-confirm"[^>]*autocomplete="new-password"/);
   assert.match(s, /At least 8 characters/);
-  const normal = passwordView.render({ user: member });
-  assert.ok(!normal.includes('Please choose your own password'));
-  assert.match(normal, /Change your password/);
+  assert.match(s, /Current password/);
 });
 
 test('password view escapes error text', () => {
@@ -369,8 +360,9 @@ test('nav differs by role and marks the current page', () => {
   assert.match(a, /<a href="#\/" aria-current="page">/);
 
   assert.equal(nav.render({ user: null }, '#/login'), '');
-  const f = nav.render({ user: fresh }, '#/password');
-  assert.ok(!f.includes('My schedule'));
+  const f = nav.render({ user: member }, '#/password');
+  assert.match(f, /My schedule/);
+  assert.match(f, /aria-label="Change my password"/);
   assert.match(f, /Log out/);
 });
 

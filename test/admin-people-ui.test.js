@@ -4,9 +4,11 @@ import * as people from '../web/views/admin-people.js';
 import * as teamsView from '../web/views/admin-teams.js';
 import { ApiError } from '../web/api.js';
 import { fakeRoot, fakeApi } from './helpers/fakeui.js';
+import { inviteMessage } from '../web/lib/invite.js';
 
 const apiErr = (status, message) => new ApiError({ status, message });
-const P = (id, name, username, extra = {}) => ({ id, name, username, role: 'member', active: true, mustChangePassword: false, positionIds: [], ...extra });
+const P = (id, name, username, extra = {}) => ({ id, name, username, role: 'member', active: true, joined: true, positionIds: [], ...extra });
+const INVITE = { link: 'https://flock.example.org/#/welcome?token=' + 'i'.repeat(43), localOnly: false };
 const TEAMS = [
   { id: 1, name: 'Band', positions: [{ id: 10, name: 'Drums', qualifiedPersonIds: [2] }, { id: 11, name: 'Keys', qualifiedPersonIds: [] }] },
   { id: 2, name: 'Sound', positions: [{ id: 20, name: 'Mixer', qualifiedPersonIds: [2, 3] }] },
@@ -65,23 +67,24 @@ test('hostile names stay text', async () => {
   assert.ok(!root.innerHTML.includes('<script>'));
 });
 
-test('adding a person posts, then shows the one-time password box', async () => {
+test('adding a person posts, then shows the one-time invite box', async () => {
   const { api, root } = await setup({
-    'POST /api/people': { person: P(9, 'Sam <b>', 'sam'), tempPassword: 'maple-river-42' },
+    'POST /api/people': { person: P(9, 'Sam <b>', 'sam', { joined: false }), invite: INVITE },
   });
   root.click('add-open');
   assert.match(root.innerHTML, /Make this person a scheduler/);
   root.submit('add-person', { name: ' Sam <b> ', username: '', scheduler: true });
   await flush();
   assert.equal(api.calls[0], 'POST /api/people {"name":"Sam <b>","role":"admin"}');
-  assert.match(root.innerHTML, /Give this to Sam &lt;b&gt;: <strong data-secret>maple-river-42<\/strong>\. It is only shown once, and Sam &lt;b&gt; will choose their own password at first login\./);
+  assert.match(root.innerHTML, /Invite for Sam &lt;b&gt;/);
+  assert.match(root.innerHTML, /Your username is sam\. The link works for 7 days/);
   assert.match(root.innerHTML, /data-action="copy"/);
   root.click('done');
-  assert.ok(!root.innerHTML.includes('maple-river-42'));
+  assert.ok(!root.innerHTML.includes(INVITE.link));
 });
 
 test('add person sends username when given and nothing when name is empty', async () => {
-  const { api, root } = await setup({ 'POST /api/people': { person: P(9, 'Al', 'al.x'), tempPassword: 'a-b-1' } });
+  const { api, root } = await setup({ 'POST /api/people': { person: P(9, 'Al', 'al.x', { joined: false }), invite: INVITE } });
   root.click('add-open');
   root.submit('add-person', { name: '  ', username: '', scheduler: false });
   await flush();
@@ -101,13 +104,14 @@ test('username taken 409 is friendly', async () => {
 });
 
 test('reset needs confirmation: asking sends nothing, yes sends', async () => {
-  const { api, root } = await setup({ 'POST /api/people/2/reset-password': { tempPassword: 'oak-lake-77' } });
+  const { api, root } = await setup({ 'POST /api/people/2/reset-password': { person: P(2, 'Sam Ortiz', 'sam.ortiz', { joined: false }), invite: INVITE } });
   root.click('reset-yes', 2); // no confirm step yet
   await flush();
   assert.equal(api.calls.length, 0);
   root.click('reset-ask', 2);
   assert.equal(api.calls.length, 0);
-  assert.match(root.innerHTML, /Yes, reset it/);
+  assert.match(root.innerHTML, /Yes, make a new link/);
+  assert.match(root.innerHTML, /logged out everywhere/);
   root.click('cancel');
   root.click('reset-yes', 2);
   await flush();
@@ -116,7 +120,8 @@ test('reset needs confirmation: asking sends nothing, yes sends', async () => {
   root.click('reset-yes', 2);
   await flush();
   assert.deepEqual(api.calls, ['POST /api/people/2/reset-password {}']);
-  assert.match(root.innerHTML, /Give this to Sam Ortiz: <strong data-secret>oak-lake-77/);
+  assert.match(root.innerHTML, /Invite for Sam Ortiz/);
+  assert.match(root.innerHTML, /Copy message/);
 });
 
 test('deactivate and reactivate need confirmation and explain history is kept', async () => {
@@ -180,14 +185,14 @@ test('checklist is grouped by team, preticked, and saves with PUT', async () => 
 });
 
 test('copy button guards a missing clipboard and uses it when present', async () => {
-  const api = fakeApi({ 'GET /api/people': PEOPLE, 'GET /api/teams': TEAMS, 'POST /api/people/2/reset-password': { tempPassword: 'a-b-1' } });
+  const api = fakeApi({ 'GET /api/people': PEOPLE, 'GET /api/teams': TEAMS, 'POST /api/people/2/reset-password': { person: P(2, 'Sam Ortiz', 'sam.ortiz', { joined: false }), invite: INVITE } });
   const written = [];
   const root = fakeRoot();
   const s = people.createScreen({ api, root, win: { navigator: { clipboard: { writeText: async (t) => { written.push(t); } } } } });
   await s.ready;
   root.click('reset-ask', 2); root.click('reset-yes', 2); await flush();
   root.click('copy'); await flush();
-  assert.deepEqual(written, ['a-b-1']);
+  assert.deepEqual(written, [inviteMessage({ name: 'Sam Ortiz', username: 'sam.ortiz', ...INVITE })]);
   assert.match(root.innerHTML, /Copied/);
   const root2 = fakeRoot();
   const s2 = people.createScreen({ api, root: root2, win: {} });
@@ -197,8 +202,8 @@ test('copy button guards a missing clipboard and uses it when present', async ()
   assert.match(root2.innerHTML, /Could not copy/);
 });
 
-test('password copy button shows a check SVG, then the copy SVG after 1.5s', async () => {
-  const api = fakeApi({ 'GET /api/people': PEOPLE, 'GET /api/teams': TEAMS, 'POST /api/people/2/reset-password': { tempPassword: 'a-b-1' } });
+test('invite copy button shows a check SVG, then the copy SVG after 1.5s', async () => {
+  const api = fakeApi({ 'GET /api/people': PEOPLE, 'GET /api/teams': TEAMS, 'POST /api/people/2/reset-password': { person: P(2, 'Sam Ortiz', 'sam.ortiz', { joined: false }), invite: INVITE } });
   const timers = [];
   const win = { navigator: { clipboard: { writeText: async () => {} } }, setTimeout: (fn, ms) => { timers.push({ fn, ms }); return timers.length; }, clearTimeout() {} };
   const root = fakeRoot();
@@ -209,11 +214,49 @@ test('password copy button shows a check SVG, then the copy SVG after 1.5s', asy
   const btn = { innerHTML: '', dataset: { action: 'copy' } };
   btn.closest = () => btn;
   root.fire('click', btn); await flush();
-  assert.match(btn.innerHTML, /<svg[^>]*>.*M4\.5 12\.5l5 5 10-11.*<\/svg> Copy$/);
+  assert.match(btn.innerHTML, /^<span class="icon" aria-hidden="true"><svg[^>]*>.*M4\.5 12\.5l5 5 10-11.*<\/svg><\/span> Copy message$/);
   assert.equal(timers[0].ms, 1500);
   timers[0].fn();
   assert.ok(!btn.innerHTML.includes(CHECK));
-  assert.match(btn.innerHTML, /<svg[^>]*>.*rect.*<\/svg> Copy$/);
+  assert.match(btn.innerHTML, /<svg[^>]*>.*rect.*<\/svg><\/span> Copy message$/);
+});
+
+test('invite copying uses the shared HTTP clipboard fallback when the API is absent', async () => {
+  const copied = [];
+  const field = { setAttribute() {}, focus() {}, select() {}, setSelectionRange() {}, remove() {} };
+  const win = { document: { createElement: () => field, body: { appendChild() {} }, execCommand: () => { copied.push(field.value); return true; } } };
+  const api = fakeApi({ 'GET /api/people': PEOPLE, 'GET /api/teams': TEAMS, 'POST /api/people/2/reset-password': { person: P(2, 'Sam Ortiz', 'sam.ortiz', { joined: false }), invite: INVITE } });
+  const root = fakeRoot();
+  const s = people.createScreen({ api, root, win });
+  await s.ready;
+  root.click('reset-ask', 2); root.click('reset-yes', 2); await flush();
+  root.click('copy');
+  assert.deepEqual(copied, [inviteMessage({ name: 'Sam Ortiz', username: 'sam.ortiz', ...INVITE })]);
+  await flush();
+  assert.match(root.innerHTML, /Copied\./);
+});
+
+test('unjoined rows offer a new invite and local-only links explain the limitation', async () => {
+  const pending = P(2, 'Sam Ortiz', 'sam.ortiz', { joined: false });
+  const { api, root } = await setup({
+    'GET /api/people': [pending],
+    'POST /api/people/2/invite': { person: pending, invite: { ...INVITE, localOnly: true } },
+  });
+  assert.match(root.innerHTML, /Not joined yet/);
+  assert.match(root.innerHTML, /aria-label="Copy new invite"/);
+  root.click('invite', 2);
+  await flush();
+  assert.deepEqual(api.calls, ['POST /api/people/2/invite {}']);
+  assert.match(root.innerHTML, /This link uses localhost/);
+  assert.match(root.innerHTML, /FLOCK_PUBLIC_URL/);
+});
+
+test('joined rows offer neither the pending label nor an invite action', async () => {
+  const { api, root } = await setup();
+  assert.doesNotMatch(root.innerHTML, /Not joined yet|Copy new invite/);
+  root.click('invite', 2);
+  await flush();
+  assert.equal(api.calls.length, 0);
 });
 
 test('view render/mount shape', () => {
@@ -368,7 +411,7 @@ test('toolbar buttons: every one has an accessible name, and each action opens i
   assert.match(root.innerHTML, /What can Ann Admin do\?/);
   root.click('cancel');
   root.click('reset-ask', 1);
-  assert.match(root.innerHTML, /Yes, reset it/);
+  assert.match(root.innerHTML, /Yes, make a new link/);
   root.click('cancel');
   root.click('role-ask', 1);
   assert.match(root.innerHTML, /Make Ann Admin a volunteer\?/);
@@ -389,7 +432,7 @@ test('deactivated row: the active button says Reactivate, and its actions still 
   assert.match(root.innerHTML, /What can Old Joe do\?/);
   root.click('cancel');
   root.click('reset-ask', 3);
-  assert.match(root.innerHTML, /Yes, reset it/);
+  assert.match(root.innerHTML, /Yes, make a new link/);
   root.click('cancel');
   root.click('active-ask', 3);
   assert.match(root.innerHTML, /Reactivate <strong>Old Joe<\/strong>\?/);

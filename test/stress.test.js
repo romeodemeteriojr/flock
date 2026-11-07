@@ -10,7 +10,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { startTestApp } from './helpers/app.js';
-import { createClient, cookieFrom } from './helpers/client.js';
+import { createClient, cookieFrom, tokenFromLink } from './helpers/client.js';
 import { buildChurch, PASSWORD } from './helpers/church.js';
 import { openDb } from '../src/db.js';
 import { fixedClock } from '../src/infra/clock.js';
@@ -243,7 +243,7 @@ test('stress: two schedulers edit the same person at once (name and role): neith
   } finally { await ctx.done(); }
 });
 
-test('stress: simultaneous password resets: one audit entry each, exactly one temporary password works', async () => {
+test('stress: simultaneous resets: one audit entry each, exactly one invite can be claimed', async () => {
   const ctx = await boot();
   try {
     const { church, client, db } = ctx;
@@ -255,23 +255,23 @@ test('stress: simultaneous password resets: one audit entry each, exactly one te
     assert.equal(auditCount(db, 'person.reset_password', `person ${id}`), 5);
     assert.equal((await victim.get('/api/me')).status, 401, 'the old session ended');
 
-    const temps = res.map((r) => r.json.tempPassword);
-    assert.equal(new Set(temps).size, 5, 'every reset made a new password');
+    const tokens = res.map((r) => tokenFromLink(r.json.invite.link));
+    assert.equal(new Set(tokens).size, 5, 'every reset made a new invite');
     let working = 0;
-    for (const pw of temps) {
-      const r = await client.browser().login('member7', pw);
+    for (const token of tokens) {
+      const r = await client.browser().welcome(token, 'member7 own password');
       if (r.status === 200) {
         working++;
-        assert.equal(r.json.person.mustChangePassword, true);
+        assert.equal(r.json.person.hasPassword, true);
       }
     }
     assert.equal(working, 1, 'only the last reset counts');
 
-    // Resetting 20 different people at once: 20 audit entries, 20 working passwords.
+    // Resetting 20 different people at once: 20 audit entries, 20 usable invites.
     const ids = church.memberIds.slice(10, 30);
     const many = await Promise.all(ids.map((pid, i) => schedulers[i % 5].post(`/api/people/${pid}/reset-password`)));
     assert.deepEqual(many.map((r) => r.status), Array(20).fill(200));
-    const logins = await Promise.all(many.map((r, i) => client.browser().login(`member${11 + i}`, r.json.tempPassword)));
+    const logins = await Promise.all(many.map((r) => client.browser().welcome(tokenFromLink(r.json.invite.link), 'my own password 1')));
     assert.deepEqual(logins.map((r) => r.status), Array(20).fill(200));
     assert.equal(auditCount(db, 'person.reset_password'), 25);
     no500(client);

@@ -34,8 +34,7 @@ test('login success sets cookie with flags and returns person', async () => {
     await addPerson(db, { name: 'Ann Example', username: 'ann' });
     const r = await login(app, 'ann', 'test-pass-1');
     assert.equal(r.status, 200);
-    assert.deepEqual(Object.keys(r.json.person).sort(), ['id', 'mustChangePassword', 'name', 'role']);
-    assert.equal(r.json.person.mustChangePassword, false);
+    assert.deepEqual(Object.keys(r.json.person).sort(), ['id', 'name', 'role']);
     const c = r.headers['set-cookie'][0];
     assert.match(c, /^flock_session=[A-Za-z0-9_-]{43};/);
     assert.match(c, /HttpOnly/);
@@ -150,26 +149,15 @@ test('password change flow keeps this session and kills others', async () => {
   } finally { await app.close(); }
 });
 
-test('must_change_password gates every other route', async () => {
+test('people without passwords cannot log in or gain sessions', async () => {
   const { app, db } = await boot();
   try {
-    await addPerson(db, { name: 'New', username: 'newbie', mustChange: true });
+    const id = await addPerson(db, { name: 'New', username: 'newbie', password: null });
     const lr = await login(app, 'newbie', 'test-pass-1');
-    assert.equal(lr.json.person.mustChangePassword, true);
-    const cookie = lr.headers['set-cookie'][0].split(';')[0];
-    const g = await app.request('GET', '/api/test-login', { cookie });
-    assert.equal(g.status, 403);
-    assert.deepEqual(g.json, { error: 'Please choose a new password first', code: 'must_change_password' });
-    assert.equal((await app.request('POST', '/api/test-post', { cookie, headers: X })).status, 403);
-    assert.equal((await app.request('GET', '/api/me', { cookie })).status, 200);
-    const pw = await app.request('POST', '/api/password', { cookie, headers: X, body: { oldPassword: 'test-pass-1', newPassword: 'fresh-pass-9' } });
-    assert.equal(pw.status, 200);
-    assert.equal((await app.request('GET', '/api/test-login', { cookie })).status, 200);
-    const lo = await boot();
-    await addPerson(lo.db, { name: 'New', username: 'newbie', mustChange: true });
-    const c = await loginAs(lo.app, 'newbie');
-    assert.equal((await lo.app.request('POST', '/api/logout', { cookie: c, headers: X })).status, 200);
-    await lo.app.close();
+    assert.deepEqual([lr.status, lr.json], [401, { error: 'Wrong username or password' }]);
+    assert.equal(lr.headers['set-cookie'], undefined);
+    assert.equal(db.prepare('SELECT failed_logins FROM people WHERE id = ?').get(id).failed_logins, 0);
+    assert.equal((await app.request('GET', '/api/test-login')).status, 401);
   } finally { await app.close(); }
 });
 

@@ -28,13 +28,10 @@ function resolve(target) {
   throw new TypeError('addPerson needs a container, test app or database');
 }
 
-export async function addPerson(target, { name, username, role = 'member', password = 'test-pass-1', mustChange = false, active = true }) {
+export async function addPerson(target, { name, username, role = 'member', password = 'test-pass-1', active = true }) {
   const { data, hasher } = resolve(target);
-  const person = await data.people.create({
-    name, username, role, mustChangePassword: mustChange,
-    passwordHash: await hasher.hash(password),
-    createdAt: '2025-01-01T00:00:00.000Z',
-  });
+  const person = await data.people.create({ name, username, role, createdAt: '2025-01-01T00:00:00.000Z' });
+  if (password !== null) await data.people.setPassword(person.id, await hasher.hash(password));
   if (!active) await data.people.update(person.id, { active: false });
   return person.id;
 }

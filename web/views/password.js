@@ -1,7 +1,7 @@
 import { html } from '../lib/html.js';
 import { iconSlot } from '../lib/icons.js';
 
-export const title = 'Your password';
+export const title = 'Change my password';
 export const MIN_LENGTH = 8;
 
 // Checks done before sending. Returns an error message, or '' when fine.
@@ -15,18 +15,16 @@ export function checkPasswords(oldPassword, newPassword, confirm) {
 }
 
 export function render(state, opts = {}) {
-  const must = !!state?.user?.mustChangePassword;
   const error = opts.error ?? '';
   return String(html`
     <section class="auth">
       <div class="auth-card">
         <span class="auth-mark">${iconSlot('lock', 'icon-lg')}</span>
-        <h1 tabindex="-1">${must ? 'Please choose your own password' : 'Change your password'}</h1>
-        ${must ? html`<p class="lead">You logged in with a password someone gave you. Please choose your own password before you go on.</p>` : ''}
+        <h1 tabindex="-1">Change my password</h1>
         <form class="form" data-form="password" novalidate>
           ${error ? html`<p class="form-error" role="alert">${error}</p>` : ''}
           <div class="field">
-            <label for="pw-old">${must ? 'The password you were given' : 'Current password'}</label>
+            <label for="pw-old">Current password</label>
             <input id="pw-old" name="oldPassword" type="password" autocomplete="current-password" required>
           </div>
           <div class="field">
@@ -65,7 +63,6 @@ export function mount(root, ctx) {
     btn.textContent = 'Saving…';
     try {
       await ctx.api.post('/api/password', { oldPassword, newPassword });
-      if (ctx.state.user) ctx.setUser({ ...ctx.state.user, mustChangePassword: false });
       ctx.navigate('#/');
       ctx.showMessage('Your new password is saved.');
     } catch (err) {

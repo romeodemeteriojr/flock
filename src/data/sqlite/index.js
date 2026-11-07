@@ -3,6 +3,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import { createQueue } from './queue.js';
 import { peopleRepo } from './people.js';
 import { sessionsRepo } from './sessions.js';
+import { invitesRepo } from './invites.js';
 import { teamsRepo, positionsRepo } from './teams.js';
 import { qualificationsRepo } from './qualifications.js';
 import { servicesRepo } from './services.js';
@@ -37,6 +38,7 @@ export function createSqliteData(db) {
     const data = {
       people: peopleRepo(ctx),
       sessions: sessionsRepo(ctx),
+      invites: invitesRepo(ctx),
       teams: teamsRepo(ctx),
       positions: positionsRepo(ctx),
       qualifications: qualificationsRepo(ctx),

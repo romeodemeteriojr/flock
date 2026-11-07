@@ -271,7 +271,7 @@ test('data interface: every repository method in src/data/index.js has a contrac
   const contract = lex(readFileSync(path.join(ROOT, 'test/data/contract.js'), 'utf8')).code;
   const { repos, dataProps } = interfaceMethods(src);
   assert.deepEqual(Object.keys(repos).sort(),
-    ['audit', 'blockouts', 'maintenance', 'people', 'positions', 'qualifications', 'services', 'sessions', 'slots', 'teams']);
+    ['audit', 'blockouts', 'invites', 'maintenance', 'people', 'positions', 'qualifications', 'services', 'sessions', 'slots', 'teams']);
   assert.ok(dataProps.includes('tx'));
   const missing = [];
   let count = 0;

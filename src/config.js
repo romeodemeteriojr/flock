@@ -5,6 +5,7 @@ export function loadConfig(env = process.env) {
     dbPath: env.FLOCK_DB || './data/flock.db',
     secureCookies: env.FLOCK_SECURE_COOKIES === '1',
     trustProxy: env.FLOCK_TRUST_PROXY === '1',
+    publicUrl: env.FLOCK_PUBLIC_URL ? env.FLOCK_PUBLIC_URL.trim().replace(/\/+$/, '') : undefined,
     unansweredDays: 3,
     sessionDays: 14,
   });
@@ -34,6 +35,15 @@ export function validateConfig(config) {
   if (!intIn(config.unansweredDays, 0, 30)) problems.push('unansweredDays must be a whole number from 0 to 30');
   if (typeof config.secureCookies !== 'boolean') problems.push('secureCookies must be true or false (FLOCK_SECURE_COOKIES)');
   if (config.trustProxy !== undefined && typeof config.trustProxy !== 'boolean') problems.push('trustProxy must be true or false (FLOCK_TRUST_PROXY)');
+  if (config.publicUrl !== undefined) {
+    let ok = false;
+    try {
+      const u = new URL(config.publicUrl);
+      ok = typeof config.publicUrl === 'string' && (u.protocol === 'https:' || u.protocol === 'http:')
+        && !u.username && !u.password && !u.search && !u.hash;
+    } catch { /* reported with the other settings below */ }
+    if (!ok) problems.push('publicUrl must be a full http:// or https:// address without credentials, a query or a fragment (FLOCK_PUBLIC_URL)');
+  }
   if (problems.length) throw new ConfigError(problems);
   return config;
 }

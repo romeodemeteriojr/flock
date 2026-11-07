@@ -30,7 +30,7 @@ export { DuplicateError, InUseError } from './errors.js';
  * @property {string} name
  * @property {string} username
  * @property {'admin'|'member'} role
- * @property {boolean} mustChangePassword
+ * @property {boolean} hasPassword
  * @property {boolean} active
  * @property {string} createdAt  ISO time
  * @property {number[]} positionIds  qualified positions, ascending
@@ -42,18 +42,18 @@ export { DuplicateError, InUseError } from './errors.js';
  * @property {string} name
  * @property {string} username
  * @property {'admin'|'member'} role
- * @property {boolean} mustChangePassword
+ * @property {boolean} hasPassword
  * @property {boolean} active
  * @property {string} createdAt
- * @property {string} passwordHash
+ * @property {string|null} passwordHash
  * @property {number} failedLogins
  * @property {string|null} lockedUntil  ISO time
  */
 
 /**
  * @typedef {object} PeopleRepo
- * @property {(p: {name: string, username: string, passwordHash: string, role?: 'admin'|'member', mustChangePassword?: boolean, createdAt: string}) => Promise<Person>} create
- *   Add an active person (role defaults to member, mustChangePassword to true).
+ * @property {(p: {name: string, username: string, role?: 'admin'|'member', createdAt: string}) => Promise<Person>} create
+ *   Add an active person with no password (role defaults to member).
  *   Throws DuplicateError when the username is taken (case-insensitive).
  * @property {(id: number) => Promise<Person|null>} findById
  * @property {(id: number) => Promise<AuthPerson|null>} findAuthById  Includes passwordHash, failedLogins, lockedUntil.
@@ -61,10 +61,10 @@ export { DuplicateError, InUseError } from './errors.js';
  * @property {() => Promise<Person[]>} list  Everyone (active or not), sorted by name (case-insensitive) then id.
  * @property {(id: number, patch: {name?: string, role?: 'admin'|'member', active?: boolean}) => Promise<Person|null>} update
  *   Changes only the given fields; null if the person does not exist.
- * @property {(id: number, passwordHash: string, mustChange: boolean) => Promise<boolean>} setPassword
+ * @property {(id: number, passwordHash: string|null) => Promise<boolean>} setPassword
  *   Also clears failedLogins and lockedUntil. False if the person does not exist.
  * @property {(id: number, f: {failedLogins: number, lockedUntil: string|null}) => Promise<boolean>} setLoginFailures
- * @property {() => Promise<number>} countActiveAdmins
+ * @property {() => Promise<number>} countActiveAdmins  Joined active admins only; pending invites cannot prevent lockout.
  */
 
 /**
@@ -76,6 +76,21 @@ export { DuplicateError, InUseError } from './errors.js';
  * @property {(personId: number, exceptTokenHash?: string) => Promise<number>} deleteForPerson
  *   Delete all sessions of a person, optionally keeping one. Returns how many were deleted.
  * @property {(nowIso: string) => Promise<number>} deleteExpired  Deletes sessions with expiresAt <= nowIso.
+ */
+
+/**
+ * @typedef {object} Invite
+ * @property {number} personId
+ * @property {string} tokenHash  Only the SHA-256 is stored.
+ * @property {string} expiresAt
+ * @property {string} createdAt
+ */
+
+/**
+ * @typedef {object} InvitesRepo
+ * @property {(invite: Invite) => Promise<void>} replace  Replaces this person's previous invite.
+ * @property {(tokenHash: string) => Promise<Invite|null>} findByTokenHash
+ * @property {(personId: number) => Promise<number>} deleteForPerson  Number deleted.
  */
 
 /**
@@ -258,6 +273,7 @@ export { DuplicateError, InUseError } from './errors.js';
  * @typedef {object} Data
  * @property {PeopleRepo} people
  * @property {SessionsRepo} sessions
+ * @property {InvitesRepo} invites
  * @property {TeamsRepo} teams
  * @property {PositionsRepo} positions
  * @property {QualificationsRepo} qualifications

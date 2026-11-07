@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { openDb } from '../src/db.js';
 import { startTestApp } from './helpers/app.js';
 import { addPerson, loginAs, seedAdminAndMember } from './helpers/seed.js';
+import { tokenFromLink, cookieFrom } from './helpers/client.js';
 
 const X = { 'X-Flock': '1' };
 
@@ -19,7 +20,8 @@ test('members get 403 and logged-out users 401 on every route', async () => {
   const { app, s, call } = await boot();
   try {
     const routes = [['GET', '/api/people'], ['POST', '/api/people', { name: 'X Y' }],
-      ['PATCH', `/api/people/${s.memberId}`, { name: 'Z' }], ['POST', `/api/people/${s.memberId}/reset-password`, {}]];
+      ['PATCH', `/api/people/${s.memberId}`, { name: 'Z' }], ['POST', `/api/people/${s.memberId}/reset-password`, {}],
+      ['POST', `/api/people/${s.memberId}/invite`, {}]];
     for (const [m, p, b] of routes) {
       assert.equal((await call(m, p, b, s.memberCookie)).status, 403, `${m} ${p}`);
       assert.equal((await call(m, p, b, null)).status, 401, `${m} ${p}`);
@@ -27,7 +29,7 @@ test('members get 403 and logged-out users 401 on every route', async () => {
   } finally { await app.close(); }
 });
 
-test('create returns temp password once; person must change it', async () => {
+test('create returns an invite once; claiming it chooses a password and logs in', async () => {
   const { app, call } = await boot();
   try {
     const r = await call('POST', '/api/people', { name: '  Sam Jones ', username: 'Sam_J' });
@@ -35,14 +37,15 @@ test('create returns temp password once; person must change it', async () => {
     assert.equal(r.json.person.username, 'sam_j');
     assert.equal(r.json.person.name, 'Sam Jones');
     assert.equal(r.json.person.role, 'member');
-    assert.equal(r.json.person.mustChangePassword, true);
-    assert.equal(typeof r.json.tempPassword, 'string');
-    const cookie = await loginAs(app, 'sam_j', r.json.tempPassword);
-    const me = await call('GET', '/api/people', undefined, cookie);
+    assert.equal(r.json.person.joined, false);
+    const token = tokenFromLink(r.json.invite.link);
+    const accepted = await call('POST', '/api/welcome', { token, password: 'sam own password' });
+    assert.equal(accepted.status, 200);
+    const me = await call('GET', '/api/people', undefined, cookieFrom(accepted));
     assert.equal(me.status, 403);
-    assert.equal(me.json.code, 'must_change_password');
+    assert.equal(me.json.error, 'Only the scheduler can do that');
     const list = await call('GET', '/api/people');
-    assert.ok(!list.text.includes(r.json.tempPassword));
+    assert.ok(!list.text.includes(token));
   } finally { await app.close(); }
 });
 
@@ -72,7 +75,7 @@ test('listing has no secrets, sorted by name, with positionIds', async () => {
     assert.deepEqual(r.json.map((p) => p.name), ['Ada Admin', 'Max Member']);
     assert.deepEqual(r.json[1].positionIds, [1]);
     assert.deepEqual(Object.keys(r.json[0]).sort(),
-      ['active', 'id', 'mustChangePassword', 'name', 'positionIds', 'role', 'username']);
+      ['active', 'id', 'joined', 'name', 'positionIds', 'role', 'username']);
     assert.doesNotMatch(r.text, /scrypt|password_hash/);
   } finally { await app.close(); }
 });
@@ -122,11 +125,12 @@ test('reset-password flow', async () => {
     db.prepare('UPDATE people SET failed_logins = 5, locked_until = ? WHERE id = ?').run('2999-01-01T00:00:00.000Z', s.memberId);
     const r = await call('POST', `/api/people/${s.memberId}/reset-password`, {});
     assert.equal(r.status, 200);
-    assert.deepEqual(Object.keys(r.json), ['tempPassword']);
+    assert.deepEqual(Object.keys(r.json), ['person', 'invite']);
     assert.equal((await call('GET', '/api/me', undefined, s.memberCookie)).status, 401);
-    const cookie = await loginAs(app, 'max', r.json.tempPassword);
-    const me = await call('GET', '/api/me', undefined, cookie);
-    assert.equal(me.json.person.mustChangePassword, true);
+    const accepted = await call('POST', '/api/welcome', { token: tokenFromLink(r.json.invite.link), password: 'new max password' });
+    assert.equal(accepted.status, 200);
+    const me = await call('GET', '/api/me', undefined, cookieFrom(accepted));
+    assert.equal(me.json.person.hasPassword, true);
     assert.equal((await call('POST', '/api/people/9999/reset-password', {})).status, 404);
   } finally { await app.close(); }
 });
@@ -164,7 +168,7 @@ test('audit rows are written without secrets', async () => {
     assert.deepEqual(rows.map((r) => r.action), ['person.create', 'person.update', 'person.reset_password']);
     for (const r of rows) {
       assert.equal(r.actor_id, s.adminId);
-      assert.ok(!r.detail.includes(c.json.tempPassword) && !r.detail.includes(rs.json.tempPassword));
+      assert.ok(!r.detail.includes(tokenFromLink(c.json.invite.link)) && !r.detail.includes(tokenFromLink(rs.json.invite.link)));
       assert.doesNotMatch(r.detail, /scrypt/);
     }
   } finally { await app.close(); }

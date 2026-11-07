@@ -18,6 +18,7 @@ import { ICON_NAMES, ART_NAMES, hydrateIcons, icon } from '../web/lib/icons.js';
 import { iconButton } from '../web/lib/iconbutton.js';
 import * as nav from '../web/views/nav.js';
 import * as login from '../web/views/login.js';
+import * as welcome from '../web/views/welcome.js';
 import * as password from '../web/views/password.js';
 import * as notFound from '../web/views/notfound.js';
 import * as mySchedule from '../web/views/my-schedule.js';
@@ -168,9 +169,17 @@ test('icons-a11y: every button and link in login is accessible', () => {
   assert.equal(errs.length, 0, `login a11y errors: ${errs.join('; ')}`);
 });
 
+test('icons-a11y: every button and link in welcome is accessible', () => {
+  const results = viewStates(welcome, [
+    ['checking', () => welcome.render({})],
+    ['choose-password', () => welcome.render({}, { info: { name: 'Pat Demo', username: 'pat.demo' } })],
+    ['gone', () => welcome.render({}, { error: 'This link has expired or was already used.' })],
+  ], 'welcome');
+  assert.deepEqual(flatErrors(results), []);
+});
+
 test('icons-a11y: every button and link in password is accessible', () => {
   const results = viewStates(password, [
-    ['first-login', () => password.render({ user: { mustChangePassword: true } })],
     ['change-password', () => password.render({ user: {} })],
     ['error', () => password.render({ user: {} }, { error: "Passwords don't match" })],
   ], 'password');

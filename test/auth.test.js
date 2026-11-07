@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import { scryptHasher } from '../src/infra/hasher.js';
 import { fixedClock } from '../src/infra/clock.js';
-import { validatePassword, TEMP_WORDS, publicPerson } from '../src/services/auth-service.js';
+import { validatePassword, publicPerson } from '../src/services/auth-service.js';
 import { makeContainer } from './helpers/container.js';
 
 // The old src/auth.js tests, now run against services.auth (built by the
@@ -22,8 +22,9 @@ function makeCtx(start = T0, config) {
 async function seed(ctx = makeCtx()) {
   const add = async (name, username, pw, role, active) => {
     const p = await ctx.data.people.create({
-      name, username, role, mustChangePassword: false, passwordHash: await ctx.c.hasher.hash(pw), createdAt: T0,
+      name, username, role, createdAt: T0,
     });
+    await ctx.data.people.setPassword(p.id, await ctx.c.hasher.hash(pw));
     if (!active) await ctx.data.people.update(p.id, { active: false });
     return p.id;
   };
@@ -121,20 +122,17 @@ test('validatePassword rules', () => {
   assert.equal(validatePassword('longenough'), null);
 });
 
-test('generateTempPassword shape over 200 samples', () => {
+test('invite tokens have 32 bytes of entropy and vary over 200 samples', () => {
   const { auth } = makeCtx();
-  assert.ok(TEMP_WORDS.length >= 64);
-  assert.equal(new Set(TEMP_WORDS).size, TEMP_WORDS.length);
   const seen = new Set();
   for (let i = 0; i < 200; i++) {
-    const t = auth.generateTempPassword();
-    const m = t.match(/^([a-z]+)-([a-z]+)-([0-9]{2})$/);
-    assert.ok(m, t);
-    assert.ok(TEMP_WORDS.includes(m[1]) && TEMP_WORDS.includes(m[2]), t);
-    assert.equal(validatePassword(t, { username: 'ann' }), null);
-    seen.add(t);
+    const invite = auth.newInvite();
+    assert.match(invite.token, /^[A-Za-z0-9_-]{43}$/);
+    assert.equal(Buffer.from(invite.token, 'base64url').length, 32);
+    assert.match(invite.tokenHash, /^[a-f0-9]{64}$/);
+    seen.add(invite.token);
   }
-  assert.ok(seen.size > 150, 'temp passwords should vary');
+  assert.equal(seen.size, 200);
 });
 
 // ---------- sessions ----------
@@ -311,9 +309,8 @@ test('changePassword rules', async () => {
   assert.match((await tryChange(s, ann, 'correct horse', 'annexample')).error, /username/);
   assert.equal((await tryChange(s, 9999, 'x', 'brand new pw')).ok, false);
 
-  db.prepare('UPDATE people SET must_change_password=1 WHERE id=?').run(ann);
   assert.deepEqual(await tryChange(s, ann, 'correct horse', 'brand new pw'), { ok: true });
-  assert.equal((await row(s, ann)).mustChangePassword, false);
+  assert.equal((await row(s, ann)).hasPassword, true);
   assert.equal(await s.c.hasher.verify('brand new pw', (await row(s, ann)).passwordHash), true);
   assert.equal((await tryLogin(s, 'annexample', 'correct horse')).ok, false);
   assert.equal((await tryLogin(s, 'annexample', 'brand new pw')).ok, true);
@@ -342,37 +339,28 @@ test('failed changePassword keeps sessions and hash', async () => {
   assert.equal((await row(s, s.ann)).passwordHash, before);
 });
 
-// ---------- setTempPassword ----------
+// ---------- invite reset ----------
 
-test('setTempPassword forces change, clears lockout, drops sessions', async () => {
+test('reset clears lockout and sessions; an invite chooses the replacement password', async () => {
   const s = await seed();
   const { auth, ann } = s;
   const tok = await loginToken(s, 'ann');
   for (let i = 0; i < 5; i++) await tryLogin(s, 'ann', 'bad');
   assert.ok((await row(s, ann)).lockedUntil);
-
-  const temp = await auth.issueTempPassword(ann);
-  assert.match(temp, /^[a-z]+-[a-z]+-[0-9]{2}$/);
+  const { invite } = await s.c.services.people.resetPassword(null, ann);
   const r = await row(s, ann);
-  assert.equal(r.mustChangePassword, true);
-  assert.equal(r.failedLogins, 0);
-  assert.equal(r.lockedUntil, null);
-  assert.ok(!r.passwordHash.includes(temp));
+  assert.deepEqual([r.passwordHash, r.hasPassword, r.failedLogins, r.lockedUntil], [null, false, 0, null]);
   assert.equal(await auth.authenticate(tok), null);
   assert.equal(sessionCount(s, ann), 0);
-
-  const res = await tryLogin(s, 'ann', temp);
-  assert.equal(res.ok, true);
-  assert.equal(publicPerson(res.person).mustChangePassword, true);
   assert.equal((await tryLogin(s, 'ann', 'correct horse')).ok, false);
-
-  assert.equal((await tryChange(s, ann, temp, 'my own password')).ok, true);
-  assert.equal((await row(s, ann)).mustChangePassword, false);
+  const accepted = await auth.acceptInvite(invite.token, 'my own password');
+  assert.equal(accepted.person.hasPassword, true);
+  assert.equal((await tryLogin(s, 'ann', 'my own password')).ok, true);
 });
 
-test('setTempPassword on unknown person throws', async () => {
+test('reset on an unknown person throws', async () => {
   const s = await seed();
-  await assert.rejects(s.auth.issueTempPassword(9999));
+  await assert.rejects(s.c.services.people.resetPassword(null, 9999));
 });
 
 // ---------- publicPerson ----------
@@ -380,7 +368,7 @@ test('setTempPassword on unknown person throws', async () => {
 test('publicPerson exposes no hash', async () => {
   const s = await seed();
   const p = publicPerson(await row(s, s.ann));
-  assert.deepEqual(p, { id: s.ann, name: 'Ann Example', username: 'ann', role: 'admin', mustChangePassword: false, active: true });
+  assert.deepEqual(p, { id: s.ann, name: 'Ann Example', username: 'ann', role: 'admin', hasPassword: true, active: true });
   assert.ok(!JSON.stringify(p).includes('fast$') && !JSON.stringify(p).includes('scrypt'));
   assert.equal(publicPerson(await row(s, s.cy)).active, false);
   assert.equal(publicPerson(null), null);

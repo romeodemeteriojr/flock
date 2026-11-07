@@ -8,7 +8,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { startTestApp } from './helpers/app.js';
 import { addPerson } from './helpers/seed.js';
-import { createClient, cookieFrom, fillPath, MUTATING } from './helpers/client.js';
+import { createClient, cookieFrom, fillPath, MUTATING, tokenFromLink } from './helpers/client.js';
 import { fixedClock } from '../src/infra/clock.js';
 import { createLogger } from '../src/infra/logger.js';
 import { fastHasher } from '../src/infra/hasher.js';
@@ -21,7 +21,7 @@ import { fakeRoot as hostRoot } from './helpers/fakeroot.js';
 
 const WEB_VIEWS = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'web', 'views');
 const NOW = '2025-01-05T12:00:00.000Z'; // a Sunday
-const PUBLIC = new Set(['POST /api/login', 'GET /api/health']);
+const PUBLIC = new Set(['POST /api/login', 'GET /api/health', 'POST /api/welcome/check', 'POST /api/welcome']);
 const key = (r) => `${r.method} ${r.pattern}`;
 
 async function boot(extra = {}) {
@@ -50,7 +50,7 @@ async function adminAndMember(ctx) {
 
 // ---------- authorization matrix ----------
 
-test('matrix: the router lists every route, and only login and health are public', () => withApp(async ({ routes }) => {
+test('matrix: only login, health and invite welcome routes are public', () => withApp(async ({ routes }) => {
   assert.ok(routes.length >= 39, `only ${routes.length} routes`);
   for (const r of routes) {
     assert.ok(r.pattern.startsWith('/api/'), `${key(r)} is outside /api`);
@@ -60,7 +60,7 @@ test('matrix: the router lists every route, and only login and health are public
   assert.equal(new Set(routes.map(key)).size, routes.length, 'duplicate routes');
 }));
 
-test('matrix: every /api route except login and health is 401 when logged out', () => withApp(async ({ client, routes }) => {
+test('matrix: every protected /api route is 401 when logged out', () => withApp(async ({ client, routes }) => {
   const anon = client.browser();
   for (const r of routes) {
     if (PUBLIC.has(key(r))) continue;
@@ -98,7 +98,7 @@ test('matrix: every admin route is 403 for a member, and nothing changes', () =>
 test('matrix: CSRF: every mutating route needs X-Flock (only login is exempt), checked before anything runs', () => withApp(async (ctx) => {
   const { admin, member } = await adminAndMember(ctx);
   const mutating = ctx.routes.filter((r) => MUTATING.has(r.method));
-  assert.deepEqual(mutating.filter((r) => r.auth === 'none').map(key), ['POST /api/login']);
+  assert.deepEqual(mutating.filter((r) => r.auth === 'none').map(key), ['POST /api/login', 'POST /api/welcome/check', 'POST /api/welcome']);
   const teamsBefore = JSON.stringify((await admin.get('/api/teams')).json);
   for (const r of mutating) {
     if (key(r) === 'POST /api/login') continue;
@@ -246,52 +246,52 @@ function recordingHasher() {
 }
 const secretsHasher = recordingHasher();
 
-test('secrets: password hashes, tokens and passwords never reach a response, an audit row or a log line', () => withApp(async (ctx) => {
+test('secrets: hashes, credentials and invite tokens stay out of public responses, audit and logs', () => withApp(async (ctx) => {
   const { admin } = await adminAndMember(ctx);
-  // A person added with a temporary password, who logs in and changes it.
-  const created = (await admin.post('/api/people', { name: 'Tess Temp', username: 'tess' })).json;
-  const temp = created.tempPassword;
+  const created = (await admin.post('/api/people', { name: 'Tess Invite', username: 'tess' })).json;
+  const renewed = (await admin.post(`/api/people/${created.person.id}/invite`)).json;
+  const invite1 = tokenFromLink(created.invite.link);
+  const invite2 = tokenFromLink(renewed.invite.link);
   const tess = ctx.client.browser();
-  assert.equal((await tess.login('tess', temp)).status, 200);
-  assert.equal((await tess.post('/api/password', { oldPassword: temp, newPassword: 'tess-own-pass-9' })).status, 200);
+  assert.equal((await tess.login('tess', 'not yet chosen')).status, 401);
+  assert.equal((await tess.welcome(invite2, 'tess-own-pass-9')).status, 200);
+  assert.equal((await tess.post('/api/password', { oldPassword: 'tess-own-pass-9', newPassword: 'tess-first-change-9' })).status, 200);
   const reset = (await admin.post(`/api/people/${created.person.id}/reset-password`)).json;
-  const temp2 = reset.tempPassword;
-  await tess.login('tess', temp2);
-  await tess.post('/api/password', { oldPassword: temp2, newPassword: 'tess-second-pass-9' });
-  // Failed logins and a lockout are logged and audited too.
+  const invite3 = tokenFromLink(reset.invite.link);
+  assert.equal((await tess.welcome(invite3, 'tess-second-pass-9')).status, 200);
+  assert.equal((await tess.post('/api/password', { oldPassword: 'tess-second-pass-9', newPassword: 'tess-final-pass-9' })).status, 200);
   for (let i = 0; i < 6; i++) await ctx.client.browser().post('/api/login', { username: 'max', password: `wrong-guess-${i}` });
   await admin.get('/api/people');
   await admin.get('/api/me');
   await tess.get('/api/me');
   await tess.post('/api/logout');
 
-  // Every hash ever made (old ones too), every token handed out and its stored hash.
   const hashes = [...secretsHasher.made];
-  for (const id of [1, 2, created.person.id]) assert.ok(hashes.includes((await ctx.app.data.people.findAuthById(id)).passwordHash), `current hash of person ${id} was recorded`);
+  for (const id of [1, 2, created.person.id]) assert.ok(hashes.includes((await ctx.app.data.people.findAuthById(id)).passwordHash));
   const tokens = ctx.client.responses.map(cookieFrom).filter(Boolean).map((c) => c.split('=')[1]).filter((t) => t.length > 10);
   const tokenHashes = tokens.map(tokenHash);
-  assert.ok(hashes.length >= 6 && hashes.every((h) => typeof h === 'string' && h.length > 10), `${hashes.length} hashes`);
-  assert.ok(tokens.length >= 4, `${tokens.length} tokens`);
+  const invites = [invite1, invite2, invite3];
+  const inviteHashes = invites.map(tokenHash);
+  assert.ok(hashes.length >= 6 && hashes.every((h) => typeof h === 'string' && h.length > 10));
+  assert.ok(tokens.length >= 4);
   for (const live of ctx.app.db.prepare('SELECT token_hash FROM sessions').all()) assert.ok(tokenHashes.includes(live.token_hash));
-  const passwords = ['test-pass-1', 'tess-own-pass-9', 'tess-second-pass-9', 'wrong-guess-0', 'wrong-guess-5'];
+  const passwords = ['test-pass-1', 'not yet chosen', 'tess-own-pass-9', 'tess-first-change-9', 'tess-second-pass-9', 'tess-final-pass-9', 'wrong-guess-0', 'wrong-guess-5'];
 
   const audit = JSON.stringify(await ctx.app.data.audit.list(1000));
   const logs = ctx.lines.join('\n');
-  assert.ok(ctx.lines.length > 20, 'the recording logger saw the requests');
+  assert.ok(ctx.lines.length > 20);
   for (const [where, text] of [['audit', audit], ['log', logs]]) {
-    for (const s of [...hashes, ...tokenHashes, ...tokens, ...passwords, temp, temp2]) {
-      assert.ok(!text.includes(s), `${where} contains a secret (${s.slice(0, 6)}…)`);
+    for (const secret of [...hashes, ...tokenHashes, ...tokens, ...passwords, ...invites, ...inviteHashes]) {
+      assert.ok(!text.includes(secret), `${where} contains a secret (${secret.slice(0, 6)}…)`);
     }
-    assert.ok(!/passwordHash|password_hash|tokenHash/.test(text.replace(/"\[REDACTED\]"/g, '')), `${where} names a secret field`);
+    assert.ok(!/passwordHash|password_hash|tokenHash/.test(text.replace(/"\[REDACTED\]"/g, '')));
   }
   for (const r of ctx.client.responses) {
-    for (const s of [...hashes, ...tokenHashes, ...tokens, ...passwords]) {
-      assert.ok(!r.text.includes(s), `${r.method} ${r.path} body contains a secret`);
-    }
-    assert.ok(!/passwordHash|password_hash|tokenHash|failedLogins|lockedUntil/.test(r.text), `${r.method} ${r.path} names a secret field`);
-    // Temporary passwords appear only in the one response that hands them out.
-    const handsOut = r.method === 'POST' && (r.path === '/api/people' || r.path.endsWith('/reset-password'));
-    if (!handsOut) for (const t of [temp, temp2]) assert.ok(!r.text.includes(t), `${r.method} ${r.path} repeats a temporary password`);
+    for (const secret of [...hashes, ...tokenHashes, ...tokens, ...passwords, ...inviteHashes]) assert.ok(!r.text.includes(secret), `${r.method} ${r.path} body contains a secret`);
+    assert.ok(!/passwordHash|password_hash|tokenHash|failedLogins|lockedUntil/.test(r.text));
+    const handsOut = r.method === 'POST' && (r.path === '/api/people' || r.path.endsWith('/reset-password') || r.path.endsWith('/invite'));
+    if (!handsOut) for (const invite of invites) assert.ok(!r.text.includes(invite), `${r.method} ${r.path} repeats an invite token`);
+    for (const invite of invites) assert.ok(!r.path.includes(invite), 'an invite token reached an HTTP URL');
   }
 }, { hasher: secretsHasher }));
 
@@ -431,8 +431,7 @@ async function hostileWorld(ctx) {
   assert.equal((await admin.put(`/api/slots/${s1.slots[0].id}/assign`, { personId: annId })).status, 200);
   assert.equal((await admin.put(`/api/slots/${s1.slots[1].id}/assign`, { personId: halId })).status, 200);
   const hal = ctx.client.browser();
-  assert.equal((await hal.login('hal.test', created.json.tempPassword)).status, 200);
-  assert.equal((await hal.post('/api/password', { oldPassword: created.json.tempPassword, newPassword: 'hal-new-pass-1' })).status, 200);
+  assert.equal((await hal.welcome(tokenFromLink(created.json.invite.link), 'hal-new-pass-1')).status, 200);
   const blk = await hal.post('/api/me/blockouts', { startDate: '2025-01-19', reason: HOSTILE.reason });
   assert.equal(blk.status, 201, blk.text);
   const ann = ctx.client.browser();
@@ -547,10 +546,11 @@ test('stored XSS: every web/views/*.js render path escapes hostile data from the
     covered.add(name);
   }
   // Pages that render straight from state or messages.
-  const state = { user: { id: w.halId, name: HOSTILE.name, role: 'admin', mustChangePassword: true } };
+  const state = { user: { id: w.halId, name: HOSTILE.name, role: 'admin' } };
   const direct = {
     nav: (v) => v.render(state, '#/'),
     login: (v) => v.render({}, { error: HOSTILE.reason, username: HOSTILE.position }),
+    welcome: (v) => v.render({}, { info: { name: HOSTILE.name, username: HOSTILE.position }, error: HOSTILE.reason }),
     password: (v) => v.render(state, { error: HOSTILE.title }),
     notfound: (v) => v.render(state),
   };

@@ -1,6 +1,7 @@
 // People (admin only): thin HTTP adapter over services.people.
 import { ValidationError } from '../errors.js';
 import { v, parse } from '../validate.js';
+import { inviteLink } from '../services/auth-service.js';
 
 const isObj = (b) => b !== null && typeof b === 'object' && !Array.isArray(b);
 
@@ -36,13 +37,22 @@ function cleanName(value) {
   return name;
 }
 
+function inviteOut(req, config, invite) {
+  const base = config.publicUrl ?? `${config.secureCookies ? 'https' : 'http'}://${req.headers.host ?? 'localhost'}`;
+  const host = new URL(base).hostname;
+  return {
+    link: inviteLink(base, invite.token), expiresAt: invite.expiresAt,
+    localOnly: ['localhost', '127.0.0.1', '::1', '[::1]'].includes(host),
+  };
+}
+
 export function register(router, ctx) {
   const people = () => ctx.services.people;
   const opts = { auth: 'admin' };
 
   router.add('GET', '/api/people', async () => ({ status: 200, json: await people().list() }), opts);
 
-  router.add('POST', '/api/people', async ({ body, user }) => {
+  router.add('POST', '/api/people', async ({ req, body, user }) => {
     if (!isObj(body)) throw new ValidationError('Please send the person details.');
     checkKeys(body, ['name', 'username', 'role']);
     const input = { name: cleanName(body.name) };
@@ -50,8 +60,8 @@ export function register(router, ctx) {
     if (body.username !== undefined && body.username !== null && body.username !== '') {
       input.username = check(usernameSchema, body.username, 'The username must be 3 to 30 letters, digits, dots, underscores or dashes.');
     }
-    const { person, tempPassword } = await people().create(user, input);
-    return { status: 201, json: { person, tempPassword } };
+    const { person, invite } = await people().create(user, input);
+    return { status: 201, json: { person, invite: inviteOut(req, ctx.config, invite) } };
   }, opts);
 
   router.add('PATCH', '/api/people/:id', async ({ params, body, user }) => {
@@ -68,8 +78,13 @@ export function register(router, ctx) {
     return { status: 200, json: { person: await people().update(user, id, patch) } };
   }, opts);
 
-  router.add('POST', '/api/people/:id/reset-password', async ({ params, user }) => {
-    const id = parseId(params.id);
-    return { status: 200, json: await people().resetPassword(user, id) };
+  router.add('POST', '/api/people/:id/invite', async ({ req, params, user }) => {
+    const { person, invite } = await people().invite(user, parseId(params.id));
+    return { status: 200, json: { person, invite: inviteOut(req, ctx.config, invite) } };
+  }, opts);
+
+  router.add('POST', '/api/people/:id/reset-password', async ({ req, params, user }) => {
+    const { person, invite } = await people().resetPassword(user, parseId(params.id));
+    return { status: 200, json: { person, invite: inviteOut(req, ctx.config, invite) } };
   }, opts);
 }

@@ -54,7 +54,7 @@ export function mount(root, ctx) {
     try {
       const r = await ctx.api.post('/api/login', { username, password });
       ctx.setUser(r.person);
-      ctx.navigate(r.person.mustChangePassword ? '#/password' : '#/');
+      ctx.navigate('#/');
     } catch (err) {
       again(err.message, username);
     }

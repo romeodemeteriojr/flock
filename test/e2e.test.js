@@ -11,8 +11,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { startTestApp } from './helpers/app.js';
-import { addPerson } from './helpers/seed.js';
-import { createClient } from './helpers/client.js';
+import { createClient, tokenFromLink } from './helpers/client.js';
+import { loadConfig } from '../src/config.js';
 import { importsOf } from './helpers/source.js';
 import { openDb } from '../src/db.js';
 import { fixedClock } from '../src/infra/clock.js';
@@ -35,19 +35,19 @@ const childEnv = (dir, extra = {}) => ({ PATH: process.env.PATH, HOME: dir, ...e
  * The scheduling story after the first scheduler exists. Returns a transcript
  * of every API answer (status and JSON) so runs can be compared.
  */
-async function story(app, { adminUser, adminTemp }) {
+async function story(app, { adminUser, adminToken }) {
   const client = createClient(app);
   const log = [];
   const note = (label, res) => { log.push({ label, status: res.status, json: res.json ?? null, requestId: res.headers['x-request-id'] }); return res; };
   const admin = client.browser();
 
-  // The first scheduler logs in with the temporary password and must change it.
-  const first = note('admin login', await admin.login(adminUser, adminTemp));
+  // The first scheduler follows an invite, chooses a password and is logged in.
+  const info = note('admin invite', await admin.post('/api/welcome/check', { token: adminToken }));
+  assert.equal(info.json.username, adminUser);
+  const first = note('admin joined', await admin.welcome(adminToken, 'pat-own-password-1'));
   assert.equal(first.status, 200);
-  assert.equal(first.json.person.mustChangePassword, true);
-  assert.equal(note('admin blocked', await admin.get('/api/teams')).json.code, 'must_change_password');
-  assert.equal(note('admin password', await admin.post('/api/password', { oldPassword: adminTemp, newPassword: 'pat-own-password-1' })).status, 200);
-  assert.equal(note('admin me', await admin.get('/api/me')).json.person.mustChangePassword, false);
+  assert.equal(first.json.person.hasPassword, true);
+  assert.equal(note('admin me', await admin.get('/api/me')).json.person.hasPassword, true);
 
   // A team with positions.
   const team = note('team', await admin.post('/api/teams', { name: 'Worship' })).json;
@@ -55,21 +55,21 @@ async function story(app, { adminUser, adminTemp }) {
   const guitar = note('guitar', await admin.post(`/api/teams/${team.id}/positions`, { name: 'Guitar' })).json;
   assert.ok(team.id && vocals.id && guitar.id);
 
-  // A person, added with a temporary password.
+  // A person, added with a one-time invite.
   const added = note('add person', await admin.post('/api/people', { name: 'Rae Example', username: 'rae.example' }));
   assert.equal(added.status, 201);
   const rae = added.json.person;
-  assert.equal(rae.mustChangePassword, true);
-  assert.match(added.json.tempPassword, /\S{8,}/);
+  assert.equal(rae.joined, false);
+  const raeToken = tokenFromLink(added.json.invite.link);
+  assert.match(raeToken, /^[A-Za-z0-9_-]{43}$/);
 
-  // The person logs in on their phone and is made to choose a password.
+  // An unclaimed account has no login; the phone joins directly through its invite.
   const phone = client.browser();
-  const raeLogin = note('rae login', await phone.login('rae.example', added.json.tempPassword));
-  assert.equal(raeLogin.status, 200);
-  assert.equal(raeLogin.json.person.mustChangePassword, true);
-  assert.equal(note('rae blocked', await phone.get('/api/me/schedule')).status, 403);
-  assert.equal(note('rae short password', await phone.post('/api/password', { oldPassword: added.json.tempPassword, newPassword: 'short' })).status, 400);
-  assert.equal(note('rae password', await phone.post('/api/password', { oldPassword: added.json.tempPassword, newPassword: 'rae-own-password-1' })).status, 200);
+  assert.equal(note('rae blocked', await phone.get('/api/me/schedule')).status, 401);
+  assert.equal(note('rae short password', await phone.welcome(raeToken, 'short')).status, 400);
+  const raeJoined = note('rae joined', await phone.welcome(raeToken, 'rae-own-password-1'));
+  assert.equal(raeJoined.status, 200);
+  assert.equal(raeJoined.json.person.hasPassword, true);
   assert.deepEqual(note('rae empty schedule', await phone.get('/api/me/schedule')).json, { nextServing: null, items: [] });
 
   // The scheduler qualifies and schedules them on a new service.
@@ -133,11 +133,11 @@ test('e2e: first scheduler from the command line, then the whole volunteer story
   try {
     const made = spawnSync(process.execPath, [BIN, 'create-admin', 'pat.example', 'Pat Example', '--db', t.db], { env: childEnv(t.dir), encoding: 'utf8', cwd: t.dir });
     assert.equal(made.status, 0, made.stderr);
-    const adminTemp = made.stdout.match(/Temporary password: (\S+)/)[1];
+    const adminToken = tokenFromLink(made.stdout.match(/Invite link \([^\n]+\): (\S+)/)[1]);
     // The command line hashed with the real scrypt hasher, so the app uses it too.
     const app = await startTestApp({ db: openDb(t.db), container: { clock: fixedClock(NOW), hasher: scryptHasher({ random: seededRandom('salt') }) } });
     try {
-      const log = await story(app, { adminUser: 'pat.example', adminTemp });
+      const log = await story(app, { adminUser: 'pat.example', adminToken });
       assert.ok(log.length > 25, `only ${log.length} steps`);
       // The audit trail recorded the scheduler's changes.
       const actions = (await app.data.audit.list(200)).map((a) => a.action);
@@ -151,10 +151,10 @@ test('e2e: first scheduler from the command line, then the whole volunteer story
 
 test('e2e: determinism: the same inputs and a fixed clock give identical API output', async () => {
   const run = async () => {
-    const app = await startTestApp({ container: { clock: fixedClock(NOW), random: seededRandom('e2e') } });
+    const app = await startTestApp({ config: { ...loadConfig({}), publicUrl: 'https://flock.example.org' }, container: { clock: fixedClock(NOW), random: seededRandom('e2e') } });
     try {
-      await addPerson(app, { name: 'Pat Example', username: 'pat.example', role: 'admin', password: 'first-temp-pass', mustChange: true });
-      return await story(app, { adminUser: 'pat.example', adminTemp: 'first-temp-pass' });
+      const created = await app.container.services.people.create(null, { name: 'Pat Example', username: 'pat.example', role: 'admin' });
+      return await story(app, { adminUser: 'pat.example', adminToken: created.invite.token });
     } finally { await app.close(); }
   };
   const a = await run();
@@ -164,7 +164,7 @@ test('e2e: determinism: the same inputs and a fixed clock give identical API out
   // Not trivially equal: there really were ids, times and tokens in there.
   const text = JSON.stringify(a);
   assert.match(text, /"assignedAt":"\d{4}-/);
-  assert.match(text, /"tempPassword":"\S+"/);
+  assert.match(text, /"link":"https:\/\/flock\.example\.org\/#\/welcome\?token=[A-Za-z0-9_-]{43}"/);
 });
 
 test('e2e: every file referenced by web/index.html and imported by web modules exists', () => {
@@ -258,9 +258,9 @@ test('e2e: npm start serves the app on a temp database and stops cleanly on SIGT
   }
 });
 
-test('package.json: version 0.1.0, no dependencies, and the test, coverage and start scripts', () => {
+test('package.json: version 0.2.0, no dependencies, and the test, coverage and start scripts', () => {
   const pkg = JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
-  assert.equal(pkg.version, '0.1.0');
+  assert.equal(pkg.version, '0.2.0');
   assert.equal(pkg.dependencies, undefined);
   assert.equal(pkg.devDependencies, undefined);
   // node:sqlite without a flag needs 22.13; DatabaseSync#isTransaction (used by tx) needs 22.16.
@@ -271,5 +271,5 @@ test('package.json: version 0.1.0, no dependencies, and the test, coverage and s
     start: 'node bin/flock.js serve',
   });
   const version = spawnSync(process.execPath, [BIN, 'version'], { env: { PATH: process.env.PATH }, encoding: 'utf8' });
-  assert.equal(version.stdout.trim(), 'flock 0.1.0');
+  assert.equal(version.stdout.trim(), 'flock 0.2.0');
 });

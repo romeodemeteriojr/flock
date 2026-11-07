@@ -1,6 +1,15 @@
 # Changelog
 
-## Unreleased
+## 0.2.0
+
+### Invite links
+
+- One-time invite links replace account-creation and reset passwords. Links expire after 7 days; making a new link cancels the old one.
+- The welcome page shows the username, lets the person choose a password and logs them in. Ordinary password changes remain available from the key button in the top bar.
+- People shows who has not joined, ready-to-copy private messages and a warning for localhost links. Copying uses the shared mobile clipboard fallback.
+- Resetting a password clears it and ends every session immediately. Invite claims are transactional, including expiry/deactivation checks and session creation; pending schedulers cannot bypass last-joined-scheduler protection.
+- `FLOCK_PUBLIC_URL` supplies a shared invite address. CLI `create-admin` and `demo` print invite links.
+- Pre-release 0.1.0 databases are not automatically upgraded: use a fresh database file and retain existing data/backups.
 
 ### UI styling
 

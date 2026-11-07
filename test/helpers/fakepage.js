@@ -1,5 +1,5 @@
 // A fake whole page for UI flow tests: the REAL web/app.js (router, nav, toasts,
-// forced password change, logged-out redirect) running over a tiny fake DOM,
+// invite joining, logged-out redirect) running over a tiny fake DOM,
 // with the REAL web/api.js talking real HTTP to a started test app.
 //
 // It is built so a test can only do what a person could do:

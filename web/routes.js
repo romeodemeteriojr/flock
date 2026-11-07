@@ -1,7 +1,9 @@
 // The page list, and a pure resolve() that picks the page for a #hash.
 // role: 'public' = only when logged out, 'any' = any logged-in person,
-//       'member' = logged-in person (members and admins), 'admin' = admins only.
+//       'member' = logged-in person (members and admins), 'admin' = admins only,
+//       'open' = visible whether logged in or out.
 import * as login from './views/login.js';
+import * as welcome from './views/welcome.js';
 import * as password from './views/password.js';
 import * as notFound from './views/notfound.js';
 import * as mySchedule from './views/my-schedule.js';
@@ -13,12 +15,12 @@ import * as adminSchedule from './views/admin-schedule.js';
 import * as adminGaps from './views/admin-gaps.js';
 
 export const LOGIN = '#/login';
-export const PASSWORD = '#/password';
 export const HOME = '#/';
 
 // `label` puts the page in the nav menu, in this order.
 export const routes = [
   { path: '/login', view: login, role: 'public' },
+  { path: '/welcome', view: welcome, role: 'open' },
   { path: '/password', view: password, role: 'any' },
   { path: '/', view: mySchedule, role: 'member', label: 'My schedule' },
   { path: '/blockouts', view: myBlockouts, role: 'member', label: "Days I can't serve" },
@@ -49,13 +51,10 @@ export function resolve(hash, user) {
   const path = pathOf(hash);
   const route = routes.find((r) => r.path === path) ?? null;
 
+  if (route?.role === 'open') return { route };
   if (!user) {
     if (route && route.role === 'public') return { route };
     return { redirect: LOGIN };
-  }
-  if (user.mustChangePassword) {
-    if (path === '/password') return { route };
-    return { redirect: PASSWORD };
   }
   if (!route) return { route: notFoundRoute };
   if (route.role === 'public') return { redirect: HOME };
@@ -65,6 +64,6 @@ export function resolve(hash, user) {
 
 // Pages to list in the nav for this person.
 export function navRoutes(user) {
-  if (!user || user.mustChangePassword) return [];
+  if (!user) return [];
   return routes.filter((r) => r.label && (r.role !== 'admin' || isAdmin(user)));
 }

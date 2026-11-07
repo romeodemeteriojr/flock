@@ -21,7 +21,7 @@ function nextSunday(today) {
   return d;
 }
 
-/** Fill an empty database. Returns { tempPassword, counts }. */
+/** Fill an empty database. Returns { invite, counts }. */
 export async function seedDemo({ services, clock }) {
   const { people, teams, calendar, assignments, blockouts } = services;
   const admin = await people.create(null, { name: 'Demo Admin', username: 'demo-admin', role: 'admin' });
@@ -89,7 +89,7 @@ export async function seedDemo({ services, clock }) {
   }
 
   return {
-    tempPassword: admin.tempPassword,
+    invite: admin.invite,
     counts: { people: folks.length + 1, teams: Object.keys(TEAMS).length, services: WEEKS, blockouts: blocks.length },
   };
 }
