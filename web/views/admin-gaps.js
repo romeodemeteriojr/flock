@@ -108,8 +108,7 @@ function reminders(m) {
   return html`<section class="card reminders-card" data-reminders-panel>
     <h2 class="card-title">${iconSlot('bell', 'icon-sm')} Reminders</h2>
     <p class="notice notice-info">${iconSlot('mail', 'notice-icon')}<strong>${NEVER_SENDS}</strong></p>
-    ${r.error ? html`<p class="form-error" role="alert">${r.error}</p>` : ''}
-    ${toasts([[r.notice, 'ok']])}
+    ${toasts([[r.notice, 'ok'], [r.error, 'error']])}
     <form class="form form-inline" data-form="reminders" novalidate>
       <div class="field"><label for="week-of">Week starting</label>
         <input id="week-of" name="weekOf" type="date" required value="${r.weekOf}"></div>
@@ -192,7 +191,8 @@ export function createScreen({ api, root, today = todayString(), win = globalThi
 
   async function copy(text, target, label, key) {
     const ok = await copyText(win, text);
-    m.reminders.notice = ok ? 'Copied. Paste it into your messages app.' : 'Could not copy. Please select the text and copy it by hand.';
+    m.reminders.notice = ok ? 'Copied. Paste it into your messages app.' : '';
+    m.reminders.error = ok ? '' : 'Could not copy. Please select the text and copy it by hand.';
     paint();
     if (ok) flashCopied(win, root, target, label, hold, key);
   }

@@ -253,11 +253,34 @@ export function createSlotPanel({ api, paint, changed = () => {} }) {
 // Copy text with the browser clipboard. Returns true when it worked.
 export async function copyText(win, text) {
   try {
-    if (!win?.navigator?.clipboard?.writeText) return false;
-    await win.navigator.clipboard.writeText(text);
-    return true;
+    if (win?.navigator?.clipboard?.writeText) {
+      await win.navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch { /* Try the legacy clipboard below. */ }
+
+  // shortcut: HTTP needs browser-dependent legacy copy; use HTTPS if it is blocked.
+  const doc = win?.document;
+  const focused = doc?.activeElement;
+  let field;
+  try {
+    if (!doc?.body || !doc.execCommand) return false;
+    field = doc.createElement('textarea');
+    field.value = text;
+    field.className = 'visually-hidden';
+    field.setAttribute('readonly', '');
+    field.setAttribute('aria-label', 'Text to copy');
+    field.tabIndex = -1;
+    doc.body.appendChild(field);
+    field.focus({ preventScroll: true });
+    field.select();
+    field.setSelectionRange(0, field.value.length);
+    return doc.execCommand('copy');
   } catch {
     return false;
+  } finally {
+    field?.remove();
+    if (field) focused?.focus?.({ preventScroll: true });
   }
 }
 

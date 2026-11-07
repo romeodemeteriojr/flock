@@ -547,7 +547,45 @@ test('reminders: empty week and no clipboard are explained', async () => {
   await two.root.click('copy-all');
   await flush();
   assert.match(two.root.innerHTML, /Could not copy/);
+  const toast = two.root.innerHTML.match(/<div class="toast toast-error"[^>]*>[\s\S]*?<\/div>/)?.[0];
+  assert.ok(toast, 'failed copy is an error toast, not a success toast');
+  assert.match(toast, /role="alert"/);
+  assert.match(toast, /data-icon="warning"/);
+  assert.doesNotMatch(toast, /data-icon="check"/);
 });
+
+for (const action of ['copy-one', 'copy-all']) {
+  test(`reminders: ${action} clears stale feedback on failure and retry`, async () => {
+    let fail = true;
+    const timers = [];
+    const win = {
+      navigator: { clipboard: { writeText: async () => { if (fail) throw new Error('NotAllowedError'); } } },
+      setTimeout(fn, ms) { timers.push({ fn, ms }); return timers.length; },
+      clearTimeout() {},
+    };
+    const { root } = await gapsSetup({ 'GET /api/admin/reminders?weekOf=2026-11-08': REMINDERS }, win);
+    root.submit('reminders', { weekOf: '2026-11-08' });
+    await flush();
+    root.click(action, 8);
+    await flush();
+    assert.match(root.innerHTML, /toast-error/);
+    assert.doesNotMatch(root.innerHTML, /toast-ok/);
+    assert.equal(timers.length, 0, 'a failed copy must not flash a check');
+
+    fail = false;
+    root.click(action, 8);
+    await flush();
+    assert.match(root.innerHTML, /toast-ok/);
+    assert.doesNotMatch(root.innerHTML, /Could not copy|toast-error/);
+    assert.equal(timers.length, 1);
+
+    fail = true;
+    root.click(action, 8);
+    await flush();
+    assert.match(root.innerHTML, /toast-error/);
+    assert.doesNotMatch(root.innerHTML, /Copied\.|toast-ok/);
+  });
+}
 
 test('views render a heading and mount safely without a screen element', () => {
   for (const v of [services, schedule, gaps]) {
