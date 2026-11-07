@@ -487,6 +487,11 @@ input[type="checkbox"], input[type="radio"] { width: 1.4rem; height: 1.4rem; acc
 }
 .icon-btn:hover { background: var(--surface-3); }
 .icon-btn:active { transform: scale(0.94); }
+/* Keyboard focus is always visible, even where the global ring would be hidden. */
+.icon-btn:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
+.icon-btn-danger { color: var(--danger); background: var(--danger-bg); }
+.icon-btn-danger:hover { background: color-mix(in srgb, var(--danger-bg) 70%, var(--danger)); }
+.icon-btn:disabled { opacity: 0.55; cursor: wait; transform: none; }
 
 /* ---------- segmented control ---------- */
 .segmented {
@@ -940,6 +945,7 @@ th, td { text-align: left; padding: var(--s-2) var(--s-3); border-bottom: 1px so
 .gallery-section { padding: var(--s-6) 0; border-bottom: 1px solid var(--line); }
 .gallery-h { margin-top: 0; }
 .gallery-note { margin-bottom: var(--s-4); }
+.icon-meaning { margin: 0; }
 .gallery-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-3); margin: 0 0 var(--s-3); }
 .gallery-swatches, .gallery-icons {
   list-style: none; margin: 0; padding: 0;

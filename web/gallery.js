@@ -3,9 +3,10 @@
 // Open /gallery.html. It is not linked from the app and makes no API calls:
 // the one live demo (the schedule with its bottom sheet) talks to a fake,
 // in-memory api defined below.
-import { html, raw } from './lib/html.js';
+import { html, raw, esc, attr } from './lib/html.js';
 import { todayString } from './lib/dates.js';
 import { ICON_NAMES, ART_NAMES, iconSlot, watchIcons } from './lib/icons.js';
+import { iconButton } from './lib/iconbutton.js';
 import { avatar } from './lib/avatar.js';
 import { toast, toasts } from './lib/toast.js';
 import { skeleton, emptyState } from './lib/ui.js';
@@ -113,6 +114,18 @@ export function demoApi(d) {
   };
 }
 
+const NEW_ICONS = [
+  ['key', 'a password or credential'],
+  ['shield', 'protection, privacy, safety'],
+  ['user-off', 'a person who is unavailable'],
+  ['user-check', 'a person confirmed or approved'],
+  ['list-check', 'items checked off a list'],
+  ['send', 'send, submit, dispatch'],
+  ['refresh', 'reload or recalculate'],
+  ['filter', 'narrow a list down'],
+  ['dot', 'a small status point'],
+];
+
 // ---------- gallery pieces ----------
 
 const TOKENS = ['bg', 'surface', 'surface-2', 'text', 'muted', 'accent', 'accent-2', 'accent-soft',
@@ -158,7 +171,15 @@ function components(d) {
   </p></div>`, 'Every chip has a symbol and words, never colour alone.')}
   ${section('avatars', 'Avatars', html`<div class="card"><p class="gallery-row">${names.map((n) => html`<span class="gallery-avatar">${avatar(n)}<span class="hint">${n}</span></span>`)}</p>
     <p class="gallery-row">${avatar('Priya Demo', 'sm')} ${avatar('Priya Demo')} ${avatar('Priya Demo', 'lg')}</p></div>`)}
-  ${section('icons', 'Icons', html`<ul class="gallery-icons">${ICON_NAMES.map((n) => html`<li class="gallery-icon">${iconSlot(n, 'icon-lg')}<code>${n}</code></li>`)}</ul>`)}
+  ${section('icons', 'Icons', html`<ul class="gallery-icons">${ICON_NAMES.map((n) => html`<li class="gallery-icon" title="${attr(n)}">${iconSlot(n, 'icon-lg')}<code>${n}</code></li>`)}</ul>`)}
+  ${section('new-icons', 'New icons', html`<p class="hint gallery-note">The nine icons added in this pass, each with what it means.</p>
+    <ul class="gallery-icons">${NEW_ICONS.map(([n, meaning]) => html`<li class="gallery-icon" title="${attr(n)}">${iconSlot(n, 'icon-lg')}<code>${n}</code><span class="hint icon-meaning">${esc(meaning)}</span></li>`)}</ul>`)}
+  ${section('icon-buttons', 'Icon buttons', html`<p class="hint gallery-note">Real buttons built with <code>iconButton()</code>: 48×48, a visible keyboard focus ring, and a danger variant. Tab to them.</p>
+    <div class="card"><p class="gallery-row">
+      ${iconButton('bell', 'Notifications', { dataAction: 'demo' })}
+      ${iconButton('trash', 'Delete service', { dataAction: 'delete-service', danger: true })}
+      ${iconButton('refresh', 'Reload', { disabled: true })}
+    </p></div>`)}
   ${section('segmented', 'Segmented control', html`<div class="card"><div class="segmented" role="group" aria-label="Demo">
     <button type="button" class="segment" aria-pressed="true">Only people trained for this</button>
     <button type="button" class="segment" aria-pressed="false">Show people not trained for this</button></div></div>`)}
