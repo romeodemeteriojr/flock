@@ -709,6 +709,7 @@ th, td { text-align: left; padding: var(--s-2) var(--s-3); border-bottom: 1px so
 .info-card { display: flex; gap: var(--s-3); align-items: flex-start; box-shadow: none; background: var(--surface-2); }
 .info-card p { margin: 0 0 var(--s-2); }
 .info-card p:last-child { margin: 0; }
+.add-person-row { margin-bottom: var(--s-6); }
 .info-icon { width: 1.5rem; height: 1.5rem; color: var(--accent-text); }
 .secret-box { border: 2px solid var(--accent); }
 .secret-box h2 { margin-top: 0; display: flex; gap: var(--s-2); align-items: center; }

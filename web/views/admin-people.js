@@ -195,7 +195,7 @@ export function renderScreen(m) {
           <button type="submit" class="btn btn-primary">Add person</button>
           <button type="button" class="btn" data-action="add-cancel">Cancel</button>
         </div>
-      </form>` : html`<div class="btn-row"><button type="button" class="btn btn-primary" data-action="add-open">${iconSlot('plus')} Add person</button></div>`}
+      </form>` : html`<div class="btn-row add-person-row"><button type="button" class="btn btn-primary" data-action="add-open">${iconSlot('plus')} Add person</button></div>`}
     <div class="card info-card">
       ${iconSlot('info', 'info-icon')}
       <div>
