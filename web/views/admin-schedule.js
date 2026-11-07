@@ -44,6 +44,15 @@ export function buildSchedule(services, teams) {
   return { columns: columns.filter((c) => c.positions.length), rows };
 }
 
+// The Monday after today (today itself is never returned): the default week to fill.
+export function nextMonday(today) {
+  const [y, m, d] = String(today).split('-').map(Number);
+  const dow = new Date(Date.UTC(y, m - 1, d)).getUTCDay(); // 0 = Sunday
+  return addDays(today, ((8 - dow) % 7) || 7);
+}
+
+export const AUTOFILL_MAX_WEEKS = 8;
+
 // The slot as the panel wants it (adds the service's date, time and title).
 export const panelSlot = (slot, svc) => ({ ...slot, date: svc.date, time: svc.time, title: svc.title });
 
@@ -96,6 +105,41 @@ function cards(s, today) {
   </li>`)}</ul>`;
 }
 
+function autofillCard(a) {
+  const busy = a.busy ? 'disabled' : '';
+  const r = a.result;
+  let body = '';
+  if (r) {
+    body = html`<div data-autofill-result>
+      <h3 class="team-title">Who Flock would ask (${r.assigned.length})</h3>
+      ${r.assigned.length ? html`<ul class="list">${r.assigned.map((x) => html`<li data-autofill-slot="${x.slotId}">
+        <span class="num">${formatDate(x.date)} ${formatTime(x.time)}</span>: ${x.teamName} / ${x.positionName}: <strong>${x.personName}</strong>
+      </li>`)}</ul>` : html`<p class="hint">Nobody can be asked for these weeks.</p>`}
+      ${r.unfilled.length ? html`<h3 class="team-title">Still open (${r.unfilled.length})</h3>
+      <ul class="list">${r.unfilled.map((x) => html`<li data-autofill-open="${x.slotId}">
+        <span class="num">${formatDate(x.date)} ${formatTime(x.time)}</span>: ${x.teamName} / ${x.positionName}. <span class="hint">${x.message}</span>
+      </li>`)}</ul>` : ''}
+      <div class="btn-row">
+        ${r.assigned.length ? html`<button type="button" class="btn btn-primary" data-action="autofill-apply" ${busy}>Ask these people</button>` : ''}
+        <button type="button" class="btn" data-action="autofill-cancel" ${busy}>Cancel</button>
+      </div>
+    </div>`;
+  }
+  return html`<section class="card form-card" data-autofill>
+    <h2 class="card-title">Fill open positions</h2>
+    <p class="hint">Flock picks people who are set up for the position, are not away, and have not served more often than they said they can. Nothing changes until you choose "Ask these people".</p>
+    ${toasts([[a.error, 'error']])}
+    <form class="form form-inline" data-form="autofill" novalidate>
+      <div class="field"><label for="af-week">Week starting</label>
+        <input id="af-week" name="weekOf" type="date" required value="${a.weekOf}"></div>
+      <div class="field"><label for="af-weeks">Weeks</label>
+        <select id="af-weeks" name="weeks">${Array.from({ length: AUTOFILL_MAX_WEEKS }, (_, i) => i + 1).map((n) => html`<option value="${n}"${n === a.weeks ? html` selected` : ''}>${n}</option>`)}</select></div>
+      <button type="submit" class="btn btn-primary" ${busy}>Preview</button>
+    </form>
+    ${body}
+  </section>`;
+}
+
 export function renderScreen(m, panelHtml = '') {
   if (m.loading) return String(skeleton('Loading…', 'rows', 6));
   const s = buildSchedule(m.services, m.teams);
@@ -104,6 +148,7 @@ export function renderScreen(m, panelHtml = '') {
     ${toasts([[m.notice, 'ok']])}
     ${panelHtml}
     <p class="hint sched-range">${iconSlot('calendar', 'icon-sm')} <span class="num">${formatDate(m.from)} to ${formatDate(m.to)}</span>. Tap a position to fill it.</p>
+    ${autofillCard(m.autofill ?? { weekOf: '', weeks: 1 })}
     ${s.rows.length ? html`${grid(s, m.today)}${cards(s, m.today)}`
     : emptyState(`No services in the next ${WEEKS} weeks. Add them on the Services page.`, 'art-calendar')}
   `);
@@ -112,7 +157,10 @@ export function renderScreen(m, panelHtml = '') {
 // ---------- screen controller ----------
 
 export function createScreen({ api, root, today = todayString() }) {
-  const m = { services: [], teams: [], loading: true, error: '', notice: '', today, from: today, to: addDays(today, WEEKS * 7 - 1) };
+  const m = {
+    services: [], teams: [], loading: true, error: '', notice: '', today, from: today, to: addDays(today, WEEKS * 7 - 1),
+    autofill: { weekOf: nextMonday(today), weeks: 1, input: null, result: null, busy: false, error: '' },
+  };
   const paint = () => {
     sheet.before();
     root.innerHTML = renderScreen(m, panel.render());
@@ -143,11 +191,63 @@ export function createScreen({ api, root, today = todayString() }) {
     return null;
   }
 
+  async function preview(form) {
+    const a = m.autofill;
+    const weekOf = String(form?.weekOf?.value ?? '').trim();
+    const weeks = Number(form?.weeks?.value ?? 1);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(weekOf)) { a.error = 'Please pick a date.'; paint(); return; }
+    a.weekOf = weekOf;
+    a.weeks = weeks;
+    a.busy = true;
+    a.error = '';
+    a.result = null;
+    m.notice = '';
+    paint();
+    try {
+      const r = await api.post('/api/admin/autofill', { weekOf, weeks, apply: false });
+      a.input = { weekOf, weeks };
+      a.result = { assigned: r?.assigned ?? [], unfilled: r?.unfilled ?? [] };
+    } catch (err) {
+      a.error = String(err?.message || 'Could not plan those weeks.');
+    }
+    a.busy = false;
+    paint();
+  }
+
+  async function applyPlan() {
+    const a = m.autofill;
+    if (!a.input || a.busy) return;
+    a.busy = true;
+    a.error = '';
+    paint();
+    try {
+      const r = await api.post('/api/admin/autofill', { ...a.input, apply: true });
+      const n = r?.assigned?.length ?? 0;
+      a.result = null;
+      a.input = null;
+      m.notice = n === 1 ? 'Asked 1 person. They will see it in My schedule.' : `Asked ${n} people. They will see it in My schedule.`;
+      await reload();
+    } catch (err) {
+      a.error = String(err?.message || 'Could not fill those weeks.');
+    }
+    a.busy = false;
+    paint();
+  }
+
+  root.addEventListener('submit', (e) => {
+    const form = e.target?.closest?.('form[data-form]');
+    if (!form || form.dataset.form !== 'autofill') return undefined;
+    e.preventDefault();
+    return preview(form.elements);
+  });
+
   root.addEventListener('click', (e) => {
     const el = e.target?.closest?.('[data-action]');
     if (!el) return undefined;
     const action = el.dataset.action;
     const id = Number(el.dataset.id);
+    if (action === 'autofill-apply') return applyPlan();
+    if (action === 'autofill-cancel') { m.autofill.result = null; m.autofill.input = null; paint(); return undefined; }
     if (action === 'slot-open') {
       const slot = findSlot(id);
       if (!slot) return undefined;

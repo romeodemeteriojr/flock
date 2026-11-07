@@ -621,3 +621,64 @@ test('reminders: copy button shows a check SVG, then the copy SVG after 1.5s', a
   assert.ok(!btn.innerHTML.includes(CHECK));
   assert.match(btn.innerHTML, /<svg[^>]*>.*rect.*<\/svg><\/span> Copy$/);
 });
+
+// ---------- fill open positions (auto-fill) ----------
+
+test('nextMonday: the Monday after today, never today', () => {
+  assert.equal(schedule.nextMonday('2026-11-04'), '2026-11-09'); // Wednesday
+  assert.equal(schedule.nextMonday('2026-11-08'), '2026-11-09'); // Sunday
+  assert.equal(schedule.nextMonday('2026-11-09'), '2026-11-16'); // Monday
+  assert.equal(schedule.nextMonday('2026-12-31'), '2027-01-04'); // across the year
+});
+
+const PLAN = {
+  applied: false, weekOf: '2026-11-09', weeks: 2,
+  assigned: [{ slotId: 4, serviceId: 1, date: '2026-11-15', time: '09:00', serviceTitle: 'Sunday service', teamName: 'Band', positionName: 'Keys', personId: 30, personName: '<b>Sam</b> Ortiz', everyWeeks: 2 }],
+  unfilled: [{ slotId: 5, serviceId: 2, date: '2026-11-15', time: '09:00', serviceTitle: 'Sunday service', teamName: 'Sound', positionName: 'Mixer', reason: 'nobody_qualified', message: 'Nobody is set up for Mixer' }],
+};
+
+test('schedule: fill open positions previews, then asks, then reloads', async () => {
+  const { api, root } = await schedSetup({
+    'POST /api/admin/autofill': (body) => (body.apply ? { ...PLAN, applied: true } : PLAN),
+  });
+  assert.match(root.innerHTML, /Fill open positions/);
+  assert.match(root.innerHTML, /name="weekOf" type="date" required value="2026-11-09"/);
+  assert.match(root.innerHTML, /<option value="1" selected>1<\/option>/);
+
+  await root.submit('autofill', { weekOf: '2026-11-09', weeks: '2' });
+  await flush();
+  assert.deepEqual(api.calls, ['POST /api/admin/autofill {"weekOf":"2026-11-09","weeks":2,"apply":false}']);
+  const h = root.innerHTML;
+  assert.match(h, /Who Flock would ask \(1\)/);
+  assert.match(h, /&lt;b&gt;Sam&lt;\/b&gt; Ortiz/);
+  assert.match(h, /Still open \(1\)/);
+  assert.match(h, /Nobody is set up for Mixer/);
+  assert.match(h, /<option value="2" selected>2<\/option>/);
+
+  api.calls.length = 0;
+  await root.click('autofill-apply');
+  await flush();
+  assert.equal(api.calls[0], 'POST /api/admin/autofill {"weekOf":"2026-11-09","weeks":2,"apply":true}');
+  assert.ok(api.calls.includes('GET /api/teams') && api.calls.includes(SCHED_PATH), 'the schedule reloads');
+  assert.match(root.innerHTML, /Asked 1 person\. They will see it in My schedule\./);
+  assert.doesNotMatch(root.innerHTML, /data-autofill-result/);
+});
+
+test('schedule: fill open positions: bad date, cancel and a server error', async () => {
+  const { api, root } = await schedSetup({ 'POST /api/admin/autofill': PLAN });
+  await root.submit('autofill', { weekOf: '', weeks: '1' });
+  assert.match(root.innerHTML, /Please pick a date\./);
+  assert.equal(api.calls.length, 0);
+
+  await root.submit('autofill', { weekOf: '2026-11-09', weeks: '1' });
+  await flush();
+  assert.match(root.innerHTML, /data-autofill-result/);
+  await root.click('autofill-cancel');
+  assert.doesNotMatch(root.innerHTML, /data-autofill-result/);
+  assert.equal(api.calls.filter((c) => c.includes('"apply":true')).length, 0, 'cancel asks nobody');
+
+  const bad = await schedSetup({ 'POST /api/admin/autofill': new ApiError({ status: 400, message: 'Those weeks are already over' }) });
+  await bad.root.submit('autofill', { weekOf: '2026-11-02', weeks: '1' });
+  await flush();
+  assert.match(bad.root.innerHTML, /Those weeks are already over/);
+});
