@@ -3,6 +3,7 @@
 // shows a plain "Are you sure?" step; nothing is sent until the person says yes.
 import { html, raw } from '../lib/html.js';
 import { iconSlot } from '../lib/icons.js';
+import { iconButton } from '../lib/iconbutton.js';
 import { avatar } from '../lib/avatar.js';
 import { toasts } from '../lib/toast.js';
 import { skeleton, emptyState, pageHead } from '../lib/ui.js';
@@ -138,7 +139,8 @@ function personRow(p, m) {
   }
   const roleButton = !p.active ? ''
     : p.id === m.me ? html`<span class="hint">That's you</span>`
-      : html`<button type="button" class="btn btn-sm" data-action="role-ask" data-id="${p.id}">${nextRole(p) === 'admin' ? 'Make scheduler' : 'Make volunteer'}</button>`;
+      : iconButton('shield', nextRole(p) === 'admin' ? 'Make scheduler' : 'Make volunteer', { dataAction: 'role-ask', dataId: p.id });
+  const activeButton = iconButton(p.active ? 'user-off' : 'user-check', p.active ? 'Deactivate' : 'Reactivate', { dataAction: 'active-ask', dataId: p.id, danger: p.active });
   return html`<li data-person="${p.id}">
     <div class="person${p.active ? '' : ' is-inactive'}">
       ${avatar(p.name)}
@@ -150,10 +152,10 @@ function personRow(p, m) {
     </div>
     <div class="btn-row btn-row-compact">
       ${roleButton}
-      <button type="button" class="btn btn-sm" data-action="edit" data-id="${p.id}">Edit name</button>
-      <button type="button" class="btn btn-sm" data-action="positions" data-id="${p.id}">What can they do?</button>
-      <button type="button" class="btn btn-sm" data-action="reset-ask" data-id="${p.id}">Reset password</button>
-      <button type="button" class="btn btn-sm ${p.active ? 'btn-danger' : ''}" data-action="active-ask" data-id="${p.id}">${p.active ? 'Deactivate' : 'Reactivate'}</button>
+      ${iconButton('edit', 'Edit name', { dataAction: 'edit', dataId: p.id })}
+      ${iconButton('list-check', 'What can they do?', { dataAction: 'positions', dataId: p.id })}
+      ${iconButton('key', 'Reset password', { dataAction: 'reset-ask', dataId: p.id })}
+      ${activeButton}
     </div>
     ${extra}
   </li>`;
