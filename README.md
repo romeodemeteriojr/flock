@@ -117,7 +117,9 @@ Everyone sees:
 
 - **My schedule** shows the times you are asked to serve, and who else is
   serving with you. Tap **Yes, I can** or **I can't**. You can also change
-  your mind later.
+  your mind later. Tap **Full roster** on a card to see everyone serving that
+  day: every service, team and position, who has said yes, who has not
+  answered yet, and which positions are still open (names only).
 - **Days I can't serve** is where you add the dates you are away (up to a
   year at a time), with a reason if you like. Flock will not suggest you to
   the scheduler for those days. If you are already scheduled on one of those days,
@@ -128,14 +130,20 @@ Everyone sees:
 
 Schedulers also see:
 
+Long lists stay short to read: tap a person, a position or a service to see
+its buttons (one at a time; tap it again to hide them), and tap a team or a
+date to open it.
+
 - **People** lets you add people, set what they can do, reset logins, make
   someone a scheduler, and deactivate or reactivate people.
 - **Teams** lets you create teams and the positions in each team (for example
-  Band: Vocals, Guitar, Drums).
+  Band: Vocals, Guitar, Drums). Each team opens to show its positions and how
+  many people can do each.
 - **Services** lets you add service dates with the positions you need. You
   can repeat a service weekly for several weeks.
-- **Schedule** is a grid of the next 8 weeks. Click a position to put someone
-  in it. Flock suggests people who are set up for that position, are not
+- **Schedule** is a grid of the next 8 weeks (on a phone, one card per date,
+  closed, saying how many positions are open, waiting and confirmed; tap it
+  to see them). Click a position to put someone in it. Flock suggests people who are set up for that position, are not
   away, and have not served too often lately. It warns you about clashes
   (away that day, not set up for that position, already serving that
   morning). You can still go ahead if you really mean to.
@@ -147,9 +155,10 @@ Schedulers also see:
   ago. Nobody is asked until you choose **Ask these people**; then they see it
   in My schedule as waiting for their answer. Positions nobody can fill stay
   empty and show on the Gaps page.
-- **Gaps** shows the next 4 weeks of positions that still need attention:
-  empty, declined, not answered, held by someone who is away, or by someone
-  who is no longer active. It also writes **reminder messages** for a chosen
+- **Gaps** shows the next 4 weeks of positions that still need attention,
+  grouped per service (each roster day), each marked with why: empty,
+  declined, not answered, held by someone who is away, or by someone who is
+  no longer active. It also writes **reminder messages** for a chosen
   week. Copy them into your usual messages app. Flock never sends messages
   itself.
 

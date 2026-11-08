@@ -145,7 +145,10 @@ Use the laptop. Keep the terminal window open.
 
 1. Click **People** in the menu. You should see Demo Admin and the twelve other
    demo people, each with a coloured circle with initials, **Volunteer** or
-   **Scheduler**, and buttons.
+   **Scheduler**, and a small arrow, but no buttons. Tap a row: its buttons
+   appear under it (**Edit name**, **What can they do?** and so on, each with a
+   picture and words). Tap another row: the first one closes. Tap it again to
+   close it.
 2. Click **Add person**. In the Name box type `Pat Example`, and in the Email
    box `pat.example@example.com`.
 3. Clear the name and click the **Add person** button inside the form. You should
@@ -155,8 +158,8 @@ Use the laptop. Keep the terminal window open.
    email and a one-time link, and **Copy message**. Click it and save the
    message privately. Only one Pat Example should have been added; their row
    says **Not joined yet**. A localhost warning means this link only works on
-   the laptop: use the laptop's network address from A3 and **Copy new invite**
-   before sending the message to a phone.
+   the laptop: use the laptop's network address from A3, tap Pat's row and
+   choose **Copy new invite** before sending the message to a phone.
 6. Click **Done**. The invite box should disappear. Making another invite
    cancels the previous link.
 7. Add `Quinn Example` (`quinn.example@example.com`) the same way and save
@@ -177,21 +180,24 @@ Use the laptop. Keep the terminal window open.
 1. Click **Teams** (on a phone: **More**, then **Teams**).
 2. Click **Add team** with the box empty. You should see **Please type a name.**
 3. Type `Ushers` and click **Add team**. You should see **Team added.** and a
-   new **Ushers** card saying **No positions yet.**
+   new **Ushers** card, already open, saying **No positions yet.**
 4. On the Ushers card click **Add position**, type `Door`, and click
    **Add position**. You should see **Position added.** and **Door** with
    **Nobody is qualified yet**.
-5. Try **Rename** on Door and then **Cancel**. Nothing should change.
+5. Tap **Door**. **Edit name** (a pencil) and **Delete** (a bin, in red) appear.
+   Try **Edit name** and then **Cancel**. Nothing should change.
+6. Reload the page. Every team is closed and says how many positions it has
+   (Ushers: **1 position**). Tap **Ushers** to open it again.
 
 - [ ] Pass   [ ] Fail   Notes: ______________________________
 
 ### 5. Say who can do the new position
 
-1. Go to **People**. On Pat Example's row click **What can they do?**.
+1. Go to **People**. Tap Pat Example's row, then click **What can they do?**.
 2. You should see a list of every position, grouped by team, with tick boxes.
    Tick **Door** and click **Save**. You should see **Saved what Pat Example can do.**
 3. Do the same for Quinn Example.
-4. Go back to **Teams**. Door should now say **2 people can do this**.
+4. Go back to **Teams** and open **Ushers**. Door should now say **2 people can do this**.
 
 - [ ] Pass   [ ] Fail   Notes: ______________________________
 
@@ -207,7 +213,7 @@ Use the laptop. Keep the terminal window open.
 4. Click **Add service** (try double-clicking). You should see **Service added
    for** that date, and the new service in the list: **Practice service**, with
    **Greeters: Welcome. Ushers: Door.** Only one should be added.
-5. On the new service click **Repeat for more weeks**, type `2`, and click
+5. Tap the new service, click **Repeat for more weeks**, type `2`, and click
    **Repeat**. You should see **Added 2 more services.** Now there are three
    Practice services, one week apart.
 6. Try to add a service with **How many Door** set to `0`. You should see
@@ -218,9 +224,12 @@ Use the laptop. Keep the terminal window open.
 
 ### 7. Assign volunteers
 
-1. Click **Schedule**. You should see a grid of the next 8 weeks. On a phone it
-   becomes cards. Each position shows a person with a word such as **Confirmed**,
-   **Waiting for answer** or **Declined**, or **Nobody yet**.
+1. Click **Schedule**. You should see a grid of the next 8 weeks. Each position
+   shows a person with a word such as **Confirmed**, **Waiting for answer** or
+   **Declined**, or **Nobody yet**. On a phone it becomes one card per date,
+   closed, saying how many positions are **open**, **waiting**, **confirmed** and
+   **declined**. Tap a card to see its positions; it stays open while you assign
+   people. Tap it again to close it.
 2. Find the first Practice service. Click its **Door** position (Nobody yet).
 3. A panel opens: **Who could do this**, with Pat Example and Quinn Example,
    each with reasons such as "Has never served". The cursor should be on the
@@ -241,8 +250,10 @@ Use the laptop. Keep the terminal window open.
 ### 8. Gaps, suggestions and reminders
 
 1. Click **Gaps**. You should see **Next 4 weeks** and five counts: **Nobody yet,
-   Said no, Hasn't answered, Now away, No longer active**. Below, each kind has
-   a list that says what to do.
+   Said no, Hasn't answered, Now away, No longer active**. Below, the gaps are
+   grouped per service (date and time, with how many gaps it has), in date
+   order. Each position says what kind of gap it is, with the person's name
+   when there is one (for example **Said no** and who said it).
 2. Find the **Welcome (Greeters)** gap in the first Practice service. Click it.
    The same panel opens. Click **Assign** on the first suggested person. You
    should see their name is now on it, and the **Nobody yet** count goes down by one.
@@ -278,7 +289,7 @@ laptop.
    such as **You're serving this Sunday as Door at 9:00 am** (or **Next time
    you serve: Sun 22 Nov, Door**), then **Coming up** with a card for each of the
    three Practice services. Each card shows the date, the time, the position
-   and team, and **Please answer**.
+   and team, **Please answer**, and **Full roster**.
 4. At the bottom there is a bar with **My schedule** and **Days off** only.
    There are no scheduler pages. Type `#/people` at the end of the address; you
    should be sent back to My schedule.
@@ -288,15 +299,21 @@ laptop.
 ### 10. Accept and decline
 
 1. On the first card tap **Yes, I can** (try double-tapping). You should see
-   **Thank you! You are confirmed.** and the card now says **Confirmed**.
-2. On the second card tap **I can't**. You should see **Thanks for letting us
+   **Thank you! You are confirmed.** and the card now says **Confirmed**. It
+   stays under **Coming up**.
+2. On that card tap **Full roster**. You should see everyone serving that day:
+   each service, each team and position, each person's name with **Confirmed**
+   or **Waiting for answer**, empty positions as **Open**, and your own position
+   as **You**. Nobody's email is shown. Tap **Full roster** again to close it.
+3. On the second card tap **I can't**. You should see **Thanks for letting us
    know. Your scheduler will find someone else.** and that card disappears.
-3. Back on the laptop, open **Gaps**. The count of **Said no** should have gone up
-   by one, and the position Pat declined should be listed under **Said no**.
-4. On the phone, on the Confirmed card tap **I can't make it after all**. You
+4. Back on the laptop, open **Gaps**. The count of **Said no** should have gone up
+   by one, and the position Pat declined should be listed under its service,
+   marked **Said no** with Pat's name.
+5. On the phone, on the Confirmed card tap **I can't make it after all**. You
    should see **Are you sure you can't serve on ...?**
-5. Tap **No, keep me on**. The question goes away and the card stays Confirmed.
-6. Tap **I can't make it after all** again and then **Yes, I can't make it**. The
+6. Tap **No, keep me on**. The question goes away and the card stays Confirmed.
+7. Tap **I can't make it after all** again and then **Yes, I can't make it**. The
    card should disappear.
 
 - [ ] Pass   [ ] Fail   Notes: ______________________________
@@ -327,9 +344,9 @@ Back on the laptop, logged in as the scheduler.
 
 ### 12. Change someone's access level
 
-1. Go to **People**. Your own row (Demo Admin) says **That's you** and has no
-   "Make volunteer" button. That is on purpose.
-2. On Pat Example's row click **Make scheduler**. You should see **Make Pat
+1. Go to **People**. Your own row (Demo Admin) says **That's you**. Tap it: it
+   has no "Make volunteer" button. That is on purpose.
+2. Tap Pat Example's row and click **Make scheduler**. You should see **Make Pat
    Example a scheduler? ...** with two buttons.
 3. Click **No, go back**. Nothing changes.
 4. Click **Make scheduler** again, then **Yes, make a scheduler**. You should see
@@ -339,14 +356,14 @@ Back on the laptop, logged in as the scheduler.
 6. Back on the laptop click **Make volunteer** on Pat, then **Yes, make a
    volunteer**. You should see **Pat Example is now a volunteer.** Reload on the
    phone. The scheduler pages are gone again.
-7. Try **Deactivate** on your own row, then **Yes, deactivate**. You should see
+7. Tap your own row, try **Deactivate**, then **Yes, deactivate**. You should see
    **You can't deactivate your own account.**
 
 - [ ] Pass   [ ] Fail   Notes: ______________________________
 
 ### 13. Deactivate and reactivate a person
 
-1. On Pat's row click **Deactivate**. You should see **Deactivate Pat Example? They
+1. Tap Pat's row and click **Deactivate**. You should see **Deactivate Pat Example? They
    will not be able to log in ... Nothing is deleted ...**
 2. Click **No, go back**, then **Deactivate** again, then **Yes, deactivate**. You
    should see **Pat Example is deactivated. Their history is kept.** and a red
@@ -363,7 +380,7 @@ Back on the laptop, logged in as the scheduler.
 
 ### 14. Reset a login
 
-1. On the laptop, on Pat's row click **Edit name**: the email cannot be changed
+1. On the laptop, tap Pat's row and click **Edit name**: the email cannot be changed
    because Pat has joined. Cancel. Click **Reset login**. The confirmation
    should say that Pat's password and any linked sign-in stop working right
    away and Pat is logged out everywhere.
@@ -431,8 +448,10 @@ Put the mouse and trackpad aside. Use only **Tab**, **Shift+Tab**, **Enter**,
 4. Open a position in **Schedule** with Enter. The panel opens and the focus is
    inside it. Tab should stay inside the panel, never behind it. Press **Escape**.
    The panel closes and the focus goes back to the position you opened.
-5. On **Teams**, press Tab until you reach **Delete team**. Press Enter. You get a
-   question first. Press Tab to **No, go back** and Enter.
+5. On **Teams**, press Tab to a team and press Enter: it opens (Enter again closes
+   it). Tab on to **Delete team** and press Enter. You get a question first.
+   Press Tab to **No, go back** and Enter. On **People**, Enter on a row shows its
+   buttons the same way.
 6. You should never lose track of where you are (no moment with no outline), and
    you should never get stuck.
 
@@ -449,8 +468,9 @@ part. Skip it for now and tick **Skipped**.
    and button should say what it is for, never just "edit text" or "button".
 2. When you log in with a wrong password, the message **Wrong email or
    password** should be read out without you moving.
-3. On **People**, each button should say what it does, for example **Reset
-   password**. When there is a name with it you should know whose it is, either
+3. On **People**, each row should say whether it is open (expanded) or closed
+   (collapsed), and each button should say what it does, for example **Reset
+   login**. When there is a name with it you should know whose it is, either
    from the row you are in or from the words around it. Note any that you cannot
    tell apart.
 4. After changing page the reader should announce the new page heading.
@@ -502,7 +522,7 @@ says why it did not.
    green or red messages should not pile up. After you log out, Back should
    never show you scheduler pages.
 3. **Two tabs.** Open Flock in two tabs. In tab 1 delete a service. In tab 2,
-   without reloading, click **Delete** on the same service and confirm. You should
+   without reloading, tap the same service, click **Delete** and confirm. You should
    see a plain message, and the page should still work. In tab 2 also try
    changing someone Tab 1 just deactivated.
 4. **Very long names.** Add a person with a name of 80 letters (it should work)

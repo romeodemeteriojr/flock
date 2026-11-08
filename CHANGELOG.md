@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+### Volunteers see the full roster of their days (Decision 0007)
+
+- My schedule: each card has **Full roster**, everyone serving that day (every service, team and position), who said yes, who has not answered and which positions are open. Names only; someone who said no is not named. The confirmed card stays under Coming up, as before.
+- `GET /api/me/schedule` adds `rosters`, keyed by date, for the days the volunteer is asked or confirmed, and no other day.
+
+### Calmer long lists for schedulers
+
+- People, Services and the positions on Teams: tap a row to see its buttons (one row at a time, tap again to hide them). The buttons have words as well as pictures. Rename is now **Edit name** with a pencil, and Delete is a real red button with a bin.
+- Teams start closed and say how many positions they have; a new team opens by itself.
+- Schedule on a phone: each date is a closed card that says how many positions are open, waiting, confirmed and declined. Tap to see them; it stays open while you assign.
+- Gaps are grouped per service (each roster day, with a count), each position marked with its kind of gap. `GET /api/admin/gaps` now sorts by date, time, team and position.
+
 ## 0.3.0
 
 Breaking: needs a fresh database (see below). First release deployed to Fly.io (`flock-CHANGE-ME`, Sydney) by the Deploy workflow.
