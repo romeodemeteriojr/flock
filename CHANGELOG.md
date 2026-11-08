@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.4.0
+
+No database changes: it deploys over 0.3.0 as it is.
 
 ### Volunteers see the full roster of their days (Decision 0007)
 
