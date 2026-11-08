@@ -4,7 +4,7 @@ app = 'flock-CHANGE-ME'
 
 # Pick the Fly region closest to your church (run `fly platform regions` to list them,
 # for example 'iad' for Virginia or 'lhr' for London). Replace the placeholder.
-primary_region = 'CHANGE-ME'
+primary_region = 'syd'
 
 # IMPORTANT: Flock uses ONE SQLite file on ONE volume, so it must run exactly ONE machine.
 # NEVER scale to 2 machines (`fly scale count 2`): each would have its own, different database.
@@ -21,6 +21,7 @@ primary_region = 'CHANGE-ME'
   FLOCK_SECURE_COOKIES = '1'
   # Fly's proxy sets Fly-Client-IP; without this every visitor shares one IP for the sign-in limits.
   FLOCK_TRUST_PROXY = '1'
+  FLOCK_PUBLIC_URL = 'https://<app>.fly.dev'
 
 [mounts]
   source = 'flock_data'

@@ -633,7 +633,7 @@ test('serve logs startup and shuts down cleanly on SIGTERM', { skip: process.pla
     assert.ok(msgs.includes('flock stopping'));
     assert.ok(msgs.includes('flock stopped'));
     const started = events.find((e) => e.msg === 'flock started');
-    assert.equal(started.version, '0.2.0');
+    assert.equal(started.version, '0.3.0');
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

@@ -67,7 +67,7 @@ test('deploy.yml is manual only with a required tag input', () => {
   assert.match(t, /superfly\/flyctl-actions\/setup-flyctl/);
   assert.match(t, /flyctl volumes snapshots create/);
   assert.match(t, /flyctl volumes list.*--json/);
-  assert.match(t, /flyctl deploy --remote-only/);
+  assert.match(t, /flyctl deploy --remote-only --ha=false/);
   assert.match(t, /\/api\/health/);
   assert.match(t, /ROLLBACK/);
   assert.match(t, /flyctl releases/);

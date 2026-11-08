@@ -1,6 +1,16 @@
 # Changelog
 
-## Unreleased
+## 0.3.0
+
+Breaking: needs a fresh database (see below). First release deployed to Fly.io (`flock-CHANGE-ME`, Sydney) by the Deploy workflow.
+
+### Also
+
+- New Flock mark (a flock of birds in a V that is also a church roof), favicon and iPhone home-screen icon.
+- Privacy page (`/privacy.html`), linked from the login page.
+- iPhone: date fields no longer overflow narrow boxes.
+- Fly: sleeps when idle; sign-in limits are per visitor behind Fly's proxy (`FLOCK_TRUST_PROXY`).
+
 
 ### Email logins and single sign-on, Google first (Decision 0006)
 

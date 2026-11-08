@@ -13,16 +13,20 @@ const dockerfile = read('Dockerfile');
 const ok = (over = {}) => checkConfig({ fly, dockerfile, ...over });
 const bad = (over) => checkConfig({ fly, dockerfile, ...over });
 
-test('check-config passes on the repo files, and the placeholder only fails in production', () => {
+test('check-config passes on the repo files (also for production), and a placeholder only fails in production', () => {
   assert.deepEqual(ok(), []);
-  assert.ok(ok({ production: true }).some((p) => /placeholder/.test(p)));
-  assert.deepEqual(ok({ production: true, fly: fly.replace('flock-CHANGE-ME', 'grace-flock').replace("'CHANGE-ME'", "'iad'") }), []);
+  assert.deepEqual(ok({ production: true }), []);
+  const template = fly.replace(/^app = '.*'$/m, "app = 'flock-CHANGE-ME'").replace(/^primary_region = '.*'$/m, "primary_region = 'CHANGE-ME'");
+  assert.deepEqual(ok({ fly: template }), []);
+  const problems = ok({ production: true, fly: template });
+  assert.ok(problems.some((p) => /app name is still the placeholder/.test(p)));
+  assert.ok(problems.some((p) => /primary_region is still the placeholder/.test(p)));
 });
 
 test('check-config script runs as a command', () => {
   const run = (...a) => spawnSync(process.execPath, [`${root}scripts/check-config.js`, ...a], { encoding: 'utf8' });
   assert.equal(run().status, 0);
-  assert.equal(run('--production').status, 1);
+  assert.equal(run('--production').status, 0);
 });
 
 test('check-config fails on bad variants', () => {
@@ -64,7 +68,8 @@ test('.dockerignore lists the required entries', () => {
 });
 
 test('fly.toml has the required sections', () => {
-  assert.match(fly, /^app = 'flock-CHANGE-ME'/m);
+  assert.match(fly, /^app = '[a-z0-9-]+'$/m);
+  assert.match(fly, /^primary_region = '[a-z]{3}'$/m);
   assert.match(fly, /GLOBALLY UNIQUE/);
   assert.match(fly, /^primary_region = /m);
   assert.match(fly, /\[build\]\s+dockerfile = 'Dockerfile'/);
