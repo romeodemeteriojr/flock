@@ -63,10 +63,16 @@ jobs:
             echo "No volume named $VOLUME_NAME found. Refusing to deploy without a snapshot." >&2
             exit 1
           fi
-          flyctl volumes snapshots create "$VOLUME_ID" -a "$APP" || {
-            echo "Could not create a snapshot. Refusing to deploy." >&2
-            exit 1
-          }
+          if ! OUT=$(flyctl volumes snapshots create "$VOLUME_ID" -a "$APP" 2>&1); then
+            echo "$OUT" >&2
+            # A volume no machine has used yet holds no data (first deploy), so there is nothing to lose.
+            if printf '%s' "$OUT" | grep -q 'uninitialized volume'; then
+              echo "The volume has never been used (first deploy), so there is nothing to snapshot."
+            else
+              echo "Could not create a snapshot. Refusing to deploy." >&2
+              exit 1
+            fi
+          fi
       - name: Deploy
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}

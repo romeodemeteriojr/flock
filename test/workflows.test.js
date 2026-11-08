@@ -66,6 +66,9 @@ test('deploy.yml is manual only with a required tag input', () => {
   assert.match(t, /check-config\.js --production/);
   assert.match(t, /superfly\/flyctl-actions\/setup-flyctl/);
   assert.match(t, /flyctl volumes snapshots create/);
+  // Only a never-used volume (first deploy) may skip the snapshot; any other failure stops the deploy.
+  assert.match(t, /grep -q 'uninitialized volume'/);
+  assert.match(t, /Could not create a snapshot\. Refusing to deploy\.[\s\S]*?exit 1/);
   assert.match(t, /flyctl volumes list.*--json/);
   assert.match(t, /flyctl deploy --remote-only --ha=false/);
   assert.match(t, /\/api\/health/);
