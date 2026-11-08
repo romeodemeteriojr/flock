@@ -1,8 +1,8 @@
-// Google sign-in and logging in with an email (decision 0006).
+// Single sign-on (Google today) and logging in with an email (decision 0006).
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { loadConfig, validateConfig, ConfigError } from '../src/config.js';
-import { googleOAuth, TOKEN_URL } from '../src/infra/google.js';
+import { ssoProviders, PRESETS } from '../src/infra/oidc.js';
 import { startTestApp } from './helpers/app.js';
 import { addPerson } from './helpers/seed.js';
 
@@ -23,12 +23,12 @@ function fakeGoogle(claimsFor) {
     if (!claims) return { ok: false, status: 400, json: async () => ({}) };
     return { ok: true, status: 200, json: async () => ({ id_token: idToken(claims) }) };
   };
-  return { calls, google: googleOAuth({ clientId: CLIENT, clientSecret: 'shh', fetch }) };
+  return { calls, sso: ssoProviders({ google: { clientId: CLIENT, clientSecret: 'shh' } }, { fetch }) };
 }
 
 async function boot(claimsFor = () => null) {
   const fake = fakeGoogle(claimsFor);
-  const t = await startTestApp({ now: () => NOW, container: { google: fake.google } });
+  const t = await startTestApp({ now: () => NOW, container: { sso: fake.sso } });
   return { ...t, calls: fake.calls };
 }
 
@@ -44,24 +44,28 @@ async function signIn(t, code, { tamperState = false } = {}) {
 }
 const sessionOf = (res) => (res.headers['set-cookie'] ?? []).find((c) => c.startsWith('flock_session=') && !c.startsWith('flock_session=;'));
 
-test('config: Google needs both id and secret, or neither', () => {
-  assert.equal(loadConfig({}).googleClientId, undefined);
+test('config: a provider needs both id and secret, or neither; unknown providers are refused', () => {
+  assert.deepEqual(ssoProviders(loadConfig({}).sso), {});
   const c = loadConfig({ FLOCK_GOOGLE_CLIENT_ID: ' id ', FLOCK_GOOGLE_CLIENT_SECRET: 's' });
-  assert.equal(c.googleClientId, 'id');
-  assert.throws(() => validateConfig({ ...loadConfig({}), googleClientId: 'id' }), ConfigError);
+  assert.deepEqual(c.sso.google, { clientId: 'id', clientSecret: 's' });
+  assert.deepEqual(Object.keys(ssoProviders(c.sso)), ['google']);
+  assert.throws(() => validateConfig({ ...loadConfig({}), sso: { google: { clientId: 'id' } } }), ConfigError);
+  assert.throws(() => validateConfig({ ...loadConfig({}), sso: { nope: {} } }), ConfigError);
 });
 
-test('options: the Google button only shows when it is set up', async () => {
+test('options: only set-up providers are listed; others are 404', async () => {
   const off = await startTestApp();
   const on = await boot();
   try {
-    assert.deepEqual((await off.request('GET', '/api/auth/options')).json, { google: false });
+    assert.deepEqual((await off.request('GET', '/api/auth/options')).json, { providers: [] });
     assert.equal((await off.request('GET', '/api/auth/google')).status, 404);
-    assert.deepEqual((await on.request('GET', '/api/auth/options')).json, { google: true });
+    assert.deepEqual((await on.request('GET', '/api/auth/options')).json, { providers: [{ id: 'google', label: 'Google' }] });
+    assert.equal((await on.request('GET', '/api/auth/nope')).status, 404);
+    assert.equal((await on.request('GET', '/api/auth/nope/callback?code=a&state=b')).headers.location, '/#/login?signin=failed');
   } finally { await off.close(); await on.close(); }
 });
 
-test('start: redirects to Google with state, and the same state in a short HttpOnly cookie', async () => {
+test('start: redirects to the provider with state, and the same state in a short HttpOnly cookie', async () => {
   const t = await boot();
   try {
     const r = await t.request('GET', '/api/auth/google', { headers: { Host: 'localhost:8080' } });
@@ -71,7 +75,7 @@ test('start: redirects to Google with state, and the same state in a short HttpO
     assert.equal(u.searchParams.get('redirect_uri'), 'http://localhost:8080/api/auth/google/callback');
     assert.equal(u.searchParams.get('scope'), 'openid email');
     const c = r.headers['set-cookie'][0];
-    assert.match(c, new RegExp(`^flock_google_state=${u.searchParams.get('state')}; HttpOnly; SameSite=Lax; Path=/api/auth/google; Max-Age=600`));
+    assert.match(c, new RegExp(`^flock_sso_state=${u.searchParams.get('state')}; HttpOnly; SameSite=Lax; Path=/api/auth/google; Max-Age=600`));
   } finally { await t.close(); }
 });
 
@@ -85,7 +89,7 @@ test('a known, active email logs in; the code is exchanged with our secret', asy
     assert.equal(r.headers.location, '/#/');
     const s = sessionOf(r);
     assert.ok(s, 'session cookie set');
-    assert.equal(t.calls[0].url, TOKEN_URL);
+    assert.equal(t.calls[0].url, PRESETS.google.tokenUrl);
     assert.equal(t.calls[0].body.get('client_secret'), 'shh');
     assert.equal(t.calls[0].body.get('redirect_uri'), 'http://localhost:8080/api/auth/google/callback');
     const me = await t.request('GET', '/api/me', { cookie: s.split(';')[0] });
@@ -93,7 +97,7 @@ test('a known, active email logs in; the code is exchanged with our secret', asy
   } finally { await t.close(); }
 });
 
-test('someone who never joined joins through Google: no password needed, invite used up', async () => {
+test('someone who never joined joins through a provider: no password needed, invite used up', async () => {
   const t = await boot(() => good('new@example.com'));
   try {
     const id = await addPerson(t, { name: 'New', username: 'new', password: null });
@@ -129,12 +133,12 @@ test('refused, always with the same answer: unknown, unverified, deactivated, wr
     for (const [code, opts, why] of cases) {
       const r = await signIn(t, code, opts);
       assert.equal(r.status, 302, code);
-      assert.equal(r.headers.location, `/#/login?google=${why}`, code);
+      assert.equal(r.headers.location, '/#/login?signin=failed', code);
       assert.equal(sessionOf(r), undefined, `${code} must not log in`);
     }
     // No state cookie at all.
     const r = await t.request('GET', '/api/auth/google/callback?code=ok&state=x');
-    assert.equal(r.headers.location, '/#/login?google=failed');
+    assert.equal(r.headers.location, '/#/login?signin=failed');
   } finally { await t.close(); }
 });
 

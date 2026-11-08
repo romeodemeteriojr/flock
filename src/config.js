@@ -1,3 +1,4 @@
+import { PRESETS } from './infra/oidc.js';
 export function loadConfig(env = process.env) {
   const port = Number.parseInt(env.FLOCK_PORT, 10);
   return validateConfig({
@@ -8,8 +9,10 @@ export function loadConfig(env = process.env) {
     publicUrl: env.FLOCK_PUBLIC_URL ? env.FLOCK_PUBLIC_URL.trim().replace(/\/+$/, '') : undefined,
     unansweredDays: 3,
     sessionDays: 14,
-    googleClientId: env.FLOCK_GOOGLE_CLIENT_ID?.trim() || undefined,
-    googleClientSecret: env.FLOCK_GOOGLE_CLIENT_SECRET?.trim() || undefined,
+    sso: Object.fromEntries(Object.entries(PRESETS).map(([id, p]) => [id, {
+      clientId: env[`${p.env}_CLIENT_ID`]?.trim() || undefined,
+      clientSecret: env[`${p.env}_CLIENT_SECRET`]?.trim() || undefined,
+    }])),
   });
 }
 
@@ -46,8 +49,10 @@ export function validateConfig(config) {
     } catch { /* reported with the other settings below */ }
     if (!ok) problems.push('publicUrl must be a full http:// or https:// address without credentials, a query or a fragment (FLOCK_PUBLIC_URL)');
   }
-  if (!config.googleClientId !== !config.googleClientSecret) {
-    problems.push('Google sign-in needs both FLOCK_GOOGLE_CLIENT_ID and FLOCK_GOOGLE_CLIENT_SECRET, or neither');
+  for (const [id, s] of Object.entries(config.sso ?? {})) {
+    const env = PRESETS[id]?.env;
+    if (!env) problems.push(`sso.${id} is not a known sign-in provider`);
+    else if (!s?.clientId !== !s?.clientSecret) problems.push(`${PRESETS[id].label} sign-in needs both ${env}_CLIENT_ID and ${env}_CLIENT_SECRET, or neither`);
   }
   if (problems.length) throw new ConfigError(problems);
   return config;

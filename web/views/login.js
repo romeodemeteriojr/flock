@@ -3,11 +3,10 @@ import { iconSlot } from '../lib/icons.js';
 
 export const title = 'Log in';
 
-const GOOGLE_ERRORS = {
-  failed: 'Google sign-in did not work. If you are new, ask your scheduler to add your email.',
-};
+const SIGNIN_FAILED = 'That sign-in did not work. If you are new, ask your scheduler to add your email.';
 
-// opts: { error, username, google } so the form can be shown again after a failed try.
+// opts: { error, username, providers } so the form can be shown again after a failed try.
+// providers: [{id, label}] from /api/auth/options, one "Sign in with" button each.
 export function render(state, opts = {}) {
   const error = opts.error ?? '';
   return String(html`
@@ -29,31 +28,31 @@ export function render(state, opts = {}) {
           </div>
           <button type="submit" class="btn btn-primary btn-block btn-lg">Log in</button>
         </form>
-        ${opts.google ? html`<a class="btn btn-block btn-lg" href="/api/auth/google" data-google>Sign in with Google</a>` : ''}
+        ${(opts.providers ?? []).map((p) => html`<a class="btn btn-block btn-lg" href="/api/auth/${encodeURIComponent(p.id)}" data-provider="${p.id}">Sign in with ${p.label}</a>`)}
       </div>
       <p class="hint auth-foot">${iconSlot('lock', 'icon-sm')} Forgot your password? Ask the scheduler to reset it for you.</p>
     </section>
   `);
 }
 
-export function mount(root, ctx, google = null) {
+export function mount(root, ctx, providers = null) {
   const form = root.querySelector('form[data-form="login"]');
   if (!form) return;
   let replaced = false;
-  const again = (error, username, g = google ?? false) => {
+  const again = (error, username, list = providers ?? []) => {
     replaced = true;
-    root.innerHTML = render(ctx.state, { error, username, google: g });
-    mount(root, ctx, g);
+    root.innerHTML = render(ctx.state, { error, username, providers: list });
+    mount(root, ctx, list);
     const pw = root.querySelector('#login-password');
     if (username && pw) pw.focus();
   };
-  if (google === null) {
-    // First mount: show a Google error from the callback, and the button when it is set up.
+  if (providers === null) {
+    // First mount: show a failed sign-in from a provider, and a button per set-up provider.
     const hash = (ctx.win?.location ?? globalThis.location)?.hash ?? '';
-    const err = GOOGLE_ERRORS[new URLSearchParams(hash.split('?')[1] ?? '').get('google')] ?? '';
+    const err = new URLSearchParams(hash.split('?')[1] ?? '').get('signin') === 'failed' ? SIGNIN_FAILED : '';
     Promise.resolve(ctx.api?.get?.('/api/auth/options'))
-      .then((o) => !!o?.google, () => false)
-      .then((g) => { if (!replaced && (g || err)) again(err, '', g); });
+      .then((o) => (Array.isArray(o?.providers) ? o.providers : []), () => [])
+      .then((list) => { if (!replaced && (list.length || err)) again(err, '', list); });
   }
   form.addEventListener('submit', async (e) => {
     e.preventDefault();

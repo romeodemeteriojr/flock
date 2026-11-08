@@ -26,18 +26,18 @@ export function clientIp(req, config) {
   return req.socket?.remoteAddress ?? 'unknown';
 }
 
-const STATE_COOKIE = 'flock_google_state';
-const CALLBACK = '/api/auth/google/callback';
+const STATE_COOKIE = 'flock_sso_state';
 
 // Same base address rule as invite links: FLOCK_PUBLIC_URL, else the request's host.
-// The redirect URI must also be registered with Google, so a forged Host gets nowhere.
-function redirectUri(req, config) {
+// The redirect URI must also be registered with the provider, so a forged Host gets nowhere.
+function redirectUri(req, config, provider) {
   const base = config.publicUrl ?? `${isSecure(req, { config }) ? 'https' : 'http'}://${req.headers.host ?? 'localhost'}`;
-  return `${base}${CALLBACK}`;
+  return `${base}/api/auth/${encodeURIComponent(provider)}/callback`;
 }
 
-function stateCookie(req, ctx, value, maxAge) {
-  return `${STATE_COOKIE}=${value}; HttpOnly; SameSite=Lax; Path=/api/auth/google; Max-Age=${maxAge}${isSecure(req, ctx) ? '; Secure' : ''}`;
+// Scoped to one provider's path, so each provider only ever sees its own state.
+function stateCookie(req, ctx, provider, value, maxAge) {
+  return `${STATE_COOKIE}=${value}; HttpOnly; SameSite=Lax; Path=/api/auth/${encodeURIComponent(provider)}; Max-Age=${maxAge}${isSecure(req, ctx) ? '; Secure' : ''}`;
 }
 
 export function register(router, ctx) {
@@ -82,33 +82,36 @@ export function register(router, ctx) {
     return { status: 200, headers: { 'Set-Cookie': sessionCookie(req, ctx, token) }, json: { person } };
   }, { auth: 'none' });
 
+  // Registered before /api/auth/:provider so "options" is never taken for a provider.
   router.add('GET', '/api/auth/options', () => ({
-    status: 200, json: { google: auth.googleEnabled() },
+    status: 200, json: { providers: auth.ssoProviders() },
   }), { auth: 'none' });
 
-  router.add('GET', '/api/auth/google', ({ req }) => {
-    const { url, state } = auth.googleStart(redirectUri(req, ctx.config));
-    return { status: 302, headers: { Location: url, 'Set-Cookie': stateCookie(req, ctx, state, 600) }, json: {} };
+  router.add('GET', '/api/auth/:provider', ({ req, params }) => {
+    const { url, state } = auth.ssoStart(params.provider, redirectUri(req, ctx.config, params.provider));
+    return { status: 302, headers: { Location: url, 'Set-Cookie': stateCookie(req, ctx, params.provider, state, 600) }, json: {} };
   }, { auth: 'none' });
 
-  // Google sends the browser back here. Every outcome is a redirect into the app.
-  router.add('GET', CALLBACK, async ({ req, query }) => {
-    const clear = stateCookie(req, ctx, '', 0);
+  // The provider sends the browser back here. Every outcome is a redirect into the app,
+  // and every refusal looks the same: never reveal who is in Flock.
+  router.add('GET', '/api/auth/:provider/callback', async ({ req, params, query }) => {
+    const { provider } = params;
     const ip = clientIp(req, ctx.config);
-    const back = (where, cookies = []) => ({ status: 302, headers: { Location: where, 'Set-Cookie': [clear, ...cookies] }, json: {} });
-    if (welcomeThrottle.isLimited(ip)) return back('/#/login?google=failed');
+    const back = (where, cookies = []) => ({
+      status: 302, headers: { Location: where, 'Set-Cookie': [stateCookie(req, ctx, provider, '', 0), ...cookies] }, json: {},
+    });
+    if (welcomeThrottle.isLimited(ip)) return back('/#/login?signin=failed');
     try {
-      const { token } = await auth.googleFinish({
-        code: query.code, state: query.state,
+      const { token } = await auth.ssoFinish({
+        provider, code: query.code, state: query.state,
         expectedState: parseCookies(req.headers.cookie)[STATE_COOKIE],
-        redirectUri: redirectUri(req, ctx.config),
+        redirectUri: redirectUri(req, ctx.config, provider),
       });
       return back('/#/', [sessionCookie(req, ctx, token)]);
     } catch (e) {
       welcomeThrottle.fail(ip);
-      const reason = e?.details?.reason;
-      if (!reason) throw e;
-      return back('/#/login?google=failed'); // same answer for every reason: never reveal who is in Flock
+      if (!e?.details?.reason) throw e;
+      return back('/#/login?signin=failed');
     }
   }, { auth: 'none' });
 

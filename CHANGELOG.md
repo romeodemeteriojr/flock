@@ -2,10 +2,10 @@
 
 ## Unreleased
 
-### Sign in with Google, and log in with an email (Decision 0006)
+### Single sign-on (Google first), and log in with an email (Decision 0006)
 
 - People have an optional email, set by schedulers on People. Log in with a username or the email.
-- "Sign in with Google" when `FLOCK_GOOGLE_CLIENT_ID` and `FLOCK_GOOGLE_CLIENT_SECRET` are set; only emails already added by a scheduler get in. Redirect URI: `<FLOCK_PUBLIC_URL>/api/auth/google/callback`.
+- Provider-agnostic sign-in (`/api/auth/:provider`), Google as the first provider when `FLOCK_GOOGLE_CLIENT_ID` and `FLOCK_GOOGLE_CLIENT_SECRET` are set; only emails already added by a scheduler get in, and refusals never reveal whether an email is in Flock. Redirect URI: `<FLOCK_PUBLIC_URL>/api/auth/google/callback`.
 - New column `people.email` (migration `0003_email.sql`).
 
 ### Fill open positions and how often volunteers serve
