@@ -29,7 +29,7 @@ test('check-config fails on bad variants', () => {
   assert.ok(bad({ fly: fly.replace("destination = '/data'", "destination = '/other'") }).some((p) => /mount/.test(p)));
   assert.ok(bad({ fly: fly.replace('internal_port = 8080', 'internal_port = 3000') }).some((p) => /internal_port/.test(p)));
   assert.ok(bad({ fly: `${fly}\n[[vm]]\n  memory = '256mb'\n` }).some((p) => /one machine/i.test(p)));
-  assert.ok(bad({ fly: fly.replace('min_machines_running = 1', 'min_machines_running = 2') }).some((p) => /one machine/i.test(p)));
+  assert.ok(bad({ fly: fly.replace('min_machines_running = 0', 'min_machines_running = 2') }).some((p) => /one machine/i.test(p)));
   assert.ok(bad({ fly: fly.replace('force_https = true', '') }).some((p) => /force_https/.test(p)));
   assert.ok(bad({ fly: fly.replace("NODE_ENV = 'production'", "API_TOKEN = 'abc123'") }).some((p) => /secret/.test(p)));
   assert.ok(bad({ dockerfile: `${dockerfile}\nENV SESSION_SECRET=hunter2\n` }).some((p) => /secret/.test(p)));
@@ -69,8 +69,8 @@ test('fly.toml has the required sections', () => {
   assert.match(fly, /^primary_region = /m);
   assert.match(fly, /\[build\]\s+dockerfile = 'Dockerfile'/);
   assert.match(fly, /source = 'flock_data'/);
-  assert.match(fly, /auto_stop_machines = 'off'/);
-  assert.match(fly, /min_machines_running = 1/);
+  assert.match(fly, /auto_stop_machines = 'suspend'/);
+  assert.match(fly, /min_machines_running = 0/);
   assert.match(fly, /path = '\/api\/health'/);
   assert.match(fly, /shared-cpu-1x/);
   assert.match(fly, /memory = '256mb'/);

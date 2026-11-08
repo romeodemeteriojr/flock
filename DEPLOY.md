@@ -145,7 +145,7 @@ fly deploy --image <image-name-from-releases>
 
 ## 8. Costs
 
-About **$2.34 a month** for one small machine plus a 1 GB volume. Prices change, so check https://fly.io/docs/about/pricing/.
+At most about **$2.34 a month** for one small machine plus a 1 GB volume, and much less in practice: the machine sleeps when nobody is using it and wakes on the next visit (the first page can take a second). Prices change, so check https://fly.io/docs/about/pricing/.
 
 ## 9. Security checklist
 
