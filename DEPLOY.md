@@ -34,19 +34,28 @@ This guide is for the person who schedules volunteers. You do not need to be a p
    fly volumes create flock_data --size 1 --region <region>
    ```
 
-5. Optional safety check of the settings:
+5. Optional, Google sign-in: in your Google OAuth client add the redirect URI
+   `https://<app>.fly.dev/api/auth/google/callback`, then:
+
+   ```
+   fly secrets set FLOCK_GOOGLE_CLIENT_ID=... FLOCK_GOOGLE_CLIENT_SECRET=...
+   ```
+
+   Type the values only into your terminal, never into files or chats.
+
+6. Optional safety check of the settings:
 
    ```
    node scripts/check-config.js --production
    ```
 
-6. Deploy:
+7. Deploy:
 
    ```
    fly deploy
    ```
 
-7. Create the first scheduler account:
+8. Create the first scheduler account:
 
    ```
    fly ssh console -C "node bin/flock.js create-admin <email> 'Full Name'"
@@ -54,7 +63,7 @@ This guide is for the person who schedules volunteers. You do not need to be a p
 
    A **one-time invite link is printed**, valid for 7 days. Give it only to that person privately. Opening it lets them choose a password and logs them in. Check that it starts with your deployed HTTPS address, not localhost.
 
-8. Visit `https://<app>.fly.dev` (your app name instead of `<app>`).
+9. Visit `https://<app>.fly.dev` (your app name instead of `<app>`).
 
 ## 3. Your own web address (optional)
 

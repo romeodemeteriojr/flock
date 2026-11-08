@@ -12,12 +12,15 @@ primary_region = 'CHANGE-ME'
 [build]
   dockerfile = 'Dockerfile'
 
-# Only non-secret values belong here. Flock needs no secrets.
+# Only non-secret values belong here. Google sign-in (optional) needs two secrets, set with
+#   fly secrets set FLOCK_GOOGLE_CLIENT_ID=... FLOCK_GOOGLE_CLIENT_SECRET=...
 [env]
   NODE_ENV = 'production'
   FLOCK_PORT = '8080'
   FLOCK_DB = '/data/flock.db'
   FLOCK_SECURE_COOKIES = '1'
+  # Fly's proxy sets Fly-Client-IP; without this every visitor shares one IP for the sign-in limits.
+  FLOCK_TRUST_PROXY = '1'
 
 [mounts]
   source = 'flock_data'
