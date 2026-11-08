@@ -19,7 +19,7 @@ const cols = (db, t) => db.prepare(`PRAGMA table_info(${t})`).all().map((c) => c
 test('schema has all tables and columns', () => {
   const db = openDb();
   const want = {
-    people: ['id', 'name', 'username', 'password_hash', 'role', 'active', 'failed_logins', 'locked_until', 'created_at'],
+    people: ['id', 'name', 'username', 'email', 'password_hash', 'role', 'active', 'failed_logins', 'locked_until', 'created_at'],
     invites: ['person_id', 'token_hash', 'expires_at', 'created_at'],
     sessions: ['id', 'token_hash', 'person_id', 'expires_at', 'created_at'],
     teams: ['id', 'name', 'sort'],
@@ -42,7 +42,7 @@ test('migrations are idempotent on a file db', () => {
     person(db);
     db.close();
     db = openDb(f);
-    assert.equal(db.prepare('SELECT COUNT(*) n FROM schema_migrations').get().n, 2);
+    assert.equal(db.prepare('SELECT COUNT(*) n FROM schema_migrations').get().n, 3);
     assert.equal(db.prepare('SELECT COUNT(*) n FROM people').get().n, 1);
     db.close();
   } finally {
@@ -141,7 +141,7 @@ test('logAudit truncates and stores', () => {
 test('migration time comes from the injected clock (no direct new Date())', () => {
   const clock = { now: () => new Date('2030-02-03T04:05:06.000Z') };
   const db = openDb(':memory:', { clock });
-  assert.deepEqual(db.prepare('SELECT applied_at FROM schema_migrations').all().map((r) => r.applied_at), ['2030-02-03T04:05:06.000Z', '2030-02-03T04:05:06.000Z']);
+  assert.deepEqual(db.prepare('SELECT applied_at FROM schema_migrations').all().map((r) => r.applied_at), ['2030-02-03T04:05:06.000Z', '2030-02-03T04:05:06.000Z', '2030-02-03T04:05:06.000Z']);
   db.close();
   // Without a clock SQLite's own clock records a valid ISO time.
   const plain = openDb();

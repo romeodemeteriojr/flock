@@ -110,8 +110,12 @@ function editPanel(p) {
       <label for="edit-name-${p.id}">Name</label>
       <input id="edit-name-${p.id}" name="name" type="text" maxlength="80" required value="${p.name}">
     </div>
+    <div class="field">
+      <label for="edit-email-${p.id}">Email (optional, for logging in)</label>
+      <input id="edit-email-${p.id}" name="email" type="email" maxlength="254" autocapitalize="none" spellcheck="false" value="${p.email ?? ''}">
+    </div>
     <div class="btn-row">
-      <button type="submit" class="btn btn-primary">Save name</button>
+      <button type="submit" class="btn btn-primary">Save</button>
       <button type="button" class="btn" data-action="cancel">Cancel</button>
     </div></form>`;
 }
@@ -149,7 +153,7 @@ function personRow(p, m) {
     <div class="person${p.active ? '' : ' is-inactive'}">
       ${avatar(p.name)}
       <div class="person-text">
-        <p class="person-name"><strong>${p.name}</strong> <span class="hint">(${p.username})</span></p>
+        <p class="person-name"><strong>${p.name}</strong> <span class="hint">(${p.username}${p.email ? `, ${p.email}` : ''})</span></p>
         <p class="person-chips"><span class="chip chip-plain">${roleWord(p)}</span>
         ${!p.joined && p.active ? html`<span class="chip chip-plain">Not joined yet</span>` : ''}
         ${p.active ? '' : html`<span class="chip chip-bad">Deactivated</span>`}</p>
@@ -192,6 +196,11 @@ export function renderScreen(m) {
           <label for="new-username">Username (optional)</label>
           <input id="new-username" name="username" type="text" autocapitalize="none" spellcheck="false" aria-describedby="new-username-hint">
           <p class="hint" id="new-username-hint">Leave it empty and we will use: <strong data-suggest>${suggestion || 'a username made from the name'}</strong></p>
+        </div>
+        <div class="field">
+          <label for="new-email">Email (optional)</label>
+          <input id="new-email" name="email" type="email" maxlength="254" autocapitalize="none" spellcheck="false" aria-describedby="new-email-hint">
+          <p class="hint" id="new-email-hint">They can log in with this email, or with Google if it is a Google account.</p>
         </div>
         <div class="field">
           <label class="check"><input type="checkbox" name="scheduler"> Make this person a scheduler</label>
@@ -345,6 +354,8 @@ export function createScreen({ api, root, ctx = {}, win = globalThis }) {
       if (!name) { m.error = 'Please type a name.'; return; }
       const body = { name };
       if (username) body.username = username;
+      const email = String(form.elements.email?.value ?? '').trim();
+      if (email) body.email = email;
       if (form.elements.scheduler.checked) body.role = 'admin';
       const r = await api.post('/api/people', body);
       m.invite = { name: r.person.name, username: r.person.username, ...r.invite };
@@ -356,7 +367,9 @@ export function createScreen({ api, root, ctx = {}, win = globalThis }) {
       const id = Number(form.dataset.id);
       const name = String(form.elements.name.value ?? '').trim();
       if (!name) { m.error = 'Please type a name.'; return; }
-      await api.patch(`/api/people/${id}`, { name });
+      const email = String(form.elements.email?.value ?? '').trim();
+      const old = m.people.find((x) => x.id === id)?.email ?? '';
+      await api.patch(`/api/people/${id}`, email === old ? { name } : { name, email });
       m.panel = null;
       await reload();
       m.notice = 'Name saved.';

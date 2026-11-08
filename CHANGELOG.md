@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Sign in with Google, and log in with an email (Decision 0006)
+
+- People have an optional email, set by schedulers on People. Log in with a username or the email.
+- "Sign in with Google" when `FLOCK_GOOGLE_CLIENT_ID` and `FLOCK_GOOGLE_CLIENT_SECRET` are set; only emails already added by a scheduler get in. Redirect URI: `<FLOCK_PUBLIC_URL>/api/auth/google/callback`.
+- New column `people.email` (migration `0003_email.sql`).
+
 ### Fill open positions and how often volunteers serve
 
 - Volunteers choose how often they can serve (every week, every 2, 3, 4, 6 or 8 weeks, or a pause) on "Days I can't serve". The default is every 2 weeks.

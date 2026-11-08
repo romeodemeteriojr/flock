@@ -21,7 +21,8 @@ import { fakeRoot as hostRoot } from './helpers/fakeroot.js';
 
 const WEB_VIEWS = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'web', 'views');
 const NOW = '2025-01-05T12:00:00.000Z'; // a Sunday
-const PUBLIC = new Set(['POST /api/login', 'GET /api/health', 'POST /api/welcome/check', 'POST /api/welcome']);
+const PUBLIC = new Set(['POST /api/login', 'GET /api/health', 'POST /api/welcome/check', 'POST /api/welcome',
+  'GET /api/auth/options', 'GET /api/auth/google', 'GET /api/auth/google/callback']);
 const key = (r) => `${r.method} ${r.pattern}`;
 
 async function boot(extra = {}) {

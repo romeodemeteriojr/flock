@@ -1,12 +1,15 @@
 import { translate, id as newId, changed, num } from './util.js';
 
-const PUBLIC = 'id, name, username, role, password_hash IS NOT NULL AS has_password, active, created_at';
+const PUBLIC = 'id, name, username, email, role, password_hash IS NOT NULL AS has_password, active, created_at';
 const DUP = 'That username is already taken';
+const DUP_EMAIL = 'That email is already used by someone else';
+const dupFor = (e) => (/email/.test(String(e?.message)) ? DUP_EMAIL : DUP);
 
 const toPerson = (r) => ({
   id: r.id,
   name: r.name,
   username: r.username,
+  email: r.email ?? null,
   role: r.role,
   hasPassword: !!r.has_password,
   active: !!r.active,
@@ -31,14 +34,14 @@ export function peopleRepo({ db, run }) {
   };
 
   return {
-    create: ({ name, username, role = 'member', createdAt }) => run(() => {
+    create: ({ name, username, email = null, role = 'member', createdAt }) => run(() => {
       let r;
       try {
         r = db.prepare(
-          'INSERT INTO people (name, username, role, active, created_at) VALUES (?, ?, ?, 1, ?)',
-        ).run(name, username, role, createdAt);
+          'INSERT INTO people (name, username, email, role, active, created_at) VALUES (?, ?, ?, ?, 1, ?)',
+        ).run(name, username, email ?? null, role, createdAt);
       } catch (e) {
-        throw translate(e, { unique: DUP });
+        throw translate(e, { unique: dupFor(e) });
       }
       return findById(newId(r));
     }),
@@ -53,6 +56,12 @@ export function peopleRepo({ db, run }) {
     findAuthByUsername: (username) => run(() => {
       if (typeof username !== 'string' || username === '') return null;
       const r = db.prepare(`SELECT ${PUBLIC}, password_hash, failed_logins, locked_until FROM people WHERE username = ?`).get(username);
+      return r ? toAuth(r) : null;
+    }),
+
+    findAuthByEmail: (email) => run(() => {
+      if (typeof email !== 'string' || email === '') return null;
+      const r = db.prepare(`SELECT ${PUBLIC}, password_hash, failed_logins, locked_until FROM people WHERE email = ?`).get(email.toLowerCase());
       return r ? toAuth(r) : null;
     }),
 
@@ -72,7 +81,14 @@ export function peopleRepo({ db, run }) {
       if (patch.name !== undefined) { sets.push('name = ?'); args.push(patch.name); }
       if (patch.role !== undefined) { sets.push('role = ?'); args.push(patch.role); }
       if (patch.active !== undefined) { sets.push('active = ?'); args.push(patch.active ? 1 : 0); }
-      if (sets.length) db.prepare(`UPDATE people SET ${sets.join(', ')} WHERE id = ?`).run(...args, personId);
+      if (patch.email !== undefined) { sets.push('email = ?'); args.push(patch.email); }
+      if (sets.length) {
+        try {
+          db.prepare(`UPDATE people SET ${sets.join(', ')} WHERE id = ?`).run(...args, personId);
+        } catch (e) {
+          throw translate(e, { unique: dupFor(e) });
+        }
+      }
       return findById(personId);
     }),
 

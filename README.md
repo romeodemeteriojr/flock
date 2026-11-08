@@ -78,6 +78,22 @@ Volunteers open the Flock address in the browser on their phone, type their
 username and password, and they are in. They stay logged in for 14 days on
 that phone. They do not need to install an app.
 
+If a scheduler added their email on People, they can type the email instead
+of the username. When Google sign-in is set up (below), they can also tap
+**Sign in with Google**; that works without an invite, but only for an email a
+scheduler already added. To stop someone, deactivate them (a password reset
+does not stop Google sign-in).
+
+### Setting up Google sign-in (optional)
+
+1. In Google Cloud (free), create a project, then an OAuth client of type
+   **Web application** with the redirect URI
+   `<your Flock address>/api/auth/google/callback`, for example
+   `http://localhost:8080/api/auth/google/callback`.
+2. Start Flock with `FLOCK_GOOGLE_CLIENT_ID` and `FLOCK_GOOGLE_CLIENT_SECRET`
+   set (on Fly: `fly secrets set ...`). Set `FLOCK_PUBLIC_URL` when it runs
+   behind another address. See `docs/decisions/0006-google-sign-in-and-email.md`.
+
 While you are trying Flock out, phones on the same Wi-Fi can reach it at the
 running computer's network address, for example `http://192.168.1.20:8080`.
 Before volunteers use it for real, read "Putting it online later" below.

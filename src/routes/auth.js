@@ -1,7 +1,7 @@
 // Login, invites, logout, who am I, change password: thin HTTP adapter over services.auth.
 import { v, parse } from '../validate.js';
 import { TooManyRequestsError } from '../errors.js';
-import { sessionCookie, clearCookie, createIpThrottle } from '../guard.js';
+import { sessionCookie, clearCookie, createIpThrottle, parseCookies, isSecure } from '../guard.js';
 import { LOCKED_MESSAGE } from '../services/auth-service.js';
 
 // Credentials are text; anything else is passed on as "missing", so the
@@ -24,6 +24,20 @@ export function clientIp(req, config) {
     if (xff) return xff;
   }
   return req.socket?.remoteAddress ?? 'unknown';
+}
+
+const STATE_COOKIE = 'flock_google_state';
+const CALLBACK = '/api/auth/google/callback';
+
+// Same base address rule as invite links: FLOCK_PUBLIC_URL, else the request's host.
+// The redirect URI must also be registered with Google, so a forged Host gets nowhere.
+function redirectUri(req, config) {
+  const base = config.publicUrl ?? `${isSecure(req, { config }) ? 'https' : 'http'}://${req.headers.host ?? 'localhost'}`;
+  return `${base}${CALLBACK}`;
+}
+
+function stateCookie(req, ctx, value, maxAge) {
+  return `${STATE_COOKIE}=${value}; HttpOnly; SameSite=Lax; Path=/api/auth/google; Max-Age=${maxAge}${isSecure(req, ctx) ? '; Secure' : ''}`;
 }
 
 export function register(router, ctx) {
@@ -66,6 +80,36 @@ export function register(router, ctx) {
       textOrNone(field(body, 'token')), textOrNone(field(body, 'password')),
     ));
     return { status: 200, headers: { 'Set-Cookie': sessionCookie(req, ctx, token) }, json: { person } };
+  }, { auth: 'none' });
+
+  router.add('GET', '/api/auth/options', () => ({
+    status: 200, json: { google: auth.googleEnabled() },
+  }), { auth: 'none' });
+
+  router.add('GET', '/api/auth/google', ({ req }) => {
+    const { url, state } = auth.googleStart(redirectUri(req, ctx.config));
+    return { status: 302, headers: { Location: url, 'Set-Cookie': stateCookie(req, ctx, state, 600) }, json: {} };
+  }, { auth: 'none' });
+
+  // Google sends the browser back here. Every outcome is a redirect into the app.
+  router.add('GET', CALLBACK, async ({ req, query }) => {
+    const clear = stateCookie(req, ctx, '', 0);
+    const ip = clientIp(req, ctx.config);
+    const back = (where, cookies = []) => ({ status: 302, headers: { Location: where, 'Set-Cookie': [clear, ...cookies] }, json: {} });
+    if (welcomeThrottle.isLimited(ip)) return back('/#/login?google=failed');
+    try {
+      const { token } = await auth.googleFinish({
+        code: query.code, state: query.state,
+        expectedState: parseCookies(req.headers.cookie)[STATE_COOKIE],
+        redirectUri: redirectUri(req, ctx.config),
+      });
+      return back('/#/', [sessionCookie(req, ctx, token)]);
+    } catch (e) {
+      welcomeThrottle.fail(ip);
+      const reason = e?.details?.reason;
+      if (!reason) throw e;
+      return back(`/#/login?google=${['unknown', 'inactive', 'unverified', 'changed'].includes(reason) ? 'unknown' : 'failed'}`);
+    }
   }, { auth: 'none' });
 
   router.add('POST', '/api/logout', async ({ req }) => {

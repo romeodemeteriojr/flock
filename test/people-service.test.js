@@ -46,7 +46,7 @@ test('people service: list is sorted, has positionIds and no secrets', async () 
   const { people } = await setup();
   const list = await people.list();
   assert.deepEqual(list.map((p) => p.name), ['Ada Admin', 'Max Member']);
-  assert.deepEqual(Object.keys(list[0]), ['id', 'name', 'username', 'role', 'active', 'joined', 'positionIds']);
+  assert.deepEqual(Object.keys(list[0]), ['id', 'name', 'username', 'email', 'role', 'active', 'joined', 'positionIds']);
   assert.doesNotMatch(JSON.stringify(list), /fast\$|hash/i);
 });
 

@@ -20,6 +20,8 @@ export const INVITE_DAYS = 7;
 export const INVITE_GONE_MESSAGE = 'This link has expired or was already used. Ask your scheduler for a new one.';
 
 export const INVALID_LOGIN_MESSAGE = 'Wrong username or password';
+export const GOOGLE_FAILED_MESSAGE = 'Google sign-in did not work. Please try again.';
+export const GOOGLE_UNKNOWN_MESSAGE = 'That Google account is not in Flock. Ask your scheduler to add your email.';
 export const LOCKED_MESSAGE = 'Too many tries. Please wait a few minutes.';
 
 const TOKEN_RE = /^[A-Za-z0-9_-]{43}$/;
@@ -84,10 +86,11 @@ function lockedFor(person, nowMs) {
  * @param {{hash: Function, verify: Function}} deps.hasher
  * @param {object} deps.logger  Structured logger (never log secrets).
  * @param {object} deps.config  Validated settings (src/config.js).
+ * @param {{enabled: boolean, authUrl: Function, exchange: Function}} [deps.google]  src/infra/google.js
  * @returns {object}
  */
 export function createAuthService(deps) {
-  const { data, clock, random, hasher, logger, config } = deps;
+  const { data, clock, random, hasher, logger, config, google } = deps;
 
   const nowDate = () => {
     const n = clock.now();
@@ -177,8 +180,9 @@ export function createAuthService(deps) {
     async login(username, password) {
       const invalid = (reason) => new UnauthenticatedError(INVALID_LOGIN_MESSAGE, { details: { reason } });
       const pwOk = typeof password === 'string' && password.length <= MAX_PASSWORD_INPUT;
+      // Usernames never contain '@', so anything with one is an email.
       const found = typeof username === 'string' && username !== ''
-        ? await data.people.findAuthByUsername(username)
+        ? await (username.includes('@') ? data.people.findAuthByEmail(username.trim()) : data.people.findAuthByUsername(username))
         : null;
 
       if (!found) {
@@ -249,6 +253,56 @@ export function createAuthService(deps) {
       }
       const person = await data.people.findById(s.personId);
       return person && person.active && person.hasPassword ? publicPerson(person) : null;
+    },
+
+    googleEnabled: () => !!google?.enabled,
+
+    /** Where to send the browser, and the state to remember in a cookie. */
+    googleStart(redirectUri) {
+      if (!google?.enabled) throw new NotFoundError('Google sign-in is not set up');
+      const state = random.token(32);
+      return { state, url: google.authUrl({ state, redirectUri }) };
+    },
+
+    /**
+     * Finish a Google sign-in. Only people an admin already added with that
+     * (verified) email get in. A person who never joined joins now: they get an
+     * unknowable random password, so every "joined" rule keeps working, and their
+     * invite is used up.
+     * @returns {Promise<{person: object, token: string}>}
+     * @throws {UnauthenticatedError} message GOOGLE_FAILED_MESSAGE or GOOGLE_UNKNOWN_MESSAGE
+     */
+    async googleFinish({ code, state, expectedState, redirectUri }) {
+      const fail = (reason, message = GOOGLE_FAILED_MESSAGE) => new UnauthenticatedError(message, { details: { reason } });
+      if (!google?.enabled) throw fail('disabled');
+      const same = typeof state === 'string' && typeof expectedState === 'string' && state.length === expectedState.length
+        && crypto.timingSafeEqual(Buffer.from(state), Buffer.from(expectedState));
+      if (!same || typeof code !== 'string' || code === '' || code.length > 2048) throw fail('bad_state');
+      let who;
+      try {
+        who = await google.exchange({ code, redirectUri, nowMs: nowDate().getTime() });
+      } catch (e) {
+        logger.warn('google sign-in failed', { reason: 'exchange', message: e?.message });
+        throw fail('exchange');
+      }
+      if (!who?.email || !who.emailVerified) throw fail('unverified', GOOGLE_UNKNOWN_MESSAGE);
+      const found = await data.people.findAuthByEmail(who.email);
+      if (!found || !found.active) {
+        logger.info('google sign-in refused', { reason: found ? 'inactive' : 'unknown' });
+        throw fail(found ? 'inactive' : 'unknown', GOOGLE_UNKNOWN_MESSAGE);
+      }
+      const randomHash = found.passwordHash === null ? await hasher.hash(random.token(32)) : null;
+      const result = await data.tx(async (d) => {
+        const cur = await d.people.findAuthById(found.id);
+        if (!cur || !cur.active || cur.email !== who.email) throw fail('changed', GOOGLE_UNKNOWN_MESSAGE);
+        if (cur.passwordHash === null) {
+          await d.people.setPassword(cur.id, randomHash ?? await hasher.hash(random.token(32)));
+          await d.invites.deleteForPerson(cur.id);
+        }
+        return { person: publicPerson(await d.people.findById(cur.id)), token: await createSession(cur.id) };
+      });
+      logger.info('login', { personId: result.person.id, via: 'google' });
+      return result;
     },
 
     /** End one session. Unknown or empty tokens are ignored. */

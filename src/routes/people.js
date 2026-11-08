@@ -54,8 +54,8 @@ export function register(router, ctx) {
 
   router.add('POST', '/api/people', async ({ req, body, user }) => {
     if (!isObj(body)) throw new ValidationError('Please send the person details.');
-    checkKeys(body, ['name', 'username', 'role']);
-    const input = { name: cleanName(body.name) };
+    checkKeys(body, ['name', 'username', 'email', 'role']);
+    const input = { name: cleanName(body.name), email: body.email };
     if (body.role !== undefined) input.role = check(roleSchema, body.role, 'The role must be admin or member.');
     if (body.username !== undefined && body.username !== null && body.username !== '') {
       input.username = check(usernameSchema, body.username, 'The username must be 3 to 30 letters, digits, dots, underscores or dashes.');
@@ -67,14 +67,15 @@ export function register(router, ctx) {
   router.add('PATCH', '/api/people/:id', async ({ params, body, user }) => {
     const id = parseId(params.id);
     if (!isObj(body)) throw new ValidationError('Please send the changes.');
-    checkKeys(body, ['name', 'role', 'active']);
-    if (body.name === undefined && body.role === undefined && body.active === undefined) {
+    checkKeys(body, ['name', 'role', 'active', 'email']);
+    if (body.name === undefined && body.role === undefined && body.active === undefined && body.email === undefined) {
       throw new ValidationError('There is nothing to change.');
     }
     const patch = {};
     if (body.name !== undefined) patch.name = cleanName(body.name);
     if (body.role !== undefined) patch.role = check(roleSchema, body.role, 'The role must be admin or member.');
     if (body.active !== undefined) patch.active = check(activeSchema, body.active, 'Active must be true or false.');
+    if (body.email !== undefined) patch.email = body.email; // checked by the service
     return { status: 200, json: { person: await people().update(user, id, patch) } };
   }, opts);
 

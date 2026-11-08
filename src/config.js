@@ -8,6 +8,8 @@ export function loadConfig(env = process.env) {
     publicUrl: env.FLOCK_PUBLIC_URL ? env.FLOCK_PUBLIC_URL.trim().replace(/\/+$/, '') : undefined,
     unansweredDays: 3,
     sessionDays: 14,
+    googleClientId: env.FLOCK_GOOGLE_CLIENT_ID?.trim() || undefined,
+    googleClientSecret: env.FLOCK_GOOGLE_CLIENT_SECRET?.trim() || undefined,
   });
 }
 
@@ -43,6 +45,9 @@ export function validateConfig(config) {
         && !u.username && !u.password && !u.search && !u.hash;
     } catch { /* reported with the other settings below */ }
     if (!ok) problems.push('publicUrl must be a full http:// or https:// address without credentials, a query or a fragment (FLOCK_PUBLIC_URL)');
+  }
+  if (!config.googleClientId !== !config.googleClientSecret) {
+    problems.push('Google sign-in needs both FLOCK_GOOGLE_CLIENT_ID and FLOCK_GOOGLE_CLIENT_SECRET, or neither');
   }
   if (problems.length) throw new ConfigError(problems);
   return config;

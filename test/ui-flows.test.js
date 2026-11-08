@@ -808,7 +808,7 @@ test('UAT 16 to 19 (what a computer can check): every page has named controls, o
   // The login and password pages have labelled fields too.
   const out = await w.open();
   wellBuilt(out, 'login');
-  assert.match(out.html(), /<label for="login-username">Username<\/label>/);
+  assert.match(out.html(), /<label for="login-username">Username or email<\/label>/);
   assert.match(out.html(), /<label for="login-password">Password<\/label>/);
 });
 

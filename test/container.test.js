@@ -89,7 +89,7 @@ test('container: services are built exactly once, in dependency order, with only
     factories[name] = (deps) => {
       calls.push({ name, deps: Object.keys(deps).sort() });
       for (const need of SERVICE_SPECS[name].needs) {
-        if (!CORE_DEPS.includes(need)) assert.ok(calls.some((x) => x.name === need), `${need} built before ${name}`);
+        if (!CORE_DEPS.includes(need) && need !== 'google') assert.ok(calls.some((x) => x.name === need), `${need} built before ${name}`);
       }
       assert.ok(Object.isFrozen(deps));
       return { name, deps };

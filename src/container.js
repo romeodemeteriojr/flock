@@ -17,6 +17,7 @@ import { systemClock } from './infra/clock.js';
 import { secureRandom } from './infra/random.js';
 import { scryptHasher } from './infra/hasher.js';
 import { createLogger } from './infra/logger.js';
+import { googleOAuth } from './infra/google.js';
 import { createAuthService } from './services/auth-service.js';
 import { createPeopleService } from './services/people-service.js';
 import { createTeamsService } from './services/teams-service.js';
@@ -36,7 +37,7 @@ const CORE = CORE_DEPS;
  * other services). The order here does not matter; the container sorts them.
  */
 export const SERVICE_SPECS = Object.freeze({
-  auth: { factory: createAuthService, needs: [...CORE] },
+  auth: { factory: createAuthService, needs: [...CORE, 'google'] },
   people: { factory: createPeopleService, needs: [...CORE, 'auth'] },
   teams: { factory: createTeamsService, needs: [...CORE] },
   calendar: { factory: createCalendarService, needs: [...CORE, 'teams'] },
@@ -141,7 +142,7 @@ export function buildServices(core, specs, ready = {}) {
 
 /**
  * @param {object} [overrides]  Any part may be replaced:
- *   config, env (passed to loadConfig), clock, random, hasher, logger, db, data,
+ *   config, env (passed to loadConfig), clock, random, hasher, logger, db, data, google,
  *   services (ready-made instances by name), factories (service factories by name,
  *   a function or {factory, needs}).
  */
@@ -166,7 +167,9 @@ export function createContainer(overrides = {}) {
   }
   const data = has('data') ? need('data') : createData(db);
 
-  const core = { data, clock, random, hasher, logger, config };
+  const google = has('google') ? overrides.google
+    : googleOAuth({ clientId: config.googleClientId, clientSecret: config.googleClientSecret });
+  const core = { data, clock, random, hasher, logger, config, google };
   const services = Object.freeze(buildServices(core, specsWith(overrides.factories), overrides.services ?? {}));
 
   return {
@@ -176,6 +179,7 @@ export function createContainer(overrides = {}) {
     hasher,
     logger,
     data,
+    google,
     services,
     db,
     /** Close the database, but only if the container opened it. */

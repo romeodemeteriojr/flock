@@ -9,8 +9,19 @@ import { ConflictError, NotFoundError, ValidationError } from '../errors.js';
 export const USERNAME_RE = /^[A-Za-z0-9._-]{3,30}$/;
 export const USERNAME_ERR = 'The username must be 3 to 30 letters, digits, dots, underscores or dashes.';
 export const ROLES = Object.freeze(['admin', 'member']);
+export const EMAIL_RE = /^[^\s@]{1,64}@[^\s@]+\.[^\s@]+$/;
+export const EMAIL_ERR = 'Please enter a valid email address, or leave it empty.';
 const USERNAME_TAKEN = 'That username is already taken';
 const NOT_FOUND = 'That person was not found';
+
+/** '' or null -> null (no email); otherwise a lowercase email, or ValidationError. */
+export function cleanEmail(email) {
+  if (email === undefined) return undefined;
+  if (email === null || (typeof email === 'string' && email.trim() === '')) return null;
+  const e = typeof email === 'string' ? email.trim().toLowerCase() : '';
+  if (e.length > 254 || !EMAIL_RE.test(e)) throw new ValidationError(EMAIL_ERR);
+  return e;
+}
 
 /** A username made from a name: "Zoë van Dijk" -> "zoe.van.dijk" (3 to 24 characters). */
 export function baseUsername(name) {
@@ -27,6 +38,7 @@ export function personView(p) {
     id: p.id,
     name: p.name,
     username: p.username,
+    email: p.email ?? null,
     role: p.role,
     active: !!p.active,
     joined: !!p.hasPassword,
@@ -66,9 +78,10 @@ export function createPeopleService(deps) {
     /**
      * Add a person with a one-time invite. Only the token hash is stored.
      * @param {{id: number}} actor
-     * @param {{name: string, username?: string|null, role?: 'admin'|'member'}} input
+     * @param {{name: string, username?: string|null, email?: string|null, role?: 'admin'|'member'}} input
      */
-    async create(actor, { name, username, role = 'member' }) {
+    async create(actor, { name, username, email, role = 'member' }) {
+      const mail = cleanEmail(email) ?? null;
       if (!ROLES.includes(role)) throw new ValidationError('The role must be admin or member.');
       let wanted = null;
       if (username !== undefined && username !== null && username !== '') {
@@ -82,10 +95,10 @@ export function createPeopleService(deps) {
         let created;
         try {
           created = await d.people.create({
-            name, username: uname, role, createdAt: clock.now().toISOString(),
+            name, username: uname, email: mail, role, createdAt: clock.now().toISOString(),
           });
         } catch (e) {
-          if (e?.name === 'DuplicateError') throw new ConflictError(USERNAME_TAKEN);
+          if (e?.name === 'DuplicateError') throw new ConflictError(/email/.test(e.message) ? e.message : USERNAME_TAKEN);
           throw e;
         }
         await d.invites.replace({ personId: created.id, tokenHash: inv.tokenHash, expiresAt: inv.expiresAt, createdAt: inv.createdAt });
@@ -99,7 +112,8 @@ export function createPeopleService(deps) {
      * Change name, role and/or active. Keeps at least one active admin, stops an
      * admin deactivating themselves, and ends every session of a deactivated person.
      */
-    async update(actor, id, { name, role, active } = {}) {
+    async update(actor, id, { name, role, active, email } = {}) {
+      const mail = cleanEmail(email);
       if (role !== undefined && !ROLES.includes(role)) throw new ValidationError('The role must be admin or member.');
       const person = await data.tx(async (d) => {
         const cur = await d.people.findById(id);
@@ -118,7 +132,14 @@ export function createPeopleService(deps) {
         if (name !== undefined && name !== cur.name) changes.push('name');
         if (newRole !== cur.role) changes.push(`role ${cur.role} -> ${newRole}`);
         if (newActive !== cur.active) changes.push(newActive ? 'reactivated' : 'deactivated');
-        const updated = await d.people.update(id, { name: name ?? cur.name, role: newRole, active: newActive });
+        if (mail !== undefined && mail !== cur.email) changes.push('email');
+        let updated;
+        try {
+          updated = await d.people.update(id, { name: name ?? cur.name, role: newRole, active: newActive, email: mail });
+        } catch (e) {
+          if (e?.name === 'DuplicateError') throw new ConflictError(e.message);
+          throw e;
+        }
         if (!newActive) await auth.endSessions(id);
         if (changes.length) await audit(d, actor, 'person.update', `person ${id}: ${changes.join(', ')}`);
         return updated;

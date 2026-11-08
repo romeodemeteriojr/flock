@@ -21,7 +21,7 @@ const NOW = '2025-01-05T12:00:00'; // a Sunday
 const PASSWORD = 'test-pass-1';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const CASES = 14; // random cases per route and role, on top of the fixed hostile cases
-const ALLOWED = new Set([200, 201, 204, 400, 401, 403, 404, 405, 409, 413, 429]);
+const ALLOWED = new Set([200, 201, 204, 302, 400, 401, 403, 404, 405, 409, 413, 429]);
 const MUTATING = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
 // ---------------------------------------------------------------- generator

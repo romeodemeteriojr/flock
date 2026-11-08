@@ -301,7 +301,7 @@ test('api works against the real server: 401, wrong login, X-Flock and voluntary
 
 test('login view has labelled fields with the right autocomplete', () => {
   const s = loginView.render({ user: null });
-  assert.match(s, /<label for="login-username">Username<\/label>/);
+  assert.match(s, /<label for="login-username">Username or email<\/label>/);
   assert.match(s, /<input id="login-username"[^>]*autocomplete="username"/);
   assert.match(s, /<label for="login-password">Password<\/label>/);
   assert.match(s, /<input id="login-password"[^>]*type="password"[^>]*autocomplete="current-password"/);

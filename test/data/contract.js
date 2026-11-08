@@ -71,7 +71,7 @@ export function runContract(name, makeData) {
         await fresh();
         const p = await person('ann', { name: 'Ann', role: 'admin', passwordHash: null });
         assert.equal(typeof p.id, 'number');
-        assert.deepEqual(p, { id: p.id, name: 'Ann', username: 'ann', role: 'admin', hasPassword: false, active: true, createdAt: T, positionIds: [] });
+        assert.deepEqual(p, { id: p.id, name: 'Ann', username: 'ann', email: null, role: 'admin', hasPassword: false, active: true, createdAt: T, positionIds: [] });
         assert.equal((await data.people.findAuthById(p.id)).passwordHash, null);
         noSecrets(p, 'people.create');
       });
@@ -103,6 +103,22 @@ export function runContract(name, makeData) {
         assert.equal(await data.people.findAuthByUsername(''), null);
         assert.equal(await data.people.findAuthById(999), null);
         noSnakeCase(a, 'findAuthById');
+      });
+
+      test('email: optional, unique, found case-insensitively', async () => {
+        await fresh();
+        const ann = await data.people.create({ name: 'Ann', username: 'ann', email: 'ann@example.com', createdAt: T });
+        assert.equal(ann.email, 'ann@example.com');
+        const bob = await person('bob');
+        assert.equal(bob.email, null);
+        assert.equal((await data.people.findAuthByEmail('ANN@example.com')).id, ann.id);
+        assert.equal(await data.people.findAuthByEmail('nobody@example.com'), null);
+        assert.equal(await data.people.findAuthByEmail(''), null);
+        await assert.rejects(data.people.update(bob.id, { email: 'ann@example.com' }), (e) => e instanceof DuplicateError && /email/.test(e.message));
+        await assert.rejects(data.people.create({ name: 'X', username: 'x', email: 'ann@example.com', createdAt: T }), DuplicateError);
+        assert.equal((await data.people.update(bob.id, { email: 'bob@example.com' })).email, 'bob@example.com');
+        assert.equal((await data.people.update(bob.id, { email: null })).email, null);
+        await person('cy'); // two people without email do not clash
       });
 
       test('list sorts by name, includes positionIds, no secrets', async () => {
