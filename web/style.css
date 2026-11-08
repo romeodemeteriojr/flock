@@ -650,6 +650,7 @@ th, td { text-align: left; padding: var(--s-2) var(--s-3); border-bottom: 1px so
   box-shadow: var(--shadow-2);
 }
 .auth-foot { text-align: center; margin-top: var(--s-5); }
+.auth-providers { display: flex; flex-direction: column; gap: var(--s-3); margin-top: var(--s-4); }
 
 /* ---------- my schedule: hero card and serving cards ---------- */
 .hero {

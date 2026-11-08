@@ -28,7 +28,9 @@ export function render(state, opts = {}) {
           </div>
           <button type="submit" class="btn btn-primary btn-block btn-lg">Log in</button>
         </form>
-        ${(opts.providers ?? []).map((p) => html`<a class="btn btn-block btn-lg" href="/api/auth/${encodeURIComponent(p.id)}" data-provider="${p.id}">Sign in with ${p.label}</a>`)}
+        ${opts.providers?.length ? html`<div class="auth-providers">
+          ${opts.providers.map((p) => html`<a class="btn btn-block btn-lg" href="/api/auth/${encodeURIComponent(p.id)}" data-provider="${p.id}">${iconSlot(p.id)} Sign in with ${p.label}</a>`)}
+        </div>` : ''}
       </div>
       <p class="hint auth-foot">${iconSlot('lock', 'icon-sm')} Forgot your password? Ask the scheduler to reset your login.</p>
     </section>

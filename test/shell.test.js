@@ -12,6 +12,7 @@ import { resolve, routes, pathOf } from '../web/routes.js';
 import * as loginView from '../web/views/login.js';
 import * as passwordView from '../web/views/password.js';
 import * as nav from '../web/views/nav.js';
+import { icon } from '../web/lib/icons.js';
 
 const WEB = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'web');
 
@@ -307,6 +308,13 @@ test('login view has labelled fields with the right autocomplete', () => {
   assert.match(s, /<input id="login-password"[^>]*type="password"[^>]*autocomplete="current-password"/);
   assert.match(s, /<button type="submit"[^>]*>Log in<\/button>/);
   assert.ok(!s.includes('form-error'));
+});
+
+test('login view: one spaced-out button per sign-in provider, with its mark; none without providers', () => {
+  const s = loginView.render({ user: null }, { providers: [{ id: 'google', label: 'Google' }] });
+  assert.match(s, /<div class="auth-providers">\s*<a class="btn btn-block btn-lg" href="\/api\/auth\/google" data-provider="google"><span class="icon" data-icon="google" aria-hidden="true"><\/span> Sign in with Google<\/a>/);
+  assert.ok(icon('google').includes('#4285F4'), 'the Google mark keeps its brand colours');
+  assert.doesNotMatch(loginView.render({ user: null }), /auth-providers/);
 });
 
 test('login view escapes error text and email', () => {
