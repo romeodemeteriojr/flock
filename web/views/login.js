@@ -12,7 +12,7 @@ export function render(state, opts = {}) {
   return String(html`
     <section class="auth">
       <div class="auth-card">
-        <span class="auth-mark">${iconSlot('sparkle', 'icon-lg')}</span>
+        <span class="auth-mark">${iconSlot('flock', 'icon-lg')}</span>
         <h1 tabindex="-1">Log in to Flock</h1>
         <p class="page-lead">Your church serving schedule.</p>
         <form class="form" data-form="login" novalidate>

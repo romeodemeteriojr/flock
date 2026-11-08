@@ -43,7 +43,7 @@ export function render(state, hash = '') {
     </nav>` : '';
   return String(html`
     <div class="topbar">
-      <a class="brand" href="#/">${iconSlot('sparkle', 'brand-mark')}<span class="brand-name">Flock</span></a>
+      <a class="brand" href="#/">${iconSlot('flock', 'brand-mark')}<span class="brand-name">Flock</span></a>
       <div class="nav-user">
         ${avatar(user.name, 'sm')}
         <p class="nav-who">Logged in as <strong>${user.name}</strong></p>

@@ -7,7 +7,7 @@ export function render(state, { info = null, error = '' } = {}) {
   return String(html`
     <section class="auth">
       <div class="auth-card">
-        <span class="auth-mark">${iconSlot('sparkle', 'icon-lg')}</span>
+        <span class="auth-mark">${iconSlot('flock', 'icon-lg')}</span>
         <h1 tabindex="-1">Welcome to Flock</h1>
         ${info ? html`
           <p class="lead" id="welcome-person">Hi ${info.name}. You will log in with <strong>${info.email}</strong>.</p>

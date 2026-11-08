@@ -27,7 +27,7 @@ async function webFiles(dir = WEB) {
 }
 const rel = (f) => '/' + path.relative(WEB, f).split(path.sep).join('/');
 
-const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.woff2': 'font/woff2' };
+const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.woff2': 'font/woff2', '.svg': 'image/svg+xml' };
 
 const member = { id: 2, name: 'Mary', role: 'member' };
 const admin = { id: 1, name: 'Ann', role: 'admin' };
@@ -70,7 +70,8 @@ test('index.html has lang, viewport, title, #app, module script and stylesheet',
 
 test('no external URLs, inline scripts, inline handlers or inline styles in web files', async () => {
   for (const f of (await webFiles()).filter((p) => !p.endsWith('.woff2'))) {
-    const s = await readFile(f, 'utf8');
+    // The SVG namespace is an identifier, never fetched.
+    const s = (await readFile(f, 'utf8')).replace('xmlns="http://www.w3.org/2000/svg"', '');
     const name = rel(f);
     assert.doesNotMatch(s, /https?:\/\//i, `${name}: has an http(s) URL`);
     assert.doesNotMatch(s, /["'`(=]\s*\/\/[a-z0-9]/i, `${name}: has a protocol-relative URL`);
