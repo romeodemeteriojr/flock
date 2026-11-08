@@ -428,6 +428,10 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
   box-shadow: 0 0 0 4px var(--accent-soft), 0 0 0 1.5px var(--focus);
 }
 textarea { min-height: 6rem; }
+/* iOS Safari: native date/time inputs ignore width:100% and keep a wide intrinsic size,
+   so they overflow narrow boxes. Dropping the native appearance lets them shrink. */
+input[type="date"], input[type="time"] { -webkit-appearance: none; appearance: none; min-width: 0; max-width: 100%; }
+input::-webkit-date-and-time-value { text-align: left; }
 input[type="checkbox"], input[type="radio"] { width: 1.4rem; height: 1.4rem; accent-color: var(--accent); flex: none; margin: 0; }
 .check {
   display: flex; align-items: center; gap: var(--s-3);
@@ -448,7 +452,7 @@ input[type="checkbox"], input[type="radio"] { width: 1.4rem; height: 1.4rem; acc
 .input-icon input { padding-left: 2.6rem; }
 .search-field { margin-top: var(--s-6); }
 .form-inline { display: flex; flex-wrap: wrap; align-items: end; gap: var(--s-3); max-width: none; margin-bottom: var(--s-4); }
-.form-inline .field { margin: 0; flex: 1 1 12rem; }
+.form-inline .field { margin: 0; flex: 1 1 12rem; min-width: 0; }
 .form-error {
   display: flex; gap: var(--s-2); align-items: flex-start;
   color: var(--danger); background: var(--danger-bg);
