@@ -20,8 +20,8 @@ export const INVITE_DAYS = 7;
 export const INVITE_GONE_MESSAGE = 'This link has expired or was already used. Ask your scheduler for a new one.';
 
 export const INVALID_LOGIN_MESSAGE = 'Wrong username or password';
-export const GOOGLE_FAILED_MESSAGE = 'Google sign-in did not work. Please try again.';
-export const GOOGLE_UNKNOWN_MESSAGE = 'That Google account is not in Flock. Ask your scheduler to add your email.';
+// One message for every refusal, so it never tells whether an email is in Flock.
+export const GOOGLE_FAILED_MESSAGE = 'Google sign-in did not work. If you are new, ask your scheduler to add your email.';
 export const LOCKED_MESSAGE = 'Too many tries. Please wait a few minutes.';
 
 const TOKEN_RE = /^[A-Za-z0-9_-]{43}$/;
@@ -270,10 +270,10 @@ export function createAuthService(deps) {
      * unknowable random password, so every "joined" rule keeps working, and their
      * invite is used up.
      * @returns {Promise<{person: object, token: string}>}
-     * @throws {UnauthenticatedError} message GOOGLE_FAILED_MESSAGE or GOOGLE_UNKNOWN_MESSAGE
+     * @throws {UnauthenticatedError} always GOOGLE_FAILED_MESSAGE; the reason is only in details/logs
      */
     async googleFinish({ code, state, expectedState, redirectUri }) {
-      const fail = (reason, message = GOOGLE_FAILED_MESSAGE) => new UnauthenticatedError(message, { details: { reason } });
+      const fail = (reason) => new UnauthenticatedError(GOOGLE_FAILED_MESSAGE, { details: { reason } });
       if (!google?.enabled) throw fail('disabled');
       const same = typeof state === 'string' && typeof expectedState === 'string' && state.length === expectedState.length
         && crypto.timingSafeEqual(Buffer.from(state), Buffer.from(expectedState));
@@ -285,16 +285,16 @@ export function createAuthService(deps) {
         logger.warn('google sign-in failed', { reason: 'exchange', message: e?.message });
         throw fail('exchange');
       }
-      if (!who?.email || !who.emailVerified) throw fail('unverified', GOOGLE_UNKNOWN_MESSAGE);
+      if (!who?.email || !who.emailVerified) throw fail('unverified');
       const found = await data.people.findAuthByEmail(who.email);
       if (!found || !found.active) {
         logger.info('google sign-in refused', { reason: found ? 'inactive' : 'unknown' });
-        throw fail(found ? 'inactive' : 'unknown', GOOGLE_UNKNOWN_MESSAGE);
+        throw fail(found ? 'inactive' : 'unknown');
       }
       const randomHash = found.passwordHash === null ? await hasher.hash(random.token(32)) : null;
       const result = await data.tx(async (d) => {
         const cur = await d.people.findAuthById(found.id);
-        if (!cur || !cur.active || cur.email !== who.email) throw fail('changed', GOOGLE_UNKNOWN_MESSAGE);
+        if (!cur || !cur.active || cur.email !== who.email) throw fail('changed');
         if (cur.passwordHash === null) {
           await d.people.setPassword(cur.id, randomHash ?? await hasher.hash(random.token(32)));
           await d.invites.deleteForPerson(cur.id);

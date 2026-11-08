@@ -106,7 +106,7 @@ test('someone who never joined joins through Google: no password needed, invite 
   } finally { await t.close(); }
 });
 
-test('refused: unknown, unverified, deactivated, wrong audience, bad state, Google error', async () => {
+test('refused, always with the same answer: unknown, unverified, deactivated, wrong audience, bad state, Google error', async () => {
   const claims = {
     unknown: good('stranger@example.com'),
     unverified: good('ann@example.com', { email_verified: false }),
@@ -122,7 +122,7 @@ test('refused: unknown, unverified, deactivated, wrong audience, bad state, Goog
     const off = await addPerson(t, { name: 'Off', username: 'off', active: false });
     await t.data.people.update(off, { email: 'off@example.com' });
     const cases = [
-      ['unknown', {}, 'unknown'], ['unverified', {}, 'unknown'], ['off', {}, 'unknown'],
+      ['unknown', {}, 'failed'], ['unverified', {}, 'failed'], ['off', {}, 'failed'],
       ['aud', {}, 'failed'], ['expired', {}, 'failed'], ['nope', {}, 'failed'],
       ['ok', { tamperState: true }, 'failed'],
     ];

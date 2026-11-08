@@ -108,7 +108,7 @@ export function register(router, ctx) {
       welcomeThrottle.fail(ip);
       const reason = e?.details?.reason;
       if (!reason) throw e;
-      return back(`/#/login?google=${['unknown', 'inactive', 'unverified', 'changed'].includes(reason) ? 'unknown' : 'failed'}`);
+      return back('/#/login?google=failed'); // same answer for every reason: never reveal who is in Flock
     }
   }, { auth: 'none' });
 

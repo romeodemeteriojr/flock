@@ -22,7 +22,10 @@ Status: accepted
   `email_verified`. The token comes straight from Google over TLS, so its
   signature is not re-checked (Google's documented allowance for this flow).
 - Every callback outcome is a redirect: `/#/` with a session, or
-  `/#/login?google=unknown|failed`. Failures count toward the per-IP throttle.
+  `/#/login?google=failed`. Every refusal (unknown email, deactivated,
+  unverified, bad state, Google error) gets the **same** message, so the page
+  never reveals whether an email is in Flock; the real reason is only logged
+  (without the email). Failures count toward the per-IP throttle.
 - The redirect URI is `FLOCK_PUBLIC_URL` (or the request's host) +
   `/api/auth/google/callback`. Register exactly that URI in Google Cloud.
 - **Joining through Google**: a person who never joined gets an unknowable

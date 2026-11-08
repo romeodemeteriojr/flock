@@ -4,8 +4,7 @@ import { iconSlot } from '../lib/icons.js';
 export const title = 'Log in';
 
 const GOOGLE_ERRORS = {
-  unknown: 'That Google account is not in Flock. Ask your scheduler to add your email.',
-  failed: 'Google sign-in did not work. Please try again.',
+  failed: 'Google sign-in did not work. If you are new, ask your scheduler to add your email.',
 };
 
 // opts: { error, username, google } so the form can be shown again after a failed try.
