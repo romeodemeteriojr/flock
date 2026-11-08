@@ -31,8 +31,35 @@ test('list shows name, email, role and Deactivated marker', async () => {
   assert.match(root.innerHTML, /sam\.ortiz@example\.com/);
   assert.match(root.innerHTML, /Scheduler/);
   assert.equal(root.innerHTML.match(/Deactivated<\/span>/g).length, 1);
+  assert.doesNotMatch(root.innerHTML, /data-action="active-ask"/, 'no row buttons until a row is tapped');
+  root.click('select', 3);
   assert.match(root.innerHTML, /Reactivate/);
   assert.match(root.innerHTML, /Add person/);
+});
+
+test('a row shows its buttons once tapped, one row at a time; tapping it again hides them', async () => {
+  const { api, root } = await setup();
+  const buttons = () => [...root.innerHTML.matchAll(/data-action="(edit|positions|reset-ask|active-ask|role-ask|invite)" data-id="(\d+)"/g)].map((x) => `${x[1]} ${x[2]}`);
+  assert.deepEqual(buttons(), []);
+  assert.match(root.innerHTML, /data-action="select" data-id="2" aria-expanded="false"/);
+  root.click('select', 2);
+  assert.match(root.innerHTML, /data-action="select" data-id="2" aria-expanded="true"/);
+  assert.deepEqual(buttons(), ['role-ask 2', 'edit 2', 'positions 2', 'reset-ask 2', 'active-ask 2']);
+  root.click('select', 1);
+  assert.deepEqual(buttons(), ['role-ask 1', 'edit 1', 'positions 1', 'reset-ask 1', 'active-ask 1']);
+  root.click('select', 1);
+  assert.deepEqual(buttons(), []);
+  // A panel keeps its row open (also after Cancel); tapping another row closes the panel.
+  root.click('select', 2);
+  root.click('edit', 2);
+  assert.match(root.innerHTML, /data-form="edit-name" data-id="2"/);
+  root.click('cancel');
+  assert.deepEqual(buttons().map((b) => b.split(' ')[1]), ['2', '2', '2', '2', '2']);
+  root.click('edit', 2);
+  root.click('select', 3);
+  assert.doesNotMatch(root.innerHTML, /data-form="edit-name"/);
+  assert.deepEqual(buttons().map((b) => b.split(' ')[1]), ['3', '3', '3', '3']);
+  assert.equal(api.calls.length, 0, 'tapping rows sends nothing');
 });
 
 test('filterPeople matches name or email, any case, all words', () => {
@@ -248,7 +275,8 @@ test('unjoined rows offer a new invite and local-only links explain the limitati
     'POST /api/people/2/invite': { person: pending, invite: { ...INVITE, localOnly: true } },
   });
   assert.match(root.innerHTML, /Not joined yet/);
-  assert.match(root.innerHTML, /aria-label="Copy new invite"/);
+  root.click('select', 2);
+  assert.match(root.innerHTML, /data-action="invite" data-id="2">[^]*?Copy new invite<\/button>/);
   root.click('invite', 2);
   await flush();
   assert.deepEqual(api.calls, ['POST /api/people/2/invite {}']);
@@ -258,6 +286,7 @@ test('unjoined rows offer a new invite and local-only links explain the limitati
 
 test('joined rows offer neither the pending label nor an invite action', async () => {
   const { api, root } = await setup();
+  root.click('select', 2);
   assert.doesNotMatch(root.innerHTML, /Not joined yet|Copy new invite/);
   root.click('invite', 2);
   await flush();
@@ -282,7 +311,11 @@ async function teamSetup(extra = {}) {
 
 test('teams page lists teams, positions and qualified counts', async () => {
   const { root } = await teamSetup();
-  assert.match(root.innerHTML, /<h2>Band<\/h2>/);
+  assert.match(root.innerHTML, /<h2 class="team-head"><button type="button" class="disclosure" data-action="toggle-team" data-id="1" aria-expanded="false"><span class="disclosure-text">Band<span class="disclosure-sub">2 positions<\/span>/);
+  assert.match(root.innerHTML, /Sound<span class="disclosure-sub">1 position<\/span>/);
+  assert.doesNotMatch(root.innerHTML, /can do this|qualified yet/, 'teams start closed');
+  root.click('toggle-team', 1);
+  root.click('toggle-team', 2);
   assert.match(root.innerHTML, /1 person can do this/);
   assert.match(root.innerHTML, /2 people can do this/);
   assert.match(root.innerHTML, /Nobody is qualified yet/);
@@ -314,6 +347,41 @@ test('teams: add team, add position, rename call the right paths', async () => {
     'PATCH /api/teams/1 {"name":"Music"}',
     'PATCH /api/positions/10 {"name":"Drum kit"}',
   ]);
+});
+
+test('teams: a team opens on tap; a position shows Edit name and Delete once tapped, one at a time', async () => {
+  let teams = TEAMS;
+  const { api, root } = await teamSetup({
+    'GET /api/teams': () => teams,
+    'POST /api/teams': (b) => { const t = { id: 7, name: b.name, sort: 3, positions: [] }; teams = [...TEAMS, t]; return t; },
+  });
+  const shown = () => [...root.innerHTML.matchAll(/data-action="(add-position|rename-team|delete-team|rename-position|delete-position)" data-id="(\d+)"/g)].map((x) => `${x[1]} ${x[2]}`);
+  const TEAM_1 = ['add-position 1', 'rename-team 1', 'delete-team 1'];
+  assert.deepEqual(shown(), []);
+  root.click('toggle-team', 1);
+  assert.match(root.innerHTML, /data-action="toggle-team" data-id="1" aria-expanded="true"/);
+  assert.deepEqual(shown(), TEAM_1);
+  assert.match(root.innerHTML, /data-action="select" data-id="10" aria-expanded="false"/);
+  root.click('select', 10);
+  assert.deepEqual(shown(), [...TEAM_1, 'rename-position 10', 'delete-position 10']);
+  // Rename is an edit button, Delete a real (danger) button, each with an icon; the name is there for screen readers.
+  assert.match(root.innerHTML, /class="btn btn-sm" data-action="rename-position" data-id="10"><span class="icon" data-icon="edit" aria-hidden="true"><\/span> Edit name<span class="visually-hidden"> of Drums<\/span><\/button>/);
+  assert.match(root.innerHTML, /class="btn btn-sm btn-danger" data-action="delete-position" data-id="10"><span class="icon" data-icon="trash" aria-hidden="true"><\/span> Delete<span class="visually-hidden"> Drums<\/span><\/button>/);
+  assert.match(root.innerHTML, /class="btn btn-sm btn-danger" data-action="delete-team" data-id="1"><span class="icon" data-icon="trash"/);
+  assert.doesNotMatch(root.innerHTML, /btn-quiet/);
+  root.click('select', 11);
+  assert.deepEqual(shown(), [...TEAM_1, 'rename-position 11', 'delete-position 11']);
+  root.click('select', 11);
+  assert.deepEqual(shown(), TEAM_1);
+  root.click('toggle-team', 1);
+  assert.deepEqual(shown(), []);
+  assert.equal(api.calls.length, 0, 'opening and tapping send nothing');
+  // A new team opens by itself, ready for its first position.
+  root.submit('add-team', { name: 'Kids' });
+  await flush();
+  assert.equal(api.calls[0], 'POST /api/teams {"name":"Kids"}');
+  assert.match(root.innerHTML, /data-action="toggle-team" data-id="7" aria-expanded="true"/);
+  assert.deepEqual(shown(), ['add-position 7', 'rename-team 7', 'delete-team 7']);
 });
 
 test('teams: delete needs confirmation and shows the API 409', async () => {
@@ -366,20 +434,23 @@ test('people page explains the two access levels in plain words', async () => {
 
 test('each row shows a text level badge and the matching role button', async () => {
   const { root } = await setupAs(9);
-  const ann = rowOf(root, 1);
-  const sam = rowOf(root, 2);
-  assert.match(ann, /chip-plain">Scheduler</);
-  assert.match(ann, /aria-label="Make volunteer"/);
-  assert.match(sam, /chip-plain">Volunteer</);
-  assert.match(sam, /aria-label="Make scheduler"/);
+  assert.match(rowOf(root, 1), /chip-plain">Scheduler</);
+  assert.match(rowOf(root, 2), /chip-plain">Volunteer</);
+  root.click('select', 1);
+  assert.match(rowOf(root, 1), /data-action="role-ask" data-id="1">[^]*?Make volunteer<\/button>/);
+  root.click('select', 2);
+  assert.match(rowOf(root, 2), /data-action="role-ask" data-id="2">[^]*?Make scheduler<\/button>/);
 });
 
 test('own row has no role button and says That\'s you', async () => {
   const { root } = await setupAs(1);
+  assert.match(rowOf(root, 1), /chip-info">That's you</, 'shown on the row itself, tapped or not');
+  root.click('select', 1);
   const ann = rowOf(root, 1);
-  assert.match(ann, /That's you/);
+  assert.match(ann, /data-action="edit" data-id="1"/);
   assert.ok(!ann.includes('role-ask'));
   assert.ok(!ann.includes('Make volunteer'));
+  root.click('select', 2);
   assert.match(rowOf(root, 2), /role-ask/);
   root.click('role-ask', 1);
   assert.ok(!root.innerHTML.includes("Make Ann Admin a volunteer?"));
@@ -387,26 +458,30 @@ test('own row has no role button and says That\'s you', async () => {
 
 test('deactivated row shows its level but no role button', async () => {
   const { root } = await setupAs(9);
+  root.click('select', 3);
   const joe = rowOf(root, 3);
+  assert.match(joe, /data-action="edit" data-id="3"/);
   assert.match(joe, /chip-plain">Volunteer</);
   assert.match(joe, /Deactivated/);
   assert.ok(!joe.includes('role-ask'));
   assert.ok(!joe.includes('Make scheduler'));
 });
 
-test('toolbar buttons: every one has an accessible name, and each action opens its panel', async () => {
+test('row buttons: each one has an icon and words, and each action opens its panel', async () => {
   const { root } = await setupAs(9);
+  root.click('select', 1);
   const ann = rowOf(root, 1);
-  // Every toolbar button in an active row is named.
-  const buttons = [...ann.matchAll(/<button[^>]*>/g)].map((m) => m[0]);
-  assert.ok(buttons.length >= 4, `expected at least four toolbar buttons, found ${buttons.length}: ${ann}`);
-  for (const b of buttons) assert.match(b, /aria-label="[^"]+"/, `a toolbar button has no accessible name: ${b}`);
+  const buttons = [...ann.matchAll(/<button[^>]*>[\s\S]*?<\/button>/g)].map((m) => m[0]).filter((b) => !b.includes('data-action="select"'));
+  assert.equal(buttons.length, 5, ann);
+  for (const b of buttons) {
+    assert.match(b, /data-icon="[\w-]+"/, `a row button has no icon: ${b}`);
+    assert.ok(b.replace(/<[^>]+>/g, '').trim(), `a row button has no words: ${b}`);
+  }
   // The five actions still exist with their data-action names.
   for (const [action, name] of [['role-ask', 'Make volunteer'], ['edit', 'Edit name'], ['positions', 'What can they do?'], ['reset-ask', 'Reset login'], ['active-ask', 'Deactivate']]) {
-    const re = new RegExp(`data-action="${action}"`);
-    const btns = buttons.filter((b) => re.test(b));
+    const btns = buttons.filter((b) => b.includes(`data-action="${action}"`));
     assert.equal(btns.length, 1, `expected exactly one ${action} button: ${ann}`);
-    assert.ok(btns[0].includes(`aria-label="${name}"`), `the ${action} button is misnamed: ${btns[0]}`);
+    assert.ok(btns[0].endsWith(` ${name}</button>`), `the ${action} button is misnamed: ${btns[0]}`);
   }
   // Each action opens the same panel as before.
   root.click('edit', 1);
@@ -427,9 +502,11 @@ test('toolbar buttons: every one has an accessible name, and each action opens i
 
 test('deactivated row: the active button says Reactivate, and its actions still open their panels', async () => {
   const { root } = await setupAs(9);
+  root.click('select', 3);
   const joe = rowOf(root, 3);
-  assert.match(joe, /aria-label="Reactivate"[^>]*data-action="active-ask"/);
-  assert.ok(!joe.includes('icon-btn-danger'), 'a reactivate button is not a danger button');
+  assert.match(joe, /class="btn btn-sm" data-action="active-ask" data-id="3">[^]*? Reactivate<\/button>/, 'a reactivate button is not a danger button');
+  root.click('select', 2);
+  assert.match(rowOf(root, 2), /class="btn btn-sm btn-danger" data-action="active-ask" data-id="2">[^]*? Deactivate<\/button>/);
   root.click('edit', 3);
   assert.match(root.innerHTML, /data-form="edit-name" data-id="3"/);
   root.click('cancel');

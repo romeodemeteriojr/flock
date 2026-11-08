@@ -1,14 +1,15 @@
 // Schedule page (scheduler only): the next 8 weeks. On wide screens a grid
-// (dates down, positions across, grouped by team); on phones a card per date.
-// Both are in the page; style.css shows the right one. Tapping a slot opens
-// the slot panel (suggestions, assign, remove person).
+// (dates down, positions across, grouped by team); on phones a card per date
+// that stays closed (a count of open, waiting and confirmed positions) until
+// tapped. Both are in the page; style.css shows the right one. Tapping a slot
+// opens the slot panel (suggestions, assign, remove person).
 import { html } from '../lib/html.js';
 import { formatDate, formatTime, todayString } from '../lib/dates.js';
-import { createSlotPanel, statusChip, statusOf } from '../lib/slotpanel.js';
+import { createSlotPanel, statusChip, statusOf, STATUS } from '../lib/slotpanel.js';
 import { createSheet } from '../lib/sheet.js';
 import { iconSlot } from '../lib/icons.js';
 import { toasts } from '../lib/toast.js';
-import { skeleton, emptyState, pageHead } from '../lib/ui.js';
+import { skeleton, emptyState, pageHead, disclosure, refocus } from '../lib/ui.js';
 import { addDays, sortServices } from './admin-services.js';
 
 export const title = 'Schedule';
@@ -53,6 +54,13 @@ export function nextMonday(today) {
 
 export const AUTOFILL_MAX_WEEKS = 8;
 
+// How many of a service's positions are open, waiting, confirmed and declined.
+export function statusCounts(svc) {
+  const n = { open: 0, pending: 0, accepted: 0, declined: 0 };
+  for (const x of svc?.slots ?? []) n[statusOf(x)] += 1;
+  return n;
+}
+
 // The slot as the panel wants it (adds the service's date, time and title).
 export const panelSlot = (slot, svc) => ({ ...slot, date: svc.date, time: svc.time, title: svc.title });
 
@@ -92,17 +100,29 @@ function grid(s, today) {
   </div>`;
 }
 
-function cards(s, today) {
-  return html`<ul class="cards sched-cards">${s.rows.map((r) => html`<li class="card sched-card${r.service.date === today ? ' is-today' : ''}" data-card="${r.service.id}">
-    <h2 class="num">${formatDate(r.service.date)} at ${formatTime(r.service.time)}${r.service.date === today ? todayContent : ''}</h2>
-    <p class="hint">${r.service.title}</p>
-    ${s.columns.filter((c) => c.positions.some((p) => r.cells.has(p.id))).map((c) => html`<h3 class="team-title">${c.teamName}</h3>
+const COUNT_WORDS = Object.freeze({ open: 'open', pending: 'waiting', accepted: 'confirmed', declined: 'declined' });
+
+// A closed card still says how the service stands: "2 open, 1 waiting, 5 confirmed".
+function counts(svc) {
+  const n = statusCounts(svc);
+  const chips = Object.keys(n).filter((k) => n[k]).map((k) => html`<span class="chip ${STATUS[k].cls}">${iconSlot(STATUS[k].icon, 'chip-icon')}${n[k]} ${COUNT_WORDS[k]}</span>`);
+  return html`<span class="sched-counts">${chips.length ? chips : html`<span class="disclosure-sub">No positions on this date.</span>`}</span>`;
+}
+
+function cards(s, today, open) {
+  return html`<ul class="cards sched-cards">${s.rows.map((r) => {
+    const isOpen = open.has(r.service.id);
+    const label = html`<span class="num">${formatDate(r.service.date)} at ${formatTime(r.service.time)}</span>${r.service.date === today ? todayContent : ''}
+      <span class="disclosure-sub">${r.service.title}</span>${counts(r.service)}`;
+    return html`<li class="card sched-card${r.service.date === today ? ' is-today' : ''}" data-card="${r.service.id}">
+    <h2 class="sched-card-head">${disclosure({ action: 'toggle-service', id: r.service.id, open: isOpen, label })}</h2>
+    ${isOpen ? s.columns.filter((c) => c.positions.some((p) => r.cells.has(p.id))).map((c) => html`<h3 class="team-title">${c.teamName}</h3>
       <ul class="list slot-list">${c.positions.filter((p) => r.cells.has(p.id)).map((p) => html`<li>
         <p class="slot-pos"><strong>${p.name}</strong></p>
         ${r.cells.get(p.id).map(slotButton)}
-      </li>`)}</ul>`)}
-    ${r.service.slots?.length ? '' : html`<p class="hint">No positions on this date.</p>`}
-  </li>`)}</ul>`;
+      </li>`)}</ul>`) : ''}
+  </li>`;
+  })}</ul>`;
 }
 
 function autofillCard(a) {
@@ -149,7 +169,7 @@ export function renderScreen(m, panelHtml = '') {
     ${panelHtml}
     <p class="hint sched-range">${iconSlot('calendar', 'icon-sm')} <span class="num">${formatDate(m.from)} to ${formatDate(m.to)}</span>. Tap a position to fill it.</p>
     ${autofillCard(m.autofill ?? { weekOf: '', weeks: 1 })}
-    ${s.rows.length ? html`${grid(s, m.today)}${cards(s, m.today)}`
+    ${s.rows.length ? html`${grid(s, m.today)}${cards(s, m.today, m.open ?? new Set())}`
     : emptyState(`No services in the next ${WEEKS} weeks. Add them on the Services page.`, 'art-calendar')}
   `);
 }
@@ -159,6 +179,7 @@ export function renderScreen(m, panelHtml = '') {
 export function createScreen({ api, root, today = todayString() }) {
   const m = {
     services: [], teams: [], loading: true, error: '', notice: '', today, from: today, to: addDays(today, WEEKS * 7 - 1),
+    open: new Set(), // the phone cards that are open
     autofill: { weekOf: nextMonday(today), weeks: 1, input: null, result: null, busy: false, error: '' },
   };
   const paint = () => {
@@ -248,6 +269,7 @@ export function createScreen({ api, root, today = todayString() }) {
     const id = Number(el.dataset.id);
     if (action === 'autofill-apply') return applyPlan();
     if (action === 'autofill-cancel') { m.autofill.result = null; m.autofill.input = null; paint(); return undefined; }
+    if (action === 'toggle-service') { if (!m.open.delete(id)) m.open.add(id); paint(); refocus(root, action, id); return undefined; }
     if (action === 'slot-open') {
       const slot = findSlot(id);
       if (!slot) return undefined;

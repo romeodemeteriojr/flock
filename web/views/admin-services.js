@@ -1,11 +1,12 @@
 // Services page (scheduler only): add a service date with the positions it
-// needs, repeat it for more weeks, and edit or delete upcoming services.
-// Deleting always asks first, and says how many people are scheduled.
+// needs, repeat it for more weeks, and edit or delete upcoming services. A
+// service shows its buttons once tapped (one at a time). Deleting always asks
+// first, and says how many people are scheduled.
 import { html } from '../lib/html.js';
 import { formatDate, formatTime, todayString } from '../lib/dates.js';
 import { iconSlot } from '../lib/icons.js';
 import { toasts } from '../lib/toast.js';
-import { skeleton, emptyState, pageHead } from '../lib/ui.js';
+import { skeleton, emptyState, pageHead, disclosure, refocus } from '../lib/ui.js';
 
 export const title = 'Services';
 export const DEFAULT_TIME = '09:00';
@@ -163,19 +164,21 @@ function serviceCard(svc, m) {
       </div></div>`;
   }
   const n = scheduledCount(svc);
-  return html`<li class="service-row" data-service="${svc.id}">
-    <div class="service-main">
+  const selected = m.selected === svc.id;
+  const label = html`<span class="service-main">
       <span class="service-icon">${iconSlot('calendar')}</span>
-      <div>
-        <p class="service-title"><strong class="num">${formatDate(svc.date)} at ${formatTime(svc.time)}</strong>: ${svc.title}</p>
-        <p class="hint">${svc.slots?.length ? `${positionsSummary(svc, m.teams)}.` : 'No positions yet.'}${n ? html` ${peopleWords(n)}.` : ''}</p>
-      </div>
-    </div>
-    <div class="btn-row btn-row-compact">
+      <span class="service-text">
+        <span class="service-title"><strong class="num">${formatDate(svc.date)} at ${formatTime(svc.time)}</strong>: ${svc.title}</span>
+        <span class="disclosure-sub">${svc.slots?.length ? `${positionsSummary(svc, m.teams)}.` : 'No positions yet.'}${n ? html` ${peopleWords(n)}.` : ''}</span>
+      </span>
+    </span>`;
+  return html`<li class="service-row" data-service="${svc.id}">
+    ${disclosure({ action: 'select', id: svc.id, open: selected, label, cls: 'row-select' })}
+    ${selected ? html`<div class="btn-row btn-row-compact row-actions">
       <button type="button" class="btn btn-sm" data-action="repeat" data-id="${svc.id}">Repeat for more weeks</button>
       <button type="button" class="btn btn-sm" data-action="edit" data-id="${svc.id}">${iconSlot('edit')} Edit</button>
-      <button type="button" class="btn btn-sm btn-danger btn-quiet" data-action="delete" data-id="${svc.id}">Delete</button>
-    </div>
+      <button type="button" class="btn btn-sm btn-danger" data-action="delete" data-id="${svc.id}">${iconSlot('trash')} Delete</button>
+    </div>` : ''}
     ${extra}
   </li>`;
 }
@@ -195,7 +198,8 @@ export function renderScreen(m) {
 // ---------- screen controller ----------
 
 export function createScreen({ api, root, today = todayString() }) {
-  const m = { teams: [], services: [], loading: true, panel: null, error: '', notice: '', today, draft: null };
+  // selected: the service whose buttons show.
+  const m = { teams: [], services: [], loading: true, panel: null, error: '', notice: '', today, draft: null, selected: null };
   let busy = false;
   const paint = () => { root.innerHTML = renderScreen(m); };
   const reload = async () => {
@@ -227,6 +231,7 @@ export function createScreen({ api, root, today = todayString() }) {
     const svc = find(id);
     if (!svc) return;
     m.panel = { kind, id: svc.id, count: scheduledCount(svc) };
+    m.selected = svc.id; // a panel under a row keeps that row open
     m.error = '';
     m.notice = '';
     paint();
@@ -234,6 +239,7 @@ export function createScreen({ api, root, today = todayString() }) {
 
   const actions = {
     cancel: () => { m.panel = null; paint(); },
+    select: (id) => { m.selected = m.selected === id ? null : id; m.panel = null; paint(); refocus(root, 'select', id); },
     edit: ask('edit'),
     repeat: ask('repeat'),
     delete: ask('delete'),

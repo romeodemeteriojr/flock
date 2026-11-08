@@ -255,26 +255,29 @@ function pages(d) {
   ${section('p-people', 'People', html`
     ${frame('Loading', people.render({}))}
     ${frame('List', screen('People', people.renderScreen(peopleModel())))}
+    ${frame('A person tapped: their buttons', screen('People', people.renderScreen(peopleModel({ selected: 5 }))))}
     ${frame('Adding someone', screen('People', people.renderScreen(peopleModel({ adding: true, newName: 'Noor Imaginary' }))))}
     ${frame('Invite message', screen('People', people.renderScreen(peopleModel({ invite: { name: 'Noor Imaginary', email: 'noor.imaginary@example.com', link: '/#/welcome?token=gallery-example', localOnly: true }, notice: 'Copied.' }))))}
-    ${frame('What can they do?', screen('People', people.renderScreen(peopleModel({ panel: { kind: 'positions', id: 3, checked: new Set([10]) } }))))}
-    ${frame('Deactivate?', screen('People', people.renderScreen(peopleModel({ panel: { kind: 'active', id: 5 } }))))}
-    ${frame('Make a scheduler?', screen('People', people.renderScreen(peopleModel({ panel: { kind: 'role', id: 6, role: 'admin' } }))))}
+    ${frame('What can they do?', screen('People', people.renderScreen(peopleModel({ selected: 3, panel: { kind: 'positions', id: 3, checked: new Set([10]) } }))))}
+    ${frame('Deactivate?', screen('People', people.renderScreen(peopleModel({ selected: 5, panel: { kind: 'active', id: 5 } }))))}
+    ${frame('Make a scheduler?', screen('People', people.renderScreen(peopleModel({ selected: 6, panel: { kind: 'role', id: 6, role: 'admin' } }))))}
     ${frame('Nobody matches', screen('People', people.renderScreen(peopleModel({ query: 'zzz' }))))}`)}
   ${section('p-teams', 'Teams', html`
-    ${frame('Teams and positions', screen('Teams', teams.renderScreen(teamsModel({ notice: 'Position added.' }))))}
-    ${frame('Delete a team?', screen('Teams', teams.renderScreen(teamsModel({ panel: { kind: 'delete-team', id: 3 } }))))}
-    ${frame('Rename a position', screen('Teams', teams.renderScreen(teamsModel({ panel: { kind: 'rename-position', id: 11 } }))))}
+    ${frame('Teams, all closed', screen('Teams', teams.renderScreen(teamsModel())))}
+    ${frame('A team opened, a position tapped', screen('Teams', teams.renderScreen(teamsModel({ notice: 'Position added.', open: new Set([1]), selected: 10 }))))}
+    ${frame('Delete a team?', screen('Teams', teams.renderScreen(teamsModel({ open: new Set([3]), panel: { kind: 'delete-team', id: 3 } }))))}
+    ${frame('Rename a position', screen('Teams', teams.renderScreen(teamsModel({ open: new Set([1]), selected: 11, panel: { kind: 'rename-position', id: 11 } }))))}
     ${frame('No teams yet', screen('Teams', teams.renderScreen(teamsModel({ teams: [] }))))}`)}
   ${section('p-services', 'Services', html`
     ${frame('Add and list', screen('Services', services.renderScreen(svcModel())))}
-    ${frame('Delete?', screen('Services', services.renderScreen(svcModel({ panel: { kind: 'delete', id: 1, count: 3 } }))))}
-    ${frame('Repeat', screen('Services', services.renderScreen(svcModel({ panel: { kind: 'repeat', id: 2 } }))))}
+    ${frame('A service tapped: its buttons', screen('Services', services.renderScreen(svcModel({ selected: 2 }))))}
+    ${frame('Delete?', screen('Services', services.renderScreen(svcModel({ selected: 1, panel: { kind: 'delete', id: 1, count: 3 } }))))}
+    ${frame('Repeat', screen('Services', services.renderScreen(svcModel({ selected: 2, panel: { kind: 'repeat', id: 2 } }))))}
     ${frame('With a problem', screen('Services', services.renderScreen(svcModel({ error: 'How many Drums? Please type a number from 1 to 20.' }))))}
     ${frame('Nothing yet', screen('Services', services.renderScreen(svcModel({ services: [] }))))}`)}
   ${section('p-schedule', 'Schedule', html`
     ${frame('Loading', schedule.render({}))}
-    ${frame('Grid (wide) or cards (phone), today highlighted', screen('Schedule', schedule.renderScreen(schedModel({ notice: 'Priya Demo is now on Vocals. Waiting for their answer.' }))))}
+    ${frame('Grid (wide) or cards (phone), today highlighted and opened', screen('Schedule', schedule.renderScreen(schedModel({ notice: 'Priya Demo is now on Vocals. Waiting for their answer.', open: new Set([1]) }))))}
     ${frame('No services', screen('Schedule', schedule.renderScreen(schedModel({ services: [] }))))}`)}
   ${section('p-gaps', 'Gaps', html`
     ${frame('Gaps and reminders', screen('Gaps', gaps.renderScreen(gapsModel())))}

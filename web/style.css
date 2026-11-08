@@ -738,7 +738,7 @@ th, td { text-align: left; padding: var(--s-2) var(--s-3); border-bottom: 1px so
 .people-list > li { padding: var(--s-4) 0; }
 .person { display: flex; align-items: center; gap: var(--s-3); }
 .person-text { min-width: 0; }
-.person-name { margin: 0; }
+.person-name { display: block; margin: 0; }
 .person-chips { margin: var(--s-1) 0 0; display: flex; flex-wrap: wrap; gap: var(--s-2); }
 .person.is-inactive .person-name { color: var(--muted); }
 .person.is-inactive .avatar { filter: grayscale(1); }
@@ -752,7 +752,7 @@ th, td { text-align: left; padding: var(--s-2) var(--s-3); border-bottom: 1px so
 .secret-box [data-invite-text] { overflow-wrap: anywhere; }
 
 /* ---------- teams and services ---------- */
-.team-card h2 { margin-top: var(--s-1); }
+.team-card .team-head { margin: 0; }
 .position-list { margin-top: var(--s-3); }
 .position-main { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-2) var(--s-3); }
 .position-name { margin: 0; }
@@ -763,7 +763,8 @@ th, td { text-align: left; padding: var(--s-2) var(--s-3); border-bottom: 1px so
   display: inline-flex; padding: var(--s-2); border-radius: var(--radius-sm);
   background: var(--accent-soft); color: var(--on-accent-soft);
 }
-.service-title { margin: 0; }
+.service-title { display: block; margin: 0; }
+.service-text { min-width: 0; }
 
 /* ---------- schedule: grid on wide screens, cards on phones ---------- */
 .sched-range { display: flex; align-items: center; gap: var(--s-2); margin-bottom: var(--s-4); }
@@ -771,6 +772,8 @@ th, td { text-align: left; padding: var(--s-2) var(--s-3); border-bottom: 1px so
 .sched-cards { display: block; }
 .sched-card.is-today { border: 2px solid var(--accent); background: var(--today-bg); }
 .team-title { font-size: var(--fs-sm); text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin-top: var(--s-4); }
+.sched-card-head { margin: 0; }
+.sched-counts { display: flex; flex-wrap: wrap; gap: var(--s-1) var(--s-2); margin-top: var(--s-2); }
 .slot-list > li { padding: var(--s-2) 0; }
 .slot-pos { margin: 0 0 var(--s-1); }
 .slot-btn {

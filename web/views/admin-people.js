@@ -1,15 +1,16 @@
 // People page (scheduler only): find, add and look after the people in the church.
-// All clicks go through one delegated listener on the screen. Anything risky first
-// shows a plain "Are you sure?" step; nothing is sent until the person says yes.
+// A row shows its buttons once tapped (one row at a time), so a long list stays
+// easy to read. All clicks go through one delegated listener on the screen.
+// Anything risky first shows a plain "Are you sure?" step; nothing is sent until
+// the person says yes.
 import { html, raw } from '../lib/html.js';
 import { iconSlot } from '../lib/icons.js';
 import { flashCopied } from '../lib/copyflash.js';
-import { iconButton } from '../lib/iconbutton.js';
 import { avatar } from '../lib/avatar.js';
 import { toasts } from '../lib/toast.js';
 import { inviteMessage } from '../lib/invite.js';
 import { copyText } from '../lib/slotpanel.js';
-import { skeleton, emptyState, pageHead } from '../lib/ui.js';
+import { skeleton, emptyState, pageHead, disclosure, refocus } from '../lib/ui.js';
 
 export const title = 'People';
 
@@ -127,8 +128,12 @@ function checklistPanel(p, teams, checked) {
       <button type="button" class="btn" data-action="cancel">Cancel</button>
     </div></div>`;
 }
+// One button with an icon and words (the row's actions show once it is tapped).
+const actionButton = (icon, label, action, id, cls = '') => html`<button type="button" class="btn btn-sm${cls}" data-action="${action}" data-id="${id}">${iconSlot(icon)} ${label}</button>`;
+
 function personRow(p, m) {
   const panel = m.panel && m.panel.id === p.id ? m.panel : null;
+  const selected = m.selected === p.id;
   let extra = '';
   if (panel) {
     if (panel.kind === 'reset' || panel.kind === 'active') extra = confirmPanel(p, panel.kind);
@@ -136,29 +141,28 @@ function personRow(p, m) {
     else if (panel.kind === 'edit') extra = editPanel(p);
     else if (panel.kind === 'positions') extra = checklistPanel(p, m.teams, panel.checked);
   }
-  const roleButton = !p.active ? ''
-    : p.id === m.me ? html`<span class="hint">That's you</span>`
-      : iconButton('shield', nextRole(p) === 'admin' ? 'Make scheduler' : 'Make volunteer', { dataAction: 'role-ask', dataId: p.id });
-  const activeButton = iconButton(p.active ? 'user-off' : 'user-check', p.active ? 'Deactivate' : 'Reactivate', { dataAction: 'active-ask', dataId: p.id, danger: p.active });
-  return html`<li data-person="${p.id}">
-    <div class="person${p.active ? '' : ' is-inactive'}">
+  const label = html`<span class="person${p.active ? '' : ' is-inactive'}">
       ${avatar(p.name)}
-      <div class="person-text">
-        <p class="person-name"><strong>${p.name}</strong>${p.email ? html` <span class="hint">(${p.email})</span>` : ''}</p>
-        <p class="person-chips"><span class="chip chip-plain">${roleWord(p)}</span>
+      <span class="person-text">
+        <span class="person-name"><strong>${p.name}</strong>${p.email ? html` <span class="hint">(${p.email})</span>` : ''}</span>
+        <span class="person-chips"><span class="chip chip-plain">${roleWord(p)}</span>
+        ${p.id === m.me ? html`<span class="chip chip-info">That's you</span>` : ''}
         ${!p.email && p.active ? html`<span class="chip chip-plain">No email, cannot log in</span>` : ''}
         ${p.email && !p.joined && p.active ? html`<span class="chip chip-plain">Not joined yet</span>` : ''}
-        ${p.active ? '' : html`<span class="chip chip-bad">Deactivated</span>`}</p>
-      </div>
-    </div>
-    <div class="btn-row btn-row-compact">
-      ${roleButton}
-      ${iconButton('edit', 'Edit name', { dataAction: 'edit', dataId: p.id })}
-      ${iconButton('list-check', 'What can they do?', { dataAction: 'positions', dataId: p.id })}
-      ${p.email && !p.joined && p.active ? iconButton('send', 'Copy new invite', { dataAction: 'invite', dataId: p.id }) : ''}
-      ${p.email ? iconButton('key', 'Reset login', { dataAction: 'reset-ask', dataId: p.id }) : ''}
-      ${activeButton}
-    </div>
+        ${p.active ? '' : html`<span class="chip chip-bad">Deactivated</span>`}</span>
+      </span>
+    </span>`;
+  const actions = !selected ? '' : html`<div class="btn-row btn-row-compact row-actions">
+      ${p.active && p.id !== m.me ? actionButton('shield', nextRole(p) === 'admin' ? 'Make scheduler' : 'Make volunteer', 'role-ask', p.id) : ''}
+      ${actionButton('edit', 'Edit name', 'edit', p.id)}
+      ${actionButton('list-check', 'What can they do?', 'positions', p.id)}
+      ${p.email && !p.joined && p.active ? actionButton('send', 'Copy new invite', 'invite', p.id) : ''}
+      ${p.email ? actionButton('key', 'Reset login', 'reset-ask', p.id) : ''}
+      ${p.active ? actionButton('user-off', 'Deactivate', 'active-ask', p.id, ' btn-danger') : actionButton('user-check', 'Reactivate', 'active-ask', p.id)}
+    </div>`;
+  return html`<li data-person="${p.id}">
+    ${disclosure({ action: 'select', id: p.id, open: selected, label, cls: 'row-select' })}
+    ${actions}
     ${extra}
   </li>`;
 }
@@ -217,6 +221,7 @@ export function createScreen({ api, root, ctx = {}, win = globalThis }) {
   const m = {
     people: [], teams: [], query: '', loading: true, adding: false, newName: '',
     panel: null, invite: null, error: '', notice: '', me: null,
+    selected: null, // the person whose buttons show
   };
   const hold = { timer: null, key: null };
   const me = () => ctx.state?.user?.id ?? null;
@@ -253,18 +258,21 @@ export function createScreen({ api, root, ctx = {}, win = globalThis }) {
     paint();
   }
 
+  // A panel under a row keeps that row open.
+  const openPanel = (panel) => { m.panel = panel; m.selected = panel.id; paint(); };
+
   const actions = {
     'add-open': () => { m.adding = true; m.error = ''; m.notice = ''; paint(); },
     'add-cancel': () => { m.adding = false; m.newName = ''; paint(); },
     cancel: () => { m.panel = null; paint(); },
     done: () => { m.invite = null; paint(); },
-    edit: (id) => { m.panel = { kind: 'edit', id }; paint(); },
-    'reset-ask': (id) => { m.panel = { kind: 'reset', id }; paint(); },
-    'active-ask': (id) => { m.panel = { kind: 'active', id }; paint(); },
+    select: (id) => { m.selected = m.selected === id ? null : id; m.panel = null; paint(); refocus(root, 'select', id); },
+    edit: (id) => openPanel({ kind: 'edit', id }),
+    'reset-ask': (id) => openPanel({ kind: 'reset', id }),
+    'active-ask': (id) => openPanel({ kind: 'active', id }),
     positions: (id) => {
       const p = find(id);
-      m.panel = { kind: 'positions', id, checked: new Set(p ? p.positionIds : []) };
-      paint();
+      openPanel({ kind: 'positions', id, checked: new Set(p ? p.positionIds : []) });
     },
     'toggle-position': (_id, el) => {
       if (m.panel?.kind !== 'positions') return;
@@ -297,8 +305,7 @@ export function createScreen({ api, root, ctx = {}, win = globalThis }) {
     'role-ask': (id) => {
       const p = find(id);
       if (!p || !p.active || p.id === me()) return;
-      m.panel = { kind: 'role', id: p.id, role: nextRole(p) };
-      paint();
+      openPanel({ kind: 'role', id: p.id, role: nextRole(p) });
     },
     'role-yes': (id) => attempt(async () => {
       const p = find(id);

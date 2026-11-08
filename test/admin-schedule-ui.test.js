@@ -252,6 +252,32 @@ test('schedule: grid and cards, each slot shows person and status words', async 
   assert.match(empty.root.innerHTML, /No services in the next 8 weeks/);
 });
 
+test('schedule: phone cards start closed with a count per status, open on tap, and stay open after filling a slot', async () => {
+  const { api, root } = await schedSetup({ 'GET /api/admin/suggest?slotId=4': CANDS, 'PUT /api/slots/4/assign': { slot: {} } });
+  const card = (id, next) => { const h = root.innerHTML; return h.slice(h.indexOf(`data-card="${id}"`), next ? h.indexOf(`data-card="${next}"`) : undefined); };
+  assert.match(root.innerHTML, /data-action="toggle-service" data-id="1" aria-expanded="false"/);
+  assert.match(root.innerHTML, /data-action="toggle-service" data-id="2" aria-expanded="false"/);
+  const counts = (h) => [...h.matchAll(/aria-hidden="true"><\/span>(\d+ \w+)<\/span>/g)].map((x) => x[1]);
+  assert.deepEqual(counts(card(1, 2)), ['1 open', '1 waiting', '1 confirmed', '1 declined']);
+  assert.deepEqual(counts(card(2)), ['1 open']);
+  assert.doesNotMatch(card(1, 2), /slot-list/, 'closed: no positions listed');
+  assert.match(root.innerHTML, /sched-grid[\s\S]*data-action="slot-open" data-id="4"/, 'the wide-screen grid still shows every slot');
+  root.click('toggle-service', 1);
+  assert.match(card(1, 2), /aria-expanded="true"/);
+  assert.match(card(1, 2), /<h3 class="team-title">Band<\/h3>[\s\S]*data-action="slot-open" data-id="4"/);
+  assert.doesNotMatch(card(2), /slot-list/, 'only the tapped card opens');
+  await root.click('slot-open', 4);
+  await flush();
+  await root.click('slot-assign', 30);
+  await flush();
+  assert.equal(api.calls.filter((c) => c.startsWith('PUT')).length, 1);
+  assert.match(card(1, 2), /aria-expanded="true"/, 'still open after the page reloads');
+  root.click('toggle-service', 1);
+  assert.match(card(1, 2), /aria-expanded="false"/);
+  assert.deepEqual(schedule.statusCounts(SERVICES[1]), { open: 1, pending: 1, accepted: 1, declined: 1 });
+  assert.deepEqual(schedule.statusCounts({ slots: [] }), { open: 0, pending: 0, accepted: 0, declined: 0 });
+});
+
 test('schedule: empty slot shows plus icon with accessible name', async () => {
   const { root } = await schedSetup();
   const h = root.innerHTML;

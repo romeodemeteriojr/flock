@@ -177,6 +177,10 @@ const inviteFrom = (page, name) => {
   return m[1];
 };
 const gapCount = (page, type) => Number(new RegExp(`data-count="${type}">(\\d+)<`).exec(page.html())?.[1]);
+// Tap a show/hide button (a People or Services row, a team) unless it is already open.
+const tapOpen = async (page, action, id) => {
+  if (!page.html().includes(`data-action="${action}" data-id="${id}" aria-expanded="true"`)) await page.click(action, id);
+};
 const positionId = async (page, team, name) => {
   const teams = await page.api.get('/api/teams');
   return teams.find((x) => x.name === team).positions.find((p) => p.name === name).id;
@@ -239,6 +243,7 @@ test('UAT 3 to 8: scheduler adds people, a team, positions, a service, assigns, 
   const patId = personId(page, 'Pat Example');
   const quinnId = personId(page, 'Quinn Example');
   for (const id of [patId, quinnId]) {
+    await tapOpen(page, 'select', id);
     await page.click('positions', id);
     said(page, /What can (Pat|Quinn) Example do\?/);
     wellBuilt(page, 'the positions checklist');
@@ -247,7 +252,10 @@ test('UAT 3 to 8: scheduler adds people, a team, positions, a service, assigns, 
   }
   said(page, /Saved what Quinn Example can do\./);
   await page.goto('#/teams');
+  notSaid(page, /can do this/, 'teams start closed');
+  await tapOpen(page, 'toggle-team', ushers.id);
   said(page, /2 people can do this/);
+  assert.deepEqual([page.focused?.attrs.get('data-action'), page.focused?.attrs.get('aria-expanded')], ['toggle-team', 'true'], 'focus stays on the team that was opened');
 
   // --- Services: a date with two Door positions ---
   await page.goto('#/services');
@@ -273,6 +281,12 @@ test('UAT 3 to 8: scheduler adds people, a team, positions, a service, assigns, 
   // --- Schedule: assign Pat ---
   await page.goto('#/schedule');
   said(page, /Midweek prayer|Door/);
+  // On a phone each date is a closed card that says how it stands; tapping it lists its positions.
+  assert.match(page.html(), new RegExp(`data-action="toggle-service" data-id="${service.id}" aria-expanded="false"[\\s\\S]*?2 open`));
+  await tapOpen(page, 'toggle-service', service.id);
+  assert.match(page.html(), new RegExp(`data-card="${service.id}"[\\s\\S]*?<h3 class="team-title">Ushers</h3>`));
+  assert.equal(page.focused?.attrs.get('data-action'), 'toggle-service', 'focus stays on the card that was opened');
+  wellBuilt(page, 'an open schedule card');
   await page.click('slot-open', slotA);
   said(page, /Who could do this/);
   said(page, /Pat Example/);
@@ -324,6 +338,7 @@ test('UAT 3 to 8: scheduler adds people, a team, positions, a service, assigns, 
 async function resetByScheduler(admin, name) {
   await admin.goto('#/people');
   const id = personId(admin, name);
+  await tapOpen(admin, 'select', id);
   await admin.click('reset-ask', id);
   said(admin, new RegExp(`Reset the login of ${rx(name)}\\? Their password and any linked sign-in`));
   const resets = countCalls(admin, 'POST', /reset-login/);
@@ -481,6 +496,9 @@ test('UAT 12 to 15: change access level, deactivate, reset password, log out, se
 
   // The scheduler cannot change or deactivate their own access by accident.
   const me = personId(admin, 'Demo Admin');
+  await tapOpen(admin, 'select', me);
+  assert.deepEqual([admin.focused?.attrs.get('data-action'), admin.focused?.attrs.get('data-id')], ['select', String(me)], 'focus stays on the row that was opened');
+  assert.equal(admin.has(`[data-action="edit"][data-id="${me}"]`), true, 'my own row is open');
   assert.equal(admin.has(`[data-action="role-ask"][data-id="${me}"]`), false, 'no role button on my own row');
   said(admin, /That's you/);
   await admin.click('active-ask', me);
@@ -489,6 +507,7 @@ test('UAT 12 to 15: change access level, deactivate, reset password, log out, se
   wellBuilt(admin, 'a refused change');
 
   // Volunteer -> scheduler. "No, go back" sends nothing.
+  await tapOpen(admin, 'select', bob.id);
   await admin.click('role-ask', bob.id);
   said(admin, /Make Demo Bob a scheduler\? Demo Bob will be able to change the whole schedule/);
   wellBuilt(admin, 'the role question');
@@ -510,6 +529,7 @@ test('UAT 12 to 15: change access level, deactivate, reset password, log out, se
   said(bobAdmin, /Demo Alice/);
 
   // Scheduler -> volunteer again: the scheduler pages are gone and the server refuses them.
+  await tapOpen(admin, 'select', bob.id);
   await admin.click('role-ask', bob.id);
   await admin.clickButton('Yes, make a volunteer');
   said(admin, /Demo Bob is now a volunteer\./);
@@ -526,6 +546,7 @@ test('UAT 12 to 15: change access level, deactivate, reset password, log out, se
   assert.equal((await admin.api.get('/api/teams')).some((x) => x.name === 'Sneaky team'), false);
 
   // Deactivate: asks first; the open tab is told to log in again; login is refused.
+  await tapOpen(admin, 'select', bob.id);
   await admin.click('active-ask', bob.id);
   said(admin, /Deactivate Demo Bob\? They will not be able to log in/);
   await admin.clickButton('No, go back');
@@ -542,6 +563,7 @@ test('UAT 12 to 15: change access level, deactivate, reset password, log out, se
   assert.equal(bob.phone.hash(), '#/login');
 
   // Reactivate: the same password works again.
+  await tapOpen(admin, 'select', bob.id);
   await admin.click('active-ask', bob.id);
   said(admin, /Reactivate Demo Bob\?/);
   await admin.click('reactivate-yes', bob.id);
@@ -614,6 +636,7 @@ test('UAT 20 (odd text): hostile and odd text is shown as plain text on every pa
   await admin.clickButton('Done');
   said(admin, /<b onmouseover=alert\(3\)>Eve<\/b>/);
   const eve = personId(admin, HOSTILE.person);
+  await tapOpen(admin, 'select', eve);
   await admin.click('positions', eve);
   await admin.tick('toggle-position', { position: pos });
   await admin.click('positions-save', eve);
@@ -625,6 +648,7 @@ test('UAT 20 (odd text): hostile and odd text is shown as plain text on every pa
   wellBuilt(admin, 'services');
   const svc = (await admin.api.get(`/api/services?from=${SERVICE_DATE}&to=${SERVICE_DATE}`)).find((x) => x.title === HOSTILE.title);
   const [slotA, slotB] = svc.slots.map((s) => s.id);
+  await tapOpen(admin, 'select', svc.id);
   await admin.click('delete', svc.id);
   said(admin, /<svg onload=alert\(4\)>Party' & more on/);
   wellBuilt(admin, 'delete question');
@@ -716,6 +740,7 @@ test('UAT 20: double clicks, odd names, stale tabs, rapid page changes and the b
   assert.equal(admin.has('[role="alert"]'), true, admin.text());
   wellBuilt(admin, 'duplicate team');
   const band = (await admin.api.get('/api/teams')).find((x) => x.name === 'Band');
+  await tapOpen(admin, 'toggle-team', band.id);
   await admin.click('delete-team', band.id);
   said(admin, /Delete the team Band\?/);
   await Promise.all([admin.click('delete-team-yes', band.id), admin.click('delete-team-yes', band.id)]);
@@ -731,20 +756,24 @@ test('UAT 20: double clicks, odd names, stale tabs, rapid page changes and the b
   const victim = upcoming[0]; // a demo service with people on it
 
   // Repeat for more weeks: from the last service, two new weeks are added; from a service whose next weeks exist, they are skipped.
+  await tapOpen(admin, 'select', upcoming[upcoming.length - 1].id);
   await admin.click('repeat', upcoming[upcoming.length - 1].id);
   await admin.submit('repeat', { weeks: '0' });
   said(admin, /Please type a number of weeks from 1 to 26\./);
   await admin.submit('repeat', { weeks: '2' });
   said(admin, /Added 2 more services\./);
+  await tapOpen(admin, 'select', victim.id);
   await admin.click('repeat', victim.id);
   await admin.submit('repeat', { weeks: '1' });
   said(admin, /Added 0 more services\. Skipped .*there is already a service then\./);
   wellBuilt(admin, 'repeat');
+  await tapOpen(admin, 'select', victim.id);
   await admin.click('delete', victim.id);
   said(admin, /people are scheduled on this date\.|person is scheduled on this date\./);
   await Promise.all([admin.click('delete-yes', victim.id), admin.click('delete-yes', victim.id)]);
   assert.equal(countCalls(admin, 'DELETE', /\/api\/services\//), 1);
   said(admin, /Service deleted\./);
+  await tapOpen(tab2, 'select', victim.id);
   await tab2.click('delete', victim.id);
   await tab2.click('delete-yes', victim.id);
   assert.equal(tab2.has('[role="alert"]'), true, `the stale tab is told: ${tab2.text()}`);

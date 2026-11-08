@@ -59,8 +59,8 @@ test('gallery: shows the nine new icons with names and renders real icon buttons
   assert.ok(out.includes('New icons'), 'new-icons section');
   assert.ok(out.includes('Icon buttons'), 'icon-buttons section');
   const count = (out.match(/<button type="button" class="icon-btn" aria-label=/g) ?? []).length;
-  // Three in the components section, plus one per row on every people frame.
-  assert.equal(count, 3 + 120, `the gallery should show three component icon buttons plus the people pages and invite actions, found ${count}`);
+  // The three in the components section. People rows show labelled buttons once tapped, not icon-only ones.
+  assert.equal(count, 3, `the gallery should show the three component icon buttons, found ${count}`);
   assert.ok(out.includes('aria-label="Delete service"'), 'danger button label');
   assert.ok(out.includes('icon-btn-danger'), 'danger variant in the gallery');
 });
