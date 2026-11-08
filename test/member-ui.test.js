@@ -88,6 +88,43 @@ test('schedule: co-volunteers listed and escaped', async () => {
   assert.doesNotMatch(root.innerHTML, /<b>x<\/b>/);
 });
 
+test('schedule: the full roster of the day opens and closes, says You for me, and keeps names as text', async () => {
+  const rosters = { '2026-11-08': [{ time: '09:00', serviceTitle: 'Sunday service', teams: [
+    { teamName: 'Band', positions: [
+      { positionName: 'Drums', name: '<b>Ana</b>', status: 'accepted', mine: false },
+      { positionName: 'Keys', name: null, status: 'open', mine: false },
+    ] },
+    { teamName: 'Tech', positions: [{ positionName: 'Sound', name: 'Sam Me', status: 'pending', mine: true }] },
+  ] }] };
+  const { root, api } = await setup(sched, { 'GET /api/me/schedule': { ...data([item()]), rosters } });
+  // Closed at first: one named button, none of the roster.
+  assert.match(root.innerHTML, /data-action="roster" data-id="1" aria-expanded="false"/);
+  assert.match(root.innerHTML, /Full roster<span class="visually-hidden"> for Sun 8 Nov<\/span>/);
+  assert.doesNotMatch(root.innerHTML, /data-roster=/);
+  await root.click('roster', 1);
+  assert.equal(api.calls.length, 1, 'opening the roster needs no request');
+  const h = root.innerHTML;
+  assert.match(h, /data-action="roster" data-id="1" aria-expanded="true"/);
+  assert.match(h, /9:00 am<\/span> · Sunday service/);
+  assert.match(h, /<h4 class="team-title">Band<\/h4>[\s\S]*<h4 class="team-title">Tech<\/h4>/);
+  assert.match(h, /&lt;b&gt;Ana&lt;\/b&gt;/);
+  assert.doesNotMatch(h, /<b>Ana/);
+  assert.match(h, /roster-row is-mine">\s*<span class="roster-pos">Sound<\/span>\s*<span class="roster-who"><strong>You<\/strong>/);
+  assert.doesNotMatch(h, /Sam Me/, 'my own row says You');
+  for (const word of ['Confirmed', 'Open', 'Waiting for answer']) assert.match(h, new RegExp(`>${word}<`));
+  // It stays open when the page repaints after an answer, and closes again.
+  await root.click('accept', 1);
+  assert.match(root.innerHTML, /data-roster="1"/);
+  await root.click('roster', 1);
+  assert.doesNotMatch(root.innerHTML, /data-roster=/);
+  assert.match(root.innerHTML, /aria-expanded="false"/);
+});
+
+test('schedule: no roster button when there is no roster for that day', async () => {
+  const { root } = await setup(sched, { 'GET /api/me/schedule': data([item()]) });
+  assert.doesNotMatch(root.innerHTML, /data-action="roster"/);
+});
+
 test('schedule: Yes and I can\'t call the API and refresh', async () => {
   const { root, api } = await setup(sched, { 'GET /api/me/schedule': data([item()]) });
   await root.click('accept', 1);

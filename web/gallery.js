@@ -67,6 +67,18 @@ export function demoData(today = todayString()) {
       coVolunteers: [{ name: 'Priya Demo', positionName: 'Drums' }, { name: 'Tomás Sample', positionName: 'Keys' }] },
     { slotId: 102, date: addDays(sunday, 14), time: '18:30', serviceTitle: 'Evening prayer', positionName: 'Sound', teamName: 'Tech', status: 'accepted', coVolunteers: [] },
   ];
+  // The full roster of each of those days, as GET /api/me/schedule sends it.
+  const seat = (positionName, name, status, mine = false) => ({ positionName, name, status, mine });
+  const ROSTERS = {
+    [ITEMS[0].date]: [{ time: '10:00', serviceTitle: 'Sunday service', teams: [
+      { teamName: 'Band', positions: [seat('Drums', 'Priya Demo', 'accepted'), seat('Keys', 'Tomás Sample', 'pending'), seat('Vocals', null, 'open')] },
+      { teamName: 'Tech', positions: [seat('Sound', 'Juniper Test', 'pending', true)] },
+    ] }],
+    [ITEMS[1].date]: [{ time: '18:30', serviceTitle: 'Evening prayer', teams: [
+      { teamName: 'Band', positions: [seat('Vocals', 'Ada Placeholder', 'pending')] },
+      { teamName: 'Tech', positions: [seat('Sound', 'Juniper Test', 'accepted', true)] },
+    ] }],
+  };
   const BLOCKOUTS = [
     { id: 1, startDate: addDays(today, 10), endDate: addDays(today, 13), reason: 'Family trip' },
     { id: 2, startDate: addDays(today, 30), endDate: addDays(today, 30), reason: '' },
@@ -91,7 +103,7 @@ export function demoData(today = todayString()) {
     { personId: 4, name: 'Kit Invented', qualified: true, reasons: ['Served once in the last 8 weeks'] },
     { personId: 11, name: 'Lou Pretend', qualified: false, reasons: ['Not set up for Vocals'] },
   ];
-  return { today, sunday, TEAMS, SERVICES, PEOPLE, ITEMS, BLOCKOUTS, GAPS, REMINDERS, CANDIDATES };
+  return { today, sunday, TEAMS, SERVICES, PEOPLE, ITEMS, ROSTERS, BLOCKOUTS, GAPS, REMINDERS, CANDIDATES };
 }
 
 // A fake api: canned answers, no network.
@@ -227,10 +239,11 @@ function pages(d) {
   ${section('p-password', 'Change my password', html`${frame('Change password', password.render({ user: me }))}${frame('With a problem', password.render({ user: me }, { error: "The two new passwords don't match. Please type them again." }))}`)}
   ${section('p-home', 'My schedule (volunteer home)', html`
     ${frame('Loading', mySchedule.render({}, { today: d.today, loading: true }))}
-    ${frame('Serving soon, one to answer', sched({ data: { nextServing: d.ITEMS[0], items: d.ITEMS } }))}
-    ${frame('After saying yes', sched({ message: 'Thank you! You are confirmed.', data: { nextServing: d.ITEMS[1], items: [d.ITEMS[1]] } }))}
-    ${frame('Are you sure?', sched({ confirmId: 102, data: { nextServing: d.ITEMS[1], items: [d.ITEMS[1]] } }))}
-    ${frame('A problem', sched({ problem: 'Someone else took it.', data: { nextServing: d.ITEMS[0], items: [d.ITEMS[0]] } }))}
+    ${frame('Serving soon, one to answer', sched({ data: { nextServing: d.ITEMS[0], items: d.ITEMS, rosters: d.ROSTERS } }))}
+    ${frame('Full roster of the day, opened', sched({ openRosters: new Set([101]), data: { nextServing: d.ITEMS[0], items: d.ITEMS, rosters: d.ROSTERS } }))}
+    ${frame('After saying yes', sched({ message: 'Thank you! You are confirmed.', data: { nextServing: d.ITEMS[1], items: [d.ITEMS[1]], rosters: d.ROSTERS } }))}
+    ${frame('Are you sure?', sched({ confirmId: 102, data: { nextServing: d.ITEMS[1], items: [d.ITEMS[1]], rosters: d.ROSTERS } }))}
+    ${frame('A problem', sched({ problem: 'Someone else took it.', data: { nextServing: d.ITEMS[0], items: [d.ITEMS[0]], rosters: d.ROSTERS } }))}
     ${frame('Nothing yet', sched({ data: { nextServing: null, items: [] } }))}
     ${frame('Could not load', sched({ error: "Can't reach the server. Check your internet and try again." }))}`)}
   ${section('p-off', "Days I can't serve", html`

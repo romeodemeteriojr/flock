@@ -1,10 +1,12 @@
-// My schedule (home page): the next time I serve, and my upcoming list.
+// My schedule (home page): the next time I serve, and my upcoming list, each
+// with the full roster of that day (opened with a show/hide button).
 import { html } from '../lib/html.js';
 import { formatDate, formatTime, daysUntil, relativeDay, todayString } from '../lib/dates.js';
 import { makeHost, isAlive } from '../lib/host.js';
 import { iconSlot } from '../lib/icons.js';
 import { toasts } from '../lib/toast.js';
-import { skeleton, emptyState, pageHead } from '../lib/ui.js';
+import { statusChip } from '../lib/slotpanel.js';
+import { skeleton, emptyState, pageHead, disclosure, refocus } from '../lib/ui.js';
 
 export const title = 'My schedule';
 
@@ -26,6 +28,26 @@ export function bannerText(next, today) {
 function tile(date) {
   const [dow = '', day = '', month = ''] = formatDate(date).split(' ');
   return html`<span class="date-tile" aria-hidden="true"><span class="date-tile-dow">${dow}</span><span class="date-tile-day num">${day}</span><span class="date-tile-mon">${month}</span></span>`;
+}
+
+// The full roster of the card's day (every service, team and position), shown
+// when the volunteer opens it. Rosters come from the server for their days only.
+function roster(item, view) {
+  const day = view.data?.rosters?.[item.date];
+  if (!day?.length) return '';
+  const open = !!view.openRosters?.has(item.slotId);
+  const label = html`${iconSlot('users', 'icon-sm')} Full roster<span class="visually-hidden"> for ${formatDate(item.date)}</span>`;
+  return html`<div class="roster">
+    ${disclosure({ action: 'roster', id: item.slotId, open, label })}
+    ${open ? html`<div class="roster-body" data-roster="${item.slotId}">${day.map((s) => html`
+      <h3 class="roster-service"><span class="num">${formatTime(s.time)}</span> · ${s.serviceTitle}</h3>
+      ${s.teams.map((t) => html`<h4 class="team-title">${t.teamName}</h4>
+      <ul class="list roster-list">${t.positions.map((p) => html`<li class="roster-row${p.mine ? ' is-mine' : ''}">
+        <span class="roster-pos">${p.positionName}</span>
+        <span class="roster-who">${p.mine ? html`<strong>You</strong>` : p.name ?? ''} ${statusChip(p.status)}</span>
+      </li>`)}</ul>`)}`)}
+    </div>` : ''}
+  </div>`;
 }
 
 function card(item, view) {
@@ -59,11 +81,12 @@ function card(item, view) {
       <span class="chip ${pending ? 'chip-wait' : 'chip-ok'}">${pending ? 'Please answer' : 'Confirmed'}</span>
     </div>
     ${co ? html`<p class="hint serve-with">${iconSlot('users', 'icon-sm')} Serving with: ${co}</p>` : ''}
+    ${roster(item, view)}
     ${actions}
   </li>`;
 }
 
-// view: { loading, error, data, message, confirmId, busy, today }
+// view: { loading, error, data, message, confirmId, busy, today, openRosters }
 export function render(state, view = { loading: true }) {
   const today = view.today ?? todayString();
   let body;
@@ -93,7 +116,7 @@ export function render(state, view = { loading: true }) {
 
 export function mount(main, ctx) {
   const root = makeHost(main);
-  const view = { loading: true, today: ctx.today ?? todayString() };
+  const view = { loading: true, today: ctx.today ?? todayString(), openRosters: new Set() };
   const paint = () => { if (isAlive(root, main)) root.innerHTML = render(ctx.state, view); };
 
   async function load() {
@@ -129,6 +152,7 @@ export function mount(main, ctx) {
     const action = el.dataset.action;
     const id = Number(el.dataset.id);
     if (action === 'retry') { view.loading = true; paint(); return load(); }
+    if (action === 'roster') { if (!view.openRosters.delete(id)) view.openRosters.add(id); paint(); refocus(root, action, id); return; }
     if (action === 'accept') return answer(id, 'accept', 'Thank you! You are confirmed.');
     if (action === 'decline') return answer(id, 'decline', "Thanks for letting us know. Your scheduler will find someone else.");
     if (action === 'decline-ask') { view.confirmId = id; view.message = null; paint(); return; }

@@ -24,6 +24,21 @@ export function emptyState(text, art = 'art-calendar', extra = '') {
   return html`<div class="empty-state">${iconSlot(art, 'empty-art')}<p class="empty">${text}</p>${extra}</div>`;
 }
 
+/**
+ * A show/hide button (the WAI-ARIA disclosure pattern): a collapsible part of a
+ * page, or a list row that shows its actions when tapped. The view remembers
+ * what is open (so it stays open when the view repaints) and draws the part
+ * only while it is open. label may be html`...`.
+ */
+export function disclosure({ action, id, open, label, cls = '' }) {
+  return html`<button type="button" class="disclosure${cls ? ` ${cls}` : ''}" data-action="${action}" data-id="${id}" aria-expanded="${open ? 'true' : 'false'}"><span class="disclosure-text">${label}</span>${iconSlot('chevron', 'disclosure-icon')}</button>`;
+}
+
+/** After a repaint, put focus back on the show/hide button just used, so a keyboard user keeps their place. */
+export function refocus(root, action, id) {
+  root?.querySelector?.(`[data-action="${action}"][data-id="${id}"]`)?.focus?.();
+}
+
 /** A page heading block: the h1 (focused on navigation) and an optional line under it. */
 export function pageHead(title, lead = '') {
   return html`<div class="page-head"><h1 tabindex="-1">${title}</h1>${lead ? html`<p class="page-lead">${lead}</p>` : ''}</div>`;

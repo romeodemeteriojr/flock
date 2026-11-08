@@ -573,6 +573,26 @@ table { border-collapse: separate; border-spacing: 0; width: 100%; }
 th, td { text-align: left; padding: var(--s-2) var(--s-3); border-bottom: 1px solid var(--line); vertical-align: top; }
 .table-wrap { overflow-x: auto; }
 
+/* ---------- show/hide: closed parts, and rows that show their buttons once tapped ----------
+   One button (aria-expanded) per part; the chevron turns when it is open. The
+   button reaches a little past the text on both sides so its hover and
+   "open" background have room, while the words stay in line with the page. */
+.disclosure {
+  display: flex; align-items: center; gap: var(--s-3);
+  width: calc(100% + 2 * var(--s-2)); min-height: var(--control-size);
+  margin: 0 calc(-1 * var(--s-2)); padding: var(--s-2);
+  border: 0; border-radius: var(--radius-sm); background: none; color: inherit;
+  font: inherit; text-align: left; cursor: pointer;
+  transition: background-color var(--fast) var(--ease);
+}
+.disclosure:hover { background: var(--surface-2); }
+.disclosure-text { flex: 1; min-width: 0; }
+.disclosure-sub { display: block; margin-top: 2px; color: var(--muted); font-size: var(--fs-sm); font-weight: 500; letter-spacing: 0; }
+.disclosure-icon { flex: none; color: var(--muted); transition: transform var(--fast) var(--ease); }
+.disclosure[aria-expanded="true"] .disclosure-icon { transform: rotate(90deg); }
+.row-select[aria-expanded="true"] { background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent); }
+.row-actions { margin: var(--s-2) 0 0; }
+
 /* An inline "are you sure?" or edit panel inside a row. */
 .confirm {
   margin: var(--s-4) 0 0; padding: var(--s-4);
@@ -694,6 +714,16 @@ th, td { text-align: left; padding: var(--s-2) var(--s-3); border-bottom: 1px so
 .date-tile-dow { font-size: var(--fs-xs); font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; }
 .date-tile-day { font-size: 1.5rem; font-weight: var(--weight-head); }
 .date-tile-mon { font-size: var(--fs-xs); font-weight: 700; }
+.roster { margin-top: var(--s-3); }
+.roster-body { padding: 0 0 var(--s-1); }
+.roster-service { font-size: var(--fs-md); margin: var(--s-3) 0 0; }
+.roster-list > li { padding: var(--s-2) 0; }
+.roster-row { display: grid; grid-template-columns: minmax(4.5rem, 6rem) 1fr; gap: var(--s-3); align-items: start; }
+.roster-pos { min-width: 0; font-weight: 650; overflow-wrap: anywhere; }
+.roster-who { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-1) var(--s-2); min-width: 0; overflow-wrap: anywhere; }
+.roster .chip { font-size: var(--fs-xs); white-space: normal; }
+.roster .team-title { margin: var(--s-3) 0 0; }
+.roster-row.is-mine { background: var(--accent-soft); color: var(--on-accent-soft); border-radius: var(--radius-sm); padding-inline: var(--s-2); }
 
 /* ---------- days off ---------- */
 .off-card { display: flex; align-items: center; gap: var(--s-3); flex-wrap: wrap; }

@@ -46,6 +46,10 @@ test('assign, schedule, accept, decline and unassign end to end', async () => {
       slotId: a, date: '2025-01-12', time: '09:00', serviceTitle: 'Sunday service', positionName: 'Drums', teamName: 'Band',
       status: 'pending', coVolunteers: [{ name: 'Olive Other', positionName: 'Keys' }],
     }]);
+    assert.deepEqual(sched.json.rosters, { '2025-01-12': [{ time: '09:00', serviceTitle: 'Sunday service', teams: [{ teamName: 'Band', positions: [
+      { positionName: 'Drums', name: 'Max Member', status: 'pending', mine: true },
+      { positionName: 'Keys', name: 'Olive Other', status: 'pending', mine: false },
+    ] }] }] });
 
     const acc = await call('POST', `/api/me/slots/${a}/accept`, memberCookie);
     assert.equal(acc.status, 200);
@@ -129,7 +133,7 @@ test('a member cannot touch another member\'s slot', async () => {
     }
     assert.equal((await data.slots.findById(a)).status, 'pending');
     const theirs = await app.request('GET', '/api/me/schedule', { cookie: otherCookie });
-    assert.deepEqual(theirs.json, { nextServing: null, items: [] });
+    assert.deepEqual(theirs.json, { nextServing: null, items: [], rosters: {} });
     // Members cannot assign or unassign at all, not even themselves.
     assert.equal((await call('PUT', `/api/slots/${a}/assign`, memberCookie, { personId: memberId })).status, 403);
     assert.equal((await call('DELETE', `/api/slots/${a}/assign`, memberCookie)).status, 403);

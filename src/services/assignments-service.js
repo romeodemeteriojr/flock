@@ -12,6 +12,29 @@ export const SCHEDULE_DAYS = 84;
 const HOLDING = ['pending', 'accepted'];
 
 const isInt = (v) => Number.isSafeInteger(v);
+const holds = (s) => s.personId !== null && HOLDING.includes(s.status);
+
+/**
+ * One day's full roster as a volunteer serving that day sees it: every service
+ * (by time), every team and position, who holds it and whether they said yes.
+ * Names only; a declined or empty position is open and shows no name.
+ */
+function dayRoster(slots, personId) {
+  const services = new Map();
+  for (const s of slots) {
+    if (!services.has(s.serviceId)) services.set(s.serviceId, { time: s.serviceTime, serviceTitle: s.serviceTitle, teams: new Map() });
+    const teams = services.get(s.serviceId).teams;
+    if (!teams.has(s.teamId)) teams.set(s.teamId, { teamName: s.teamName, positions: [] });
+    const held = holds(s);
+    teams.get(s.teamId).positions.push({
+      positionName: s.positionName,
+      name: held ? s.personName : null,
+      status: held ? s.status : 'open',
+      mine: held && s.personId === personId,
+    });
+  }
+  return [...services.values()].map((sv) => ({ ...sv, teams: [...sv.teams.values()] }));
+}
 
 /** The JSON shape of a slot after an assignment change (admin view). */
 export function assignmentView(s) {
@@ -130,6 +153,7 @@ export function createAssignmentsService(deps) {
      * The person's pending and accepted slots from `from` (default today) for
      * 12 weeks, each with the other people serving on the same service (names
      * and positions only). nextServing is the first item on or after today.
+     * rosters: { [date]: dayRoster } for each of those days, and no other day.
      */
     async mySchedule(personId, { from } = {}) {
       const start = from === undefined || from === null || from === '' ? today() : from;
@@ -137,13 +161,13 @@ export function createAssignmentsService(deps) {
       const end = addDays(start, SCHEDULE_DAYS);
       return data.tx(async (d) => {
         const mine = await d.slots.listForPerson(personId, start, end, HOLDING);
-        const byService = new Map();
+        const byDate = new Map(); // every slot on the days I serve
         if (mine.length) {
-          const wanted = new Set(mine.map((s) => s.serviceId));
+          const days = new Set(mine.map((s) => s.serviceDate));
           for (const s of await d.slots.listForServices(start, end)) {
-            if (!wanted.has(s.serviceId)) continue;
-            if (!byService.has(s.serviceId)) byService.set(s.serviceId, []);
-            byService.get(s.serviceId).push(s);
+            if (!days.has(s.serviceDate)) continue;
+            if (!byDate.has(s.serviceDate)) byDate.set(s.serviceDate, []);
+            byDate.get(s.serviceDate).push(s);
           }
         }
         const items = mine.map((s) => ({
@@ -154,13 +178,14 @@ export function createAssignmentsService(deps) {
           positionName: s.positionName,
           teamName: s.teamName,
           status: s.status,
-          coVolunteers: (byService.get(s.serviceId) ?? [])
-            .filter((o) => o.personId !== null && o.personId !== personId && HOLDING.includes(o.status))
+          coVolunteers: (byDate.get(s.serviceDate) ?? [])
+            .filter((o) => o.serviceId === s.serviceId && holds(o) && o.personId !== personId)
             .map((o) => ({ name: o.personName, positionName: o.positionName })),
         }));
         const now = today();
         const nextServing = items.find((i) => i.date >= now) ?? null;
-        return { nextServing, items };
+        const rosters = Object.fromEntries([...byDate].map(([date, slots]) => [date, dayRoster(slots, personId)]));
+        return { nextServing, items, rosters };
       });
     },
 

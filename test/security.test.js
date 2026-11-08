@@ -160,6 +160,25 @@ test('isolation: a volunteer sees only names and positions of co-volunteers on t
   assert.deepEqual(wide.items.map((i) => i.slotId), [s.shared.slots[0].id]);
 }));
 
+test('isolation: a volunteer sees the full roster of the days they serve (names, positions, answers), and of no other day', () => withApp(async (ctx) => {
+  const s = await twoVolunteers(ctx);
+  // A second service on Ann's day, with Cal on it, is part of that day's roster.
+  const evening = (await s.admin.post('/api/services', { date: '2025-01-12', time: '18:00', title: 'Same Day Evening', slots: [{ positionId: s.drums.id }] })).json;
+  assert.equal((await s.admin.put(`/api/slots/${evening.slots[0].id}/assign`, { personId: s.calId })).status, 200);
+  const mine = (await s.ann.get('/api/me/schedule')).json;
+  assert.deepEqual(Object.keys(mine.rosters), ['2025-01-12']);
+  const text = JSON.stringify(mine.rosters);
+  for (const seen of ['Ann Volunteer', 'Bea Volunteer', 'Cal Elsewhere', 'Same Day Evening']) assert.ok(text.includes(seen), `the day's roster shows ${seen}`);
+  for (const secret of ['Bea Only Evening', 'Cal Only Night', 'secret@example', 'Id"']) assert.ok(!text.includes(secret), `the roster leaks ${secret}`);
+  for (const svc of mine.rosters['2025-01-12']) {
+    assert.deepEqual(Object.keys(svc).sort(), ['serviceTitle', 'teams', 'time']);
+    for (const t of svc.teams) for (const p of t.positions) assert.deepEqual(Object.keys(p).sort(), ['mine', 'name', 'positionName', 'status']);
+  }
+  // Once Ann says no, that day is not hers any more.
+  assert.equal((await s.ann.post(`/api/me/slots/${s.shared.slots[0].id}/decline`)).status, 200);
+  assert.deepEqual((await s.ann.get('/api/me/schedule')).json.rosters, {});
+}));
+
 test('isolation: nothing a volunteer can read leaks another volunteer\'s schedule, blockouts, email or ids', () => withApp(async (ctx) => {
   const s = await twoVolunteers(ctx);
   const before = ctx.client.responses.length;

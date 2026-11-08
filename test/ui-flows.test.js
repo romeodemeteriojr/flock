@@ -386,6 +386,19 @@ test('UAT 9 to 11: volunteer sees My schedule, says yes and no, adds and removes
   assert.equal(waiting().includes(first), false, 'it no longer asks for an answer');
   wellBuilt(phone, 'after saying yes');
 
+  // The confirmed card stays, and opens the full roster of that day: every team and position, me included.
+  assert.equal(phone.has(`[data-slot="${first}"]`), true, 'the confirmed card stays in Coming up');
+  assert.equal(phone.has(`[data-roster="${first}"]`), false, 'the roster starts closed');
+  await phone.click('roster', first);
+  assert.equal(phone.has(`[data-roster="${first}"]`), true);
+  const roster = phone.html().slice(phone.html().indexOf(`data-roster="${first}"`));
+  assert.match(roster, /<strong>You<\/strong>/);
+  assert.match(roster, /Demo [A-Z][a-z]+/, 'other people serving that day are named');
+  assert.match(roster, /class="team-title"/);
+  wellBuilt(phone, 'the full roster');
+  await phone.click('roster', first);
+  assert.equal(phone.has(`[data-roster="${first}"]`), false);
+
   // I can't: asks nothing more, tells the scheduler will find someone.
   await phone.click('decline', second);
   assert.ok(phone.toasts().some((x) => /Your scheduler will find someone else/.test(x)), phone.text());

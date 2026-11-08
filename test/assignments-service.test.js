@@ -296,6 +296,55 @@ test('mySchedule: pending and accepted only, 12 weeks from today, coVolunteers a
   assert.deepEqual(fromPast.items.map((i) => i.slotId), [past, p1]);
   assert.equal(fromPast.nextServing.slotId, p1); // the next one from today, not the past one
   const empty = await svc.mySchedule(rae.id);
-  assert.deepEqual(empty, { nextServing: null, items: [] });
+  assert.deepEqual(empty, { nextServing: null, items: [], rosters: {} });
   await rejectsWith(svc.mySchedule(pat.id, { from: '2025-02-30' }), ValidationError);
+});
+
+test('mySchedule rosters: the whole day of each day I serve, by service, team and position; names only, never another day', async () => {
+  const { svc, admin, pat, quinn, person, data, drums, keys } = await setup();
+  const rae = await person('Rae Ray', 'rae');
+  const sam = await person('Sam Sun', 'sam');
+  await data.qualifications.setForPerson(rae.id, [drums.id, keys.id]);
+  await data.qualifications.setForPerson(sam.id, [drums.id, keys.id]);
+  const tech = await data.teams.create({ name: 'Tech' });
+  const sound = await data.positions.create(tech.id, { name: 'Sound' });
+  const slotsOf = async (date, time, title, positions) => {
+    const s = await data.services.create({ date, time, title });
+    return (await data.slots.createMany(s.id, positions)).map((x) => x.id);
+  };
+  // Pat's day: an evening service first (made first on purpose), then the morning one Pat is on.
+  const [eDrums] = await slotsOf('2025-01-12', '18:00', 'Evening', [drums.id]);
+  const [mSound, mKeys2, mKeys, mDrums] = await slotsOf('2025-01-12', '09:00', 'Morning', [sound.id, keys.id, keys.id, drums.id]);
+  const [oDrums] = await slotsOf('2025-01-19', '09:00', 'Other day', [drums.id]); // not Pat's day
+  void mSound;
+  await svc.assign(admin, mDrums, { personId: pat.id });
+  await svc.assign(admin, mKeys, { personId: quinn.id });
+  await data.slots.respond(mKeys, { status: 'accepted', respondedAt: NOW });
+  await svc.assign(admin, mKeys2, { personId: rae.id });
+  await data.slots.respond(mKeys2, { status: 'declined', respondedAt: NOW });
+  await svc.assign(admin, eDrums, { personId: sam.id });
+  await svc.assign(admin, oDrums, { personId: quinn.id });
+
+  const r = await svc.mySchedule(pat.id);
+  assert.deepEqual(r.rosters, {
+    '2025-01-12': [
+      { time: '09:00', serviceTitle: 'Morning', teams: [
+        { teamName: 'Band', positions: [
+          { positionName: 'Drums', name: 'Pat Person', status: 'pending', mine: true },
+          { positionName: 'Keys', name: null, status: 'open', mine: false }, // Rae said no: open, and no name
+          { positionName: 'Keys', name: 'Quinn Quill', status: 'accepted', mine: false },
+        ] },
+        { teamName: 'Tech', positions: [{ positionName: 'Sound', name: null, status: 'open', mine: false }] },
+      ] },
+      { time: '18:00', serviceTitle: 'Evening', teams: [
+        { teamName: 'Band', positions: [{ positionName: 'Drums', name: 'Sam Sun', status: 'pending', mine: false }] },
+      ] },
+    ],
+  });
+  // "Serving with" still means the same service only.
+  assert.deepEqual(r.items[0].coVolunteers, [{ name: 'Quinn Quill', positionName: 'Keys' }]);
+  assert.doesNotMatch(JSON.stringify(r), /Rae Ray|Other day|personId|@example\.com/);
+  // Saying no makes it not my day any more: no roster for it.
+  await svc.respond(pat.id, mDrums, 'decline');
+  assert.deepEqual(await svc.mySchedule(pat.id), { nextServing: null, items: [], rosters: {} });
 });
