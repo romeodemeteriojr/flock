@@ -364,6 +364,8 @@ test('nav differs by role and marks the current page', () => {
   assert.match(f, /My schedule/);
   assert.match(f, /aria-label="Change my password"/);
   assert.match(f, /Log out/);
+  // People who only sign in with a provider have no password to change.
+  assert.doesNotMatch(nav.render({ user: { ...member, hasPassword: false } }, '#/'), /Change my password/);
 });
 
 test('nav escapes the person name', () => {

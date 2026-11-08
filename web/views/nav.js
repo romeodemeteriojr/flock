@@ -47,7 +47,7 @@ export function render(state, hash = '') {
       <div class="nav-user">
         ${avatar(user.name, 'sm')}
         <p class="nav-who">Logged in as <strong>${user.name}</strong></p>
-        <a class="icon-btn" href="#/password" aria-label="Change my password" title="Change my password">${iconSlot('key')}</a>
+        ${user.hasPassword === false ? '' : html`<a class="icon-btn" href="#/password" aria-label="Change my password" title="Change my password">${iconSlot('key')}</a>`}
         <button type="button" class="btn btn-ghost nav-logout" data-action="logout">${iconSlot('logout')}<span class="nav-logout-label">Log out</span></button>
       </div>
     </div>

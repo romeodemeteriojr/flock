@@ -4,6 +4,7 @@ import { createQueue } from './queue.js';
 import { peopleRepo } from './people.js';
 import { sessionsRepo } from './sessions.js';
 import { invitesRepo } from './invites.js';
+import { identitiesRepo } from './identities.js';
 import { teamsRepo, positionsRepo } from './teams.js';
 import { qualificationsRepo } from './qualifications.js';
 import { servicesRepo } from './services.js';
@@ -40,6 +41,7 @@ export function createSqliteData(db) {
       people: peopleRepo(ctx),
       sessions: sessionsRepo(ctx),
       invites: invitesRepo(ctx),
+      identities: identitiesRepo(ctx),
       teams: teamsRepo(ctx),
       positions: positionsRepo(ctx),
       qualifications: qualificationsRepo(ctx),

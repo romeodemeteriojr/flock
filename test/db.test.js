@@ -21,6 +21,7 @@ test('schema has all tables and columns', () => {
   const want = {
     people: ['id', 'name', 'username', 'email', 'password_hash', 'role', 'active', 'failed_logins', 'locked_until', 'created_at'],
     invites: ['person_id', 'token_hash', 'expires_at', 'created_at'],
+    identities: ['provider', 'subject', 'person_id', 'created_at'],
     sessions: ['id', 'token_hash', 'person_id', 'expires_at', 'created_at'],
     teams: ['id', 'name', 'sort'],
     positions: ['id', 'team_id', 'name', 'sort'],

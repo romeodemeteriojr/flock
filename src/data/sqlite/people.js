@@ -1,6 +1,8 @@
 import { translate, id as newId, changed, num } from './util.js';
 
-const PUBLIC = 'id, name, username, email, role, password_hash IS NOT NULL AS has_password, active, created_at';
+// Joined = has a way to log in: a password or a linked provider account.
+const JOINED = '(password_hash IS NOT NULL OR EXISTS (SELECT 1 FROM identities i WHERE i.person_id = people.id))';
+const PUBLIC = `id, name, username, email, role, password_hash IS NOT NULL AS has_password, ${JOINED} AS joined, active, created_at`;
 const DUP = 'That username is already taken';
 const DUP_EMAIL = 'That email is already used by someone else';
 const dupFor = (e) => (/email/.test(String(e?.message)) ? DUP_EMAIL : DUP);
@@ -12,6 +14,7 @@ const toPerson = (r) => ({
   email: r.email ?? null,
   role: r.role,
   hasPassword: !!r.has_password,
+  joined: !!r.joined,
   active: !!r.active,
   createdAt: r.created_at,
 });
@@ -102,7 +105,7 @@ export function peopleRepo({ db, run }) {
 
     countActiveAdmins: () => run(() => num(
       // An unclaimed invite cannot rescue a locked-out church.
-      db.prepare("SELECT COUNT(*) AS n FROM people WHERE role = 'admin' AND active = 1 AND password_hash IS NOT NULL").get().n,
+      db.prepare(`SELECT COUNT(*) AS n FROM people WHERE role = 'admin' AND active = 1 AND ${JOINED}`).get().n,
     )),
   };
 }

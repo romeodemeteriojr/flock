@@ -10,8 +10,10 @@ const X = { 'X-Flock': '1' };
 const NOW = new Date('2025-01-05T12:00:00Z');
 const CLIENT = 'cid.apps.googleusercontent.com';
 const idToken = (claims) => `h.${Buffer.from(JSON.stringify(claims)).toString('base64url')}.s`;
+// A valid id_token for an account; its stable id (sub) defaults to one per email.
 const good = (email, extra = {}) => ({
-  aud: CLIENT, iss: 'https://accounts.google.com', exp: NOW.getTime() / 1000 + 300, email, email_verified: true, ...extra,
+  aud: CLIENT, iss: 'https://accounts.google.com', exp: NOW.getTime() / 1000 + 300,
+  sub: `sub-${email}`, email, email_verified: true, ...extra,
 });
 
 // Google answers every code with these claims; calls are recorded.
@@ -79,11 +81,16 @@ test('start: redirects to the provider with state, and the same state in a short
   } finally { await t.close(); }
 });
 
-test('a known, active email logs in; the code is exchanged with our secret', async () => {
+async function personWithEmail(t, username, email, opts = {}) {
+  const id = await addPerson(t, { name: username, username, ...opts });
+  await t.data.people.update(id, { email });
+  return id;
+}
+
+test('first sign-in links the account by verified email; the code is exchanged with our secret', async () => {
   const t = await boot((code) => (code === 'c1' ? good('Ann@Example.com') : null));
   try {
-    const id = await addPerson(t, { name: 'Ann', username: 'ann' });
-    await t.data.people.update(id, { email: 'ann@example.com' });
+    const id = await personWithEmail(t, 'ann', 'ann@example.com');
     const r = await signIn(t, 'c1');
     assert.equal(r.status, 302);
     assert.equal(r.headers.location, '/#/');
@@ -92,21 +99,82 @@ test('a known, active email logs in; the code is exchanged with our secret', asy
     assert.equal(t.calls[0].url, PRESETS.google.tokenUrl);
     assert.equal(t.calls[0].body.get('client_secret'), 'shh');
     assert.equal(t.calls[0].body.get('redirect_uri'), 'http://localhost:8080/api/auth/google/callback');
+    assert.equal(await t.data.identities.findPersonId('google', 'sub-Ann@Example.com'), id);
     const me = await t.request('GET', '/api/me', { cookie: s.split(';')[0] });
     assert.equal(me.json.person.id, id);
   } finally { await t.close(); }
 });
 
-test('someone who never joined joins through a provider: no password needed, invite used up', async () => {
+test('joining through a provider needs no password: joined, no password, invite used up', async () => {
   const t = await boot(() => good('new@example.com'));
   try {
-    const id = await addPerson(t, { name: 'New', username: 'new', password: null });
-    await t.data.people.update(id, { email: 'new@example.com' });
+    const id = await personWithEmail(t, 'new', 'new@example.com', { password: null });
     await t.data.invites.replace({ personId: id, tokenHash: 'a'.repeat(64), expiresAt: '2025-02-01T00:00:00.000Z', createdAt: NOW.toISOString() });
     const r = await signIn(t, 'c');
-    assert.ok(sessionOf(r));
-    assert.equal((await t.data.people.findById(id)).hasPassword, true);
+    const cookie = sessionOf(r).split(';')[0];
+    const p = await t.data.people.findAuthById(id);
+    assert.equal(p.passwordHash, null);
+    assert.equal(p.joined, true);
     assert.equal(await t.data.invites.findByTokenHash('a'.repeat(64)), null);
+    const me = await t.request('GET', '/api/me', { cookie });
+    assert.equal(me.status, 200);
+    assert.equal(me.json.person.hasPassword, false);
+    // No password, so password login stays refused.
+    assert.equal((await t.request('POST', '/api/login', { body: { username: 'new@example.com', password: 'anything-1' }, headers: X })).status, 401);
+  } finally { await t.close(); }
+});
+
+test('a linked account is found by its stable id, even after its email changes at the provider', async () => {
+  let claims = good('ann@example.com', { sub: 'g-1' });
+  const t = await boot(() => claims);
+  try {
+    const id = await personWithEmail(t, 'ann', 'ann@example.com');
+    assert.ok(sessionOf(await signIn(t, 'c')));
+    claims = good('ann@new-domain.example', { sub: 'g-1', email_verified: false });
+    const r = await signIn(t, 'c');
+    assert.ok(sessionOf(r), 'still the same account');
+    assert.equal(await t.data.identities.findPersonId('google', 'g-1'), id);
+    // A different account showing the same email cannot take over a linked person.
+    claims = good('ann@example.com', { sub: 'g-2' });
+    assert.equal((await signIn(t, 'c')).headers.location, '/#/login?signin=failed');
+  } finally { await t.close(); }
+});
+
+test('changing the email in Flock or resetting the password unlinks; deactivating blocks', async () => {
+  let claims = good('ann@example.com', { sub: 'g-1' });
+  const t = await boot(() => claims);
+  try {
+    const id = await personWithEmail(t, 'ann', 'ann@example.com');
+    await addPerson(t, { name: 'Boss', username: 'boss', role: 'admin' });
+    const login = await t.request('POST', '/api/login', { body: { username: 'boss', password: 'test-pass-1' }, headers: X });
+    const boss = login.headers['set-cookie'][0].split(';')[0];
+    const call = (m, p, body) => t.request(m, p, { body, cookie: boss, headers: X });
+
+    assert.ok(sessionOf(await signIn(t, 'c')));
+    assert.equal((await call('PATCH', `/api/people/${id}`, { email: 'ann2@example.com' })).status, 200);
+    assert.equal(await t.data.identities.findPersonId('google', 'g-1'), null);
+    assert.equal(sessionOf(await signIn(t, 'c')), undefined, 'old account no longer links');
+    claims = good('ann2@example.com', { sub: 'g-2' });
+    assert.ok(sessionOf(await signIn(t, 'c')), 'the new email links');
+
+    assert.equal((await call('POST', `/api/people/${id}/reset-password`)).status, 200);
+    assert.equal(await t.data.identities.findPersonId('google', 'g-2'), null);
+
+    assert.ok(sessionOf(await signIn(t, 'c')));
+    assert.equal((await call('PATCH', `/api/people/${id}`, { active: false })).status, 200);
+    assert.equal(sessionOf(await signIn(t, 'c')), undefined, 'deactivated people cannot sign in');
+  } finally { await t.close(); }
+});
+
+test('a scheduler who only signs in with a provider cannot change their own email (would lock them out)', async () => {
+  const t = await boot(() => good('boss@example.com'));
+  try {
+    await personWithEmail(t, 'boss', 'boss@example.com', { role: 'admin', password: null });
+    const cookie = sessionOf(await signIn(t, 'c')).split(';')[0];
+    const me = (await t.request('GET', '/api/me', { cookie })).json.person;
+    const r = await t.request('PATCH', `/api/people/${me.id}`, { body: { email: 'typo@example.com' }, cookie, headers: X });
+    assert.equal(r.status, 409);
+    assert.equal((await t.request('GET', '/api/me', { cookie })).status, 200);
   } finally { await t.close(); }
 });
 
@@ -116,6 +184,7 @@ test('refused, always with the same answer: unknown, unverified, deactivated, wr
     unverified: good('ann@example.com', { email_verified: false }),
     aud: good('ann@example.com', { aud: 'someone-else' }),
     expired: good('ann@example.com', { exp: NOW.getTime() / 1000 - 1 }),
+    nosub: good('ann@example.com', { sub: '' }),
     ok: good('ann@example.com'),
     off: good('off@example.com'),
   };
@@ -127,7 +196,7 @@ test('refused, always with the same answer: unknown, unverified, deactivated, wr
     await t.data.people.update(off, { email: 'off@example.com' });
     const cases = [
       ['unknown', {}, 'failed'], ['unverified', {}, 'failed'], ['off', {}, 'failed'],
-      ['aud', {}, 'failed'], ['expired', {}, 'failed'], ['nope', {}, 'failed'],
+      ['aud', {}, 'failed'], ['expired', {}, 'failed'], ['nosub', {}, 'failed'], ['nope', {}, 'failed'],
       ['ok', { tamperState: true }, 'failed'],
     ];
     for (const [code, opts, why] of cases) {

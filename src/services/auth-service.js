@@ -253,7 +253,7 @@ export function createAuthService(deps) {
         return null;
       }
       const person = await data.people.findById(s.personId);
-      return person && person.active && person.hasPassword ? publicPerson(person) : null;
+      return person && person.active && person.joined ? publicPerson(person) : null;
     },
 
     /** The set-up sign-in providers, for the login page: [{id, label}]. */
@@ -268,15 +268,19 @@ export function createAuthService(deps) {
     },
 
     /**
-     * Finish a provider sign-in. Only people an admin already added with that
-     * (verified) email get in. A person who never joined joins now: they get an
-     * unknowable random password, so every "joined" rule keeps working, and their
-     * invite is used up.
+     * Finish a provider sign-in. A linked account (provider + subject, the
+     * provider's stable id) logs straight in. An unlinked one is linked once, to
+     * the active person a scheduler added with that verified email; that also
+     * counts as joining (no password needed) and uses up their invite.
      * @returns {Promise<{person: object, token: string}>}
      * @throws {UnauthenticatedError} always SSO_FAILED_MESSAGE; the reason is only in details/logs
      */
     async ssoFinish({ provider: providerId, code, state, expectedState, redirectUri }) {
       const fail = (reason) => new UnauthenticatedError(SSO_FAILED_MESSAGE, { details: { reason } });
+      const refuse = (reason) => {
+        logger.info('sign-in refused', { provider: providerId, reason });
+        return fail(reason);
+      };
       const p = providerOf(providerId);
       if (!p) throw fail('unknown_provider');
       const same = typeof state === 'string' && typeof expectedState === 'string' && state.length === expectedState.length
@@ -289,24 +293,30 @@ export function createAuthService(deps) {
         logger.warn('sign-in failed', { provider: p.id, reason: 'exchange', message: e?.message });
         throw fail('exchange');
       }
-      if (!who?.email || !who.emailVerified) throw fail('unverified');
-      const found = await data.people.findAuthByEmail(who.email);
-      if (!found || !found.active) {
-        logger.info('sign-in refused', { provider: p.id, reason: found ? 'inactive' : 'unknown' });
-        throw fail(found ? 'inactive' : 'unknown');
-      }
-      const randomHash = found.passwordHash === null ? await hasher.hash(random.token(32)) : null;
       const result = await data.tx(async (d) => {
-        const cur = await d.people.findAuthById(found.id);
-        if (!cur || !cur.active || cur.email !== who.email) throw fail('changed');
-        if (cur.passwordHash === null) {
-          await d.people.setPassword(cur.id, randomHash ?? await hasher.hash(random.token(32)));
-          await d.invites.deleteForPerson(cur.id);
+        let personId = await d.identities.findPersonId(p.id, who.subject);
+        const linking = personId === null;
+        if (linking) {
+          if (!who.email || !who.emailVerified) throw refuse('unverified');
+          personId = (await d.people.findAuthByEmail(who.email))?.id ?? null;
+          if (personId === null) throw refuse('unknown');
         }
-        return { person: publicPerson(await d.people.findById(cur.id)), token: await createSession(cur.id) };
+        const cur = await d.people.findById(personId);
+        if (!cur || !cur.active) throw refuse('inactive');
+        if (linking) {
+          try {
+            await d.identities.link({ provider: p.id, subject: who.subject, personId, createdAt: nowDate().toISOString() });
+          } catch (e) {
+            if (e?.name === 'DuplicateError') throw refuse('other_account_linked');
+            throw e;
+          }
+          await d.invites.deleteForPerson(personId);
+        }
+        return { person: publicPerson(await d.people.findById(personId)), token: await createSession(personId), linking };
       });
+      if (result.linking) logger.info('account linked', { personId: result.person.id, provider: p.id });
       logger.info('login', { personId: result.person.id, via: p.id });
-      return result;
+      return { person: result.person, token: result.token };
     },
 
     /** End one session. Unknown or empty tokens are ignored. */

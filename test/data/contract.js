@@ -71,7 +71,7 @@ export function runContract(name, makeData) {
         await fresh();
         const p = await person('ann', { name: 'Ann', role: 'admin', passwordHash: null });
         assert.equal(typeof p.id, 'number');
-        assert.deepEqual(p, { id: p.id, name: 'Ann', username: 'ann', email: null, role: 'admin', hasPassword: false, active: true, createdAt: T, positionIds: [] });
+        assert.deepEqual(p, { id: p.id, name: 'Ann', username: 'ann', email: null, role: 'admin', hasPassword: false, joined: false, active: true, createdAt: T, positionIds: [] });
         assert.equal((await data.people.findAuthById(p.id)).passwordHash, null);
         noSecrets(p, 'people.create');
       });
@@ -180,6 +180,31 @@ export function runContract(name, makeData) {
         assert.equal(await data.people.countActiveAdmins(), 2);
         await data.people.update(a.id, { active: false });
         assert.equal(await data.people.countActiveAdmins(), 1);
+      });
+    });
+
+    // ---------- identities ----------
+    describe('identities', () => {
+      test('link, find, one account per provider per person, unlink; a linked account counts as joined', async () => {
+        await fresh();
+        const a = await person('ann', { role: 'admin', passwordHash: null });
+        const b = await person('bob', { passwordHash: null });
+        assert.equal(await data.people.countActiveAdmins(), 0);
+        await data.identities.link({ provider: 'google', subject: 's-1', personId: a.id, createdAt: T });
+        assert.equal(await data.identities.findPersonId('google', 's-1'), a.id);
+        assert.equal(await data.identities.findPersonId('google', 's-2'), null);
+        assert.equal(await data.identities.findPersonId('other', 's-1'), null);
+        const joined = await data.people.findById(a.id);
+        assert.equal(joined.joined, true);
+        assert.equal(joined.hasPassword, false);
+        assert.equal(await data.people.countActiveAdmins(), 1);
+        await assert.rejects(data.identities.link({ provider: 'google', subject: 's-1', personId: b.id, createdAt: T }), DuplicateError);
+        await assert.rejects(data.identities.link({ provider: 'google', subject: 's-3', personId: a.id, createdAt: T }), DuplicateError);
+        await data.identities.link({ provider: 'other', subject: 's-1', personId: a.id, createdAt: T });
+        await assert.rejects(data.identities.link({ provider: 'google', subject: 's-9', personId: 999, createdAt: T }));
+        assert.equal(await data.identities.deleteForPerson(a.id), 2);
+        assert.equal(await data.identities.deleteForPerson(a.id), 0);
+        assert.equal((await data.people.findById(a.id)).joined, false);
       });
     });
 

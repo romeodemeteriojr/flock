@@ -41,7 +41,7 @@ export function personView(p) {
     email: p.email ?? null,
     role: p.role,
     active: !!p.active,
-    joined: !!p.hasPassword,
+    joined: !!p.joined,
     positionIds: p.positionIds ?? [],
   };
 }
@@ -123,7 +123,7 @@ export function createPeopleService(deps) {
         if (id === actor?.id && !newActive && cur.active) {
           throw new ConflictError('You cannot deactivate your own account');
         }
-        const wasActiveAdmin = cur.role === 'admin' && cur.active && cur.hasPassword;
+        const wasActiveAdmin = cur.role === 'admin' && cur.active && cur.joined;
         const stillActiveAdmin = newRole === 'admin' && newActive;
         if (wasActiveAdmin && !stillActiveAdmin && (await d.people.countActiveAdmins()) <= 1) {
           throw new ConflictError('There must always be at least one active admin');
@@ -132,7 +132,12 @@ export function createPeopleService(deps) {
         if (name !== undefined && name !== cur.name) changes.push('name');
         if (newRole !== cur.role) changes.push(`role ${cur.role} -> ${newRole}`);
         if (newActive !== cur.active) changes.push(newActive ? 'reactivated' : 'deactivated');
-        if (mail !== undefined && mail !== cur.email) changes.push('email');
+        const emailChanged = mail !== undefined && mail !== cur.email;
+        if (emailChanged) changes.push('email');
+        // Unlinking your only way in would log you out on the spot (and could lock out the last scheduler).
+        if (emailChanged && id === actor?.id && !cur.hasPassword) {
+          throw new ConflictError('You sign in with this email, so another scheduler has to change it.');
+        }
         let updated;
         try {
           updated = await d.people.update(id, { name: name ?? cur.name, role: newRole, active: newActive, email: mail });
@@ -141,6 +146,8 @@ export function createPeopleService(deps) {
           throw e;
         }
         if (!newActive) await auth.endSessions(id);
+        // Accounts are linked through the email; a new email means linking again.
+        if (emailChanged) await d.identities.deleteForPerson(id);
         if (changes.length) await audit(d, actor, 'person.update', `person ${id}: ${changes.join(', ')}`);
         return updated;
       });
@@ -153,7 +160,7 @@ export function createPeopleService(deps) {
         const p = await d.people.findById(id);
         if (!p) throw new NotFoundError(NOT_FOUND);
         if (!p.active) throw new ValidationError(`${p.name} is deactivated. Reactivate them first.`);
-        if (p.hasPassword) throw new ValidationError(`${p.name} has already joined. Use Reset password instead.`);
+        if (p.joined) throw new ValidationError(`${p.name} has already joined. Use Reset password instead.`);
         const inv = auth.newInvite();
         await d.invites.replace({ personId: id, tokenHash: inv.tokenHash, expiresAt: inv.expiresAt, createdAt: inv.createdAt });
         await audit(d, actor, 'person.invite', `person ${id}`);
@@ -161,12 +168,13 @@ export function createPeopleService(deps) {
       });
     },
 
-    /** Clear the password and every session, and return a one-time invite. */
+    /** Clear the password, linked sign-in accounts and every session, and return a one-time invite. */
     async resetPassword(actor, id) {
       return data.tx(async (d) => {
         if (!(await d.people.setPassword(id, null))) throw new NotFoundError(NOT_FOUND);
         const inv = auth.newInvite();
         await d.sessions.deleteForPerson(id);
+        await d.identities.deleteForPerson(id);
         await d.invites.replace({ personId: id, tokenHash: inv.tokenHash, expiresAt: inv.expiresAt, createdAt: inv.createdAt });
         await audit(d, actor, 'person.reset_password', `person ${id}`);
         return { person: personView(await d.people.findById(id)), invite: { token: inv.token, expiresAt: inv.expiresAt } };

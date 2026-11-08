@@ -36,7 +36,7 @@ export function oidcProvider({ id, label, authUrl, tokenUrl, issuers, extraParam
       return `${authUrl}?${q}`;
     },
 
-    /** Code -> {email, emailVerified}. Throws on any problem. */
+    /** Code -> {subject, email, emailVerified}. Throws on any problem. */
     async exchange({ code, redirectUri, nowMs }) {
       const res = await fetch(tokenUrl, {
         method: 'POST',
@@ -52,7 +52,8 @@ export function oidcProvider({ id, label, authUrl, tokenUrl, issuers, extraParam
       if (claims.aud !== clientId) throw new Error(`${label} id_token has the wrong audience`);
       if (!issuers.includes(claims.iss)) throw new Error(`${label} id_token has the wrong issuer`);
       if (!(Number(claims.exp) * 1000 > nowMs)) throw new Error(`${label} id_token has expired`);
-      return { email: typeof claims.email === 'string' ? claims.email.toLowerCase() : null, emailVerified: claims.email_verified === true };
+      if (typeof claims.sub !== 'string' || claims.sub === '' || claims.sub.length > 255) throw new Error(`${label} id_token has no subject`);
+      return { subject: claims.sub, email: typeof claims.email === 'string' ? claims.email.toLowerCase() : null, emailVerified: claims.email_verified === true };
     },
   };
 }

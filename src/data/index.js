@@ -32,6 +32,7 @@ export { DuplicateError, InUseError } from './errors.js';
  * @property {string|null} email  lowercase, unique when set
  * @property {'admin'|'member'} role
  * @property {boolean} hasPassword
+ * @property {boolean} joined  has a password or a linked sign-in account
  * @property {boolean} active
  * @property {string} createdAt  ISO time
  * @property {number[]} positionIds  qualified positions, ascending
@@ -93,6 +94,14 @@ export { DuplicateError, InUseError } from './errors.js';
  * @property {(invite: Invite) => Promise<void>} replace  Replaces this person's previous invite.
  * @property {(tokenHash: string) => Promise<Invite|null>} findByTokenHash
  * @property {(personId: number) => Promise<number>} deleteForPerson  Number deleted.
+ */
+
+/**
+ * @typedef {object} IdentitiesRepo  Linked sign-in provider accounts.
+ * @property {(i: {provider: string, subject: string, personId: number, createdAt: string}) => Promise<void>} link
+ *   DuplicateError when the account, or another account of this provider for the person, is already linked.
+ * @property {(provider: string, subject: string) => Promise<number|null>} findPersonId
+ * @property {(personId: number) => Promise<number>} deleteForPerson  Number unlinked.
  */
 
 /**
@@ -291,6 +300,7 @@ export { DuplicateError, InUseError } from './errors.js';
  * @property {PeopleRepo} people
  * @property {SessionsRepo} sessions
  * @property {InvitesRepo} invites
+ * @property {IdentitiesRepo} identities
  * @property {TeamsRepo} teams
  * @property {PositionsRepo} positions
  * @property {QualificationsRepo} qualifications
