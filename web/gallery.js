@@ -276,7 +276,7 @@ export function renderGallery({ today = todayString() } = {}) {
   const d = demoData(today);
   return String(html`
     <header class="gallery-head">
-      <p class="hero-eyebrow">${iconSlot('sparkle', 'icon-sm')} Style gallery</p>
+      <p class="hero-eyebrow">${iconSlot('flock', 'icon-sm')} Style gallery</p>
       <h1>Flock: how it looks</h1>
       <p class="lead">Every part of the app, drawn with made-up names. Nothing here is real or saved.</p>
       <nav class="gallery-toc" aria-label="Gallery sections"><a href="#g-palette">Components</a> <a href="#g-p-login">Pages</a> <a href="#g-live">Live demo</a></nav>

@@ -27,7 +27,7 @@ async function webFiles(dir = WEB) {
 }
 const rel = (f) => '/' + path.relative(WEB, f).split(path.sep).join('/');
 
-const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.woff2': 'font/woff2', '.svg': 'image/svg+xml' };
+const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.woff2': 'font/woff2', '.svg': 'image/svg+xml', '.png': 'image/png' };
 
 const member = { id: 2, name: 'Mary', role: 'member' };
 const admin = { id: 1, name: 'Ann', role: 'admin' };
@@ -69,7 +69,7 @@ test('index.html has lang, viewport, title, #app, module script and stylesheet',
 });
 
 test('no external URLs, inline scripts, inline handlers or inline styles in web files', async () => {
-  for (const f of (await webFiles()).filter((p) => !p.endsWith('.woff2'))) {
+  for (const f of (await webFiles()).filter((p) => !/\.(woff2|png)$/.test(p))) {
     // The SVG namespace is an identifier, never fetched.
     const s = (await readFile(f, 'utf8')).replace('xmlns="http://www.w3.org/2000/svg"', '');
     const name = rel(f);

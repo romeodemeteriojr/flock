@@ -1,3 +1,5 @@
+<img src="web/favicon.svg" width="64" alt="">
+
 # Flock
 
 Flock helps a church plan who serves on which Sunday. It keeps your volunteer
