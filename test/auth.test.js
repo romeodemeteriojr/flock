@@ -20,9 +20,10 @@ function makeCtx(start = T0, config) {
 }
 
 async function seed(ctx = makeCtx()) {
-  const add = async (name, username, pw, role, active) => {
+  // People are named by a short handle; their login is <handle>@example.com.
+  const add = async (name, handle, pw, role, active) => {
     const p = await ctx.data.people.create({
-      name, username, role, createdAt: T0,
+      name, email: `${handle}@example.com`, role, createdAt: T0,
     });
     await ctx.data.people.setPassword(p.id, await ctx.c.hasher.hash(pw));
     if (!active) await ctx.data.people.update(p.id, { active: false });
@@ -36,9 +37,10 @@ async function seed(ctx = makeCtx()) {
 
 const row = (s, id) => s.data.people.findAuthById(id);
 const sessionCount = (s, id) => s.db.prepare('SELECT COUNT(*) n FROM sessions WHERE person_id=?').get(id).n;
-const tryLogin = async (s, u, p) => {
+const emailOf = (handle) => (typeof handle !== 'string' || handle === '' || handle.includes('@') ? handle : `${handle}@example.com`);
+const tryLogin = async (s, handle, p) => {
   try {
-    const r = await s.auth.login(u, p);
+    const r = await s.auth.login(emailOf(handle), p);
     return { ok: true, ...r };
   } catch (e) {
     if (e.status === 429) return { ok: false, reason: 'locked', retryAfterSec: e.retryAfterSec };
@@ -57,8 +59,8 @@ const tryChange = async (s, id, o, n, opts) => {
 };
 // Sessions without changing the password: log in with the known passwords.
 const PW = { ann: 'correct horse', bob: 'bobs password', cy: 'cys password' };
-async function loginToken(s, username) {
-  return (await s.auth.login(username, PW[username])).token;
+async function loginToken(s, handle) {
+  return (await s.auth.login(emailOf(handle), PW[handle])).token;
 }
 
 // ---------- hashing ----------
@@ -110,13 +112,13 @@ test('verifyPassword right, wrong, malformed', async () => {
 });
 
 test('validatePassword rules', () => {
-  assert.equal(validatePassword('longenough', { username: 'ann' }), null);
-  assert.equal(validatePassword('a'.repeat(200), { username: 'ann' }), null);
-  assert.match(validatePassword('short', { username: 'ann' }), /at least 8/);
-  assert.match(validatePassword('a'.repeat(201), { username: 'ann' }), /at most 200/);
-  assert.match(validatePassword('        ', { username: 'ann' }), /spaces/);
-  assert.match(validatePassword('annabelle', { username: 'annabelle' }), /username/);
-  assert.match(validatePassword('AnnaBelle', { username: 'annabelle' }), /username/);
+  assert.equal(validatePassword('longenough', { email: 'ann@example.com' }), null);
+  assert.equal(validatePassword('a'.repeat(200), { email: 'ann@example.com' }), null);
+  assert.match(validatePassword('short', { email: 'ann@example.com' }), /at least 8/);
+  assert.match(validatePassword('a'.repeat(201), { email: 'ann@example.com' }), /at most 200/);
+  assert.match(validatePassword('        ', { email: 'ann@example.com' }), /spaces/);
+  assert.match(validatePassword('annabelle@example.com', { email: 'annabelle@example.com' }), /email/);
+  assert.match(validatePassword(' AnnaBelle@Example.com ', { email: 'annabelle@example.com' }), /email/);
   assert.match(validatePassword(undefined), /password/i);
   assert.match(validatePassword(12345678), /password/i);
   assert.equal(validatePassword('longenough'), null);
@@ -150,7 +152,7 @@ test('session create, get, expire, destroy', async () => {
 
   const p = await auth.authenticate(tok);
   assert.equal(p.id, ann);
-  assert.equal(p.username, 'ann');
+  assert.equal(p.email, 'ann@example.com');
   assert.ok(!('passwordHash' in p) && !('password_hash' in p));
 
   assert.equal(await auth.authenticate('nope'), null);
@@ -226,7 +228,7 @@ test('login success, invalid, unknown, inactive', async () => {
   assert.equal(ok.ok, true);
   assert.equal(ok.person.id, ann);
   assert.ok(!('passwordHash' in ok.person));
-  assert.equal((await tryLogin(s, 'ANN', 'correct horse')).ok, true, 'username is case-insensitive');
+  assert.equal((await tryLogin(s, 'ANN@Example.com', 'correct horse')).ok, true, 'email is case-insensitive');
 
   assert.deepEqual(await tryLogin(s, 'ann', 'wrong password'), { ok: false, reason: 'invalid' });
   assert.deepEqual(await tryLogin(s, 'nobody', 'correct horse'), { ok: false, reason: 'invalid' });
@@ -305,15 +307,14 @@ test('changePassword rules', async () => {
   assert.match((await tryChange(s, ann, 'correct horse', 'short')).error, /at least 8/);
   assert.match((await tryChange(s, ann, 'correct horse', 'correct horse')).error, /different/);
   assert.match((await tryChange(s, ann, 'correct horse', '          ')).error, /spaces/);
-  db.prepare("UPDATE people SET username='annexample' WHERE id=?").run(ann);
-  assert.match((await tryChange(s, ann, 'correct horse', 'annexample')).error, /username/);
+  assert.match((await tryChange(s, ann, 'correct horse', 'ANN@example.com')).error, /email/);
   assert.equal((await tryChange(s, 9999, 'x', 'brand new pw')).ok, false);
 
   assert.deepEqual(await tryChange(s, ann, 'correct horse', 'brand new pw'), { ok: true });
   assert.equal((await row(s, ann)).hasPassword, true);
   assert.equal(await s.c.hasher.verify('brand new pw', (await row(s, ann)).passwordHash), true);
-  assert.equal((await tryLogin(s, 'annexample', 'correct horse')).ok, false);
-  assert.equal((await tryLogin(s, 'annexample', 'brand new pw')).ok, true);
+  assert.equal((await tryLogin(s, 'ann', 'correct horse')).ok, false);
+  assert.equal((await tryLogin(s, 'ann', 'brand new pw')).ok, true);
 });
 
 test('changePassword destroys other sessions but keeps the current one', async () => {
@@ -347,7 +348,7 @@ test('reset clears lockout and sessions; an invite chooses the replacement passw
   const tok = await loginToken(s, 'ann');
   for (let i = 0; i < 5; i++) await tryLogin(s, 'ann', 'bad');
   assert.ok((await row(s, ann)).lockedUntil);
-  const { invite } = await s.c.services.people.resetPassword(null, ann);
+  const { invite } = await s.c.services.people.resetLogin(null, ann);
   const r = await row(s, ann);
   assert.deepEqual([r.passwordHash, r.hasPassword, r.failedLogins, r.lockedUntil], [null, false, 0, null]);
   assert.equal(await auth.authenticate(tok), null);
@@ -360,7 +361,7 @@ test('reset clears lockout and sessions; an invite chooses the replacement passw
 
 test('reset on an unknown person throws', async () => {
   const s = await seed();
-  await assert.rejects(s.c.services.people.resetPassword(null, 9999));
+  await assert.rejects(s.c.services.people.resetLogin(null, 9999));
 });
 
 // ---------- publicPerson ----------
@@ -368,7 +369,7 @@ test('reset on an unknown person throws', async () => {
 test('publicPerson exposes no hash', async () => {
   const s = await seed();
   const p = publicPerson(await row(s, s.ann));
-  assert.deepEqual(p, { id: s.ann, name: 'Ann Example', username: 'ann', role: 'admin', hasPassword: true, active: true });
+  assert.deepEqual(p, { id: s.ann, name: 'Ann Example', email: 'ann@example.com', role: 'admin', hasPassword: true, active: true });
   assert.ok(!JSON.stringify(p).includes('fast$') && !JSON.stringify(p).includes('scrypt'));
   assert.equal(publicPerson(await row(s, s.cy)).active, false);
   assert.equal(publicPerson(null), null);

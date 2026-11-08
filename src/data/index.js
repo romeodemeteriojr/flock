@@ -28,8 +28,7 @@ export { DuplicateError, InUseError } from './errors.js';
  * @typedef {object} Person  Public person, never contains secrets.
  * @property {number} id
  * @property {string} name
- * @property {string} username
- * @property {string|null} email  lowercase, unique when set
+ * @property {string|null} email  the login (lowercase, unique); null = cannot log in
  * @property {'admin'|'member'} role
  * @property {boolean} hasPassword
  * @property {boolean} joined  has a password or a linked sign-in account
@@ -39,10 +38,10 @@ export { DuplicateError, InUseError } from './errors.js';
  */
 
 /**
- * @typedef {object} AuthPerson  Only returned by people.findAuthById / findAuthByUsername.
+ * @typedef {object} AuthPerson  Only returned by people.findAuthById / findAuthByEmail.
  * @property {number} id
  * @property {string} name
- * @property {string} username
+ * @property {string|null} email
  * @property {'admin'|'member'} role
  * @property {boolean} hasPassword
  * @property {boolean} active
@@ -54,12 +53,11 @@ export { DuplicateError, InUseError } from './errors.js';
 
 /**
  * @typedef {object} PeopleRepo
- * @property {(p: {name: string, username: string, email?: string|null, role?: 'admin'|'member', createdAt: string}) => Promise<Person>} create
+ * @property {(p: {name: string, email?: string|null, role?: 'admin'|'member', createdAt: string}) => Promise<Person>} create
  *   Add an active person with no password (role defaults to member).
- *   Throws DuplicateError when the username is taken (case-insensitive).
+ *   Throws DuplicateError when the email is taken (case-insensitive).
  * @property {(id: number) => Promise<Person|null>} findById
  * @property {(id: number) => Promise<AuthPerson|null>} findAuthById  Includes passwordHash, failedLogins, lockedUntil.
- * @property {(username: string) => Promise<AuthPerson|null>} findAuthByUsername  Case-insensitive match.
  * @property {(email: string) => Promise<AuthPerson|null>} findAuthByEmail  Case-insensitive match.
  * @property {() => Promise<Person[]>} list  Everyone (active or not), sorted by name (case-insensitive) then id.
  * @property {(id: number, patch: {name?: string, role?: 'admin'|'member', active?: boolean, email?: string|null}) => Promise<Person|null>} update

@@ -4,7 +4,7 @@ export function firstName(name) {
 }
 
 /** The ready-to-send message; callers render it as escaped text or copy it as plain text. */
-export function inviteMessage({ name, username, link }) {
+export function inviteMessage({ name, email, link }) {
   return `Hi ${firstName(name)}, you've been added to Flock. Tap this link to choose your password: ${link} `
-    + `Your username is ${username}. The link works for 7 days.`;
+    + `You will log in with ${email}. The link works for 7 days.`;
 }

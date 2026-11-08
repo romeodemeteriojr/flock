@@ -49,7 +49,7 @@ This guide is for the person who schedules volunteers. You do not need to be a p
 7. Create the first scheduler account:
 
    ```
-   fly ssh console -C "node bin/flock.js create-admin <username> 'Full Name'"
+   fly ssh console -C "node bin/flock.js create-admin <email> 'Full Name'"
    ```
 
    A **one-time invite link is printed**, valid for 7 days. Give it only to that person privately. Opening it lets them choose a password and logs them in. Check that it starts with your deployed HTTPS address, not localhost.
@@ -151,7 +151,7 @@ About **$2.34 a month** for one small machine plus a 1 GB volume. Prices change,
 - **"app name already taken"**: choose a different, more unique name in `fly.toml`.
 - **Deploy says no volume found**: run the `fly volumes create` step with the same region as `fly.toml`.
 - **Site will not load**: run `fly status` and `fly logs`. The health check is `/api/health`.
-- **Lost or expired first-scheduler invite**: run `create-admin` with a new username. If another scheduler can already log in, ask them to make a new invite instead.
+- **Lost or expired first-scheduler invite**: run `create-admin` with a different email. If another scheduler can already log in, ask them to make a new invite instead.
 - **An invite points at localhost**: set `FLOCK_PUBLIC_URL` to the public HTTPS address before creating CLI accounts. On People, browse using that address and choose **Copy new invite**.
 - **Data looks different after a while**: run `fly machine list` and make sure there is only one machine.
 - **`fly` not found**: reinstall flyctl and open a new terminal window.

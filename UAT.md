@@ -35,7 +35,7 @@ Allow about 90 minutes for everything. You can stop after any scenario.
    ```
    Demo data added: 13 people, 4 teams, 8 services, 4 blockouts.
    Everything here is fake.
-   Admin username: demo-admin
+   Admin email: demo-admin@example.com
    Invite link (works once, for 7 days): http://localhost:8080/#/welcome?token=<one-time-token>
    ```
 
@@ -53,7 +53,7 @@ Allow about 90 minutes for everything. You can stop after any scenario.
 6. Open a web browser (Chrome, Safari, Firefox or Edge) and go to
    **http://localhost:8080**.
 
-You should see a page called **Log in to Flock** with a Username box and a
+You should see a page called **Log in to Flock** with an Email box and a
 Password box.
 
 **Starting over:** press Ctrl+C in the terminal to stop Flock. Delete the files
@@ -63,10 +63,10 @@ has people in it. That is on purpose.
 
 ### A2. The demo people
 
-| Name | Username | Can log in with |
+| Name | Email (the login) | Can log in with |
 | --- | --- | --- |
-| Demo Admin (a scheduler) | `demo-admin` | choose a password using the invite printed in A1 |
-| Demo Alice, Bob, Carol, Dave, Erin, Frank, Grace, Heidi, Ivan, Judy, Mallory, Niaj | `demo.alice`, `demo.bob`, and so on | nothing yet. Make an invite on People, or add your own person in scenario 3 |
+| Demo Admin (a scheduler) | `demo-admin@example.com` | choose a password using the invite printed in A1 |
+| Demo Alice, Bob, Carol, Dave, Erin, Frank, Grace, Heidi, Ivan, Judy, Mallory, Niaj | `demo.alice@example.com`, `demo.bob@example.com`, and so on | nothing yet. Make an invite on People, or add your own person in scenario 3 |
 
 The demo has four teams (Band, Sound, Kids, Greeters) and eight "Sunday
 service" dates at 10:00 am, starting next Sunday. Some positions are filled,
@@ -104,11 +104,11 @@ Use the laptop. Keep the terminal window open.
 ### 1. Join with an invite and change a password voluntarily
 
 1. Go to http://localhost:8080. You should see **Log in to Flock**, with no menu.
-2. Click **Log in** without typing anything: **Please type your username and password.**
-3. Try `demo-admin` with a password you have not chosen. It must say
-   **Wrong username or password**, not let someone claim the account.
+2. Click **Log in** without typing anything: **Please type your email and password.**
+3. Try `demo-admin@example.com` with a password you have not chosen. It must say
+   **Wrong email or password**, not let someone claim the account.
 4. Open the invite link printed in A1. **Welcome to Flock** should show the
-   username `demo-admin`. Try mismatched passwords: **The two passwords are
+   email `demo-admin@example.com`. Try mismatched passwords: **The two passwords are
    not the same.** Try `short`: the message should require at least 8 characters.
 5. Choose your own password twice, such as `my own password 1`, and click
    **Choose password** twice quickly. You should be logged in once, on
@@ -132,7 +132,7 @@ Use the laptop. Keep the terminal window open.
 
 1. Click **Log out** (top right). You should be on the Log in page.
 2. Type `demo-admin` and a wrong password, and click **Log in**, five times in a row.
-   You should see **Wrong username or password** each time (the fifth try may
+   You should see **Wrong email or password** each time (the fifth try may
    already say it is locked).
 3. Now type the **correct** password. You should still be refused, with
    **Too many tries. Please wait a few minutes.** That is the lockout working.
@@ -146,25 +146,29 @@ Use the laptop. Keep the terminal window open.
 1. Click **People** in the menu. You should see Demo Admin and the twelve other
    demo people, each with a coloured circle with initials, **Volunteer** or
    **Scheduler**, and buttons.
-2. Click **Add person**. In the Name box type `Pat Example`. As you type, the
-   line under Username should change to **Leave it empty and we will use:
-   pat.example**.
+2. Click **Add person**. In the Name box type `Pat Example`, and in the Email
+   box `pat.example@example.com`.
 3. Clear the name and click the **Add person** button inside the form. You should
    see **Please type a name.**
-4. Type `Pat Example` again and click **Add person** (try double-clicking it).
+4. Type `Pat Example` again (and the email) and click **Add person** (try double-clicking it).
 5. You should see **Invite for Pat Example**, a message containing Pat's
-   username and a one-time link, and **Copy message**. Click it and save the
+   email and a one-time link, and **Copy message**. Click it and save the
    message privately. Only one Pat Example should have been added; their row
    says **Not joined yet**. A localhost warning means this link only works on
    the laptop: use the laptop's network address from A3 and **Copy new invite**
    before sending the message to a phone.
 6. Click **Done**. The invite box should disappear. Making another invite
    cancels the previous link.
-7. Add `Quinn Example` the same way and save their invite message privately.
-8. Try adding a third person named `Someone Else` but with the username
-   `pat.example`. You should see **That username is already taken.** Click Cancel.
-9. Type `quinn` in the **Search by name or username** box. Only Quinn Example
+7. Add `Quinn Example` (`quinn.example@example.com`) the same way and save
+   their invite message privately.
+8. Try adding a third person named `Someone Else` but with the email
+   `pat.example@example.com`. You should see **That email is already used by
+   someone else.** Click Cancel.
+9. Type `quinn` in the **Search by name or email** box. Only Quinn Example
    should stay in the list.
+10. Add `Gran Example` with no email. You should see **Gran Example is added.
+   Without an email they cannot log in, but you can schedule them.** and the
+   row says **No email, cannot log in**.
 
 - [ ] Pass   [ ] Fail   Notes: ______________________________
 
@@ -267,8 +271,8 @@ laptop.
 
 1. On the laptop, open Flock using its network address from A3. On Pat's row,
    choose **Copy new invite**, then **Copy message**. Send it privately to the phone.
-2. On the phone, tap the new link. **Welcome to Flock** should show Pat's
-   username, `pat.example`. Choose a password and type it again. The boxes
+2. On the phone, tap the new link. **Welcome to Flock** should show the
+   email Pat logs in with, `pat.example@example.com`. Choose a password and type it again. The boxes
    show dots, not letters. Tap **Choose password**; this also logs Pat in.
 3. You should land on **My schedule**: a big **Next up** box with a sentence
    such as **You're serving this Sunday as Door at 9:00 am** (or **Next time
@@ -349,7 +353,7 @@ Back on the laptop, logged in as the scheduler.
    **Deactivated** tag.
 3. On the phone (still open) tap **Days off**. You should be sent to the Log in
    page with **Please log in again.**
-4. On the phone try to log in as Pat. You should see **Wrong username or
+4. On the phone try to log in as Pat. You should see **Wrong email or
    password**.
 5. On the laptop click **Reactivate**, then **Yes, reactivate**. You should see
    **Pat Example is active again.**
@@ -357,22 +361,23 @@ Back on the laptop, logged in as the scheduler.
 
 - [ ] Pass   [ ] Fail   Notes: ______________________________
 
-### 14. Reset a password
+### 14. Reset a login
 
-1. On the laptop, on Pat's row click **Reset password**. The confirmation
-   should say that a new invite stops the current password immediately and
-   logs Pat out everywhere.
-2. Click **Yes, make a new link** (try double-clicking). You should see
+1. On the laptop, on Pat's row click **Edit name**: the email cannot be changed
+   because Pat has joined. Cancel. Click **Reset login**. The confirmation
+   should say that Pat's password and any linked sign-in stop working right
+   away and Pat is logged out everywhere.
+2. Click **Yes, reset login** (try double-clicking). You should see
    **Invite for Pat Example**. Choose **Copy message**, send it privately,
    and then choose **Done**.
 3. On the phone tap anything. You should be sent to Log in with **Please log in
    again.**
-4. Pat's old password should now say **Wrong username or password**.
+4. Pat's old password should now say **Wrong email or password**.
 5. Open the new invite link on the phone and choose a new password. Pat
    should be logged in directly; the old invite must no longer work.
 6. For a **demo** volunteer who has not joined, use **Copy new invite** on
    People. Send Demo Alice her message and open its link to join as
-   `demo.alice`. Alice already has a day off from the demo.
+   `demo.alice@example.com`. Alice already has a day off from the demo.
 
 - [ ] Pass   [ ] Fail   Notes: ______________________________
 
@@ -416,7 +421,7 @@ Back on the laptop, logged in as the scheduler.
 Put the mouse and trackpad aside. Use only **Tab**, **Shift+Tab**, **Enter**,
 **Space**, the arrow keys and **Escape**.
 
-1. On the Log in page press Tab. You should be able to reach Username, Password
+1. On the Log in page press Tab. You should be able to reach Email, Password
    and Log in, in that order, with a clear outline around the one you are on.
    Type, then press Enter to log in.
 2. Use Tab to reach the menu. Press Enter on **People**. The page should change
@@ -439,10 +444,10 @@ Turn on a screen reader (Mac: VoiceOver, Cmd+F5. Windows: Narrator, Ctrl+Windows
 Phone: VoiceOver or TalkBack). If you do not have one, a helper can do this
 part. Skip it for now and tick **Skipped**.
 
-1. On the Log in page, move through the page. It should say **Username, edit
+1. On the Log in page, move through the page. It should say **Email, edit
    text** and **Password, secure edit text**, and the button **Log in**. Every box
    and button should say what it is for, never just "edit text" or "button".
-2. When you log in with a wrong password, the message **Wrong username or
+2. When you log in with a wrong password, the message **Wrong email or
    password** should be read out without you moving.
 3. On **People**, each button should say what it does, for example **Reset
    password**. When there is a name with it you should know whose it is, either
@@ -506,7 +511,7 @@ says why it did not.
    break the page. Try a very long team name, service title and day-off reason.
 5. **Emoji and accents.** Add a person called `Zoë 🎺 Trumpet` and another
    called `🎺🎺🎺`. Both should work and show correctly everywhere (People,
-   Schedule, Gaps, a reminder). `Zoë 🎺 Trumpet` gets the username `zoe.trumpet`.
+   Schedule, Gaps, a reminder). `Zoë 🎺 Trumpet` gets the email `zoe@example.com`; `🎺🎺🎺` gets none.
 6. **Strange text.** Add a team named `<b>Bold team</b>` and a person named
    `"><script>alert(1)</script>`. The page must show that text exactly as typed,
    as plain letters, and nothing must pop up or turn bold.
@@ -563,7 +568,7 @@ see the page. Send them to whoever looks after Flock.
    red message. Take a screenshot if you can.
 5. **Which device and browser** (for example "iPhone, Safari" or "Windows laptop,
    Chrome") and roughly how wide the window was.
-6. **Who you were logged in as** (the username, for example `demo-admin`).
+6. **Who you were logged in as** (the email, for example `demo-admin@example.com`).
    **Never write down or send a password.**
 7. **The time it happened**, to the minute.
 8. **The last 10 lines in the terminal window where Flock is running.** Select,

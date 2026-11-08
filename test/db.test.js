@@ -6,8 +6,8 @@ import path from 'node:path';
 import { openDb, tx, logAudit } from '../src/db.js';
 
 const T = '2025-01-01T00:00:00.000Z';
-function person(db, username = 'ann', role = 'member') {
-  return Number(db.prepare('INSERT INTO people (name,username,password_hash,role,created_at) VALUES (?,?,?,?,?)').run('X ' + username, username, 'h', role, T).lastInsertRowid);
+function person(db, email = 'ann@example.com', role = 'member') {
+  return Number(db.prepare('INSERT INTO people (name,email,password_hash,role,created_at) VALUES (?,?,?,?,?)').run('X ' + email, email, 'h', role, T).lastInsertRowid);
 }
 function team(db, name = 'Band') {
   const t = Number(db.prepare('INSERT INTO teams (name) VALUES (?)').run(name).lastInsertRowid);
@@ -19,7 +19,7 @@ const cols = (db, t) => db.prepare(`PRAGMA table_info(${t})`).all().map((c) => c
 test('schema has all tables and columns', () => {
   const db = openDb();
   const want = {
-    people: ['id', 'name', 'username', 'email', 'password_hash', 'role', 'active', 'failed_logins', 'locked_until', 'created_at'],
+    people: ['id', 'name', 'email', 'password_hash', 'role', 'active', 'failed_logins', 'locked_until', 'created_at'],
     invites: ['person_id', 'token_hash', 'expires_at', 'created_at'],
     identities: ['provider', 'subject', 'person_id', 'created_at'],
     sessions: ['id', 'token_hash', 'person_id', 'expires_at', 'created_at'],
@@ -43,7 +43,7 @@ test('migrations are idempotent on a file db', () => {
     person(db);
     db.close();
     db = openDb(f);
-    assert.equal(db.prepare('SELECT COUNT(*) n FROM schema_migrations').get().n, 3);
+    assert.equal(db.prepare('SELECT COUNT(*) n FROM schema_migrations').get().n, 2);
     assert.equal(db.prepare('SELECT COUNT(*) n FROM people').get().n, 1);
     db.close();
   } finally {
@@ -90,7 +90,7 @@ test('cascades and set null', () => {
 
 test('check constraints', () => {
   const db = openDb();
-  assert.throws(() => db.prepare('INSERT INTO people (name,username,password_hash,role,created_at) VALUES (?,?,?,?,?)').run('a', 'a', 'h', 'boss', T));
+  assert.throws(() => db.prepare('INSERT INTO people (name,email,password_hash,role,created_at) VALUES (?,?,?,?,?)').run('a', 'a@x.org', 'h', 'boss', T));
   const { p } = team(db);
   const s = Number(db.prepare('INSERT INTO services (date,title) VALUES (?,?)').run('2025-01-05', 'Sun').lastInsertRowid);
   assert.throws(() => db.prepare("INSERT INTO slots (service_id,position_id,status) VALUES (?,?,'maybe')").run(s, p));
@@ -98,10 +98,12 @@ test('check constraints', () => {
   assert.throws(() => db.prepare('INSERT INTO blockouts (person_id,start_date,end_date,created_at) VALUES (?,?,?,?)').run(a, '2025-01-05', '2025-01-04', T));
 });
 
-test('username unique case-insensitively', () => {
+test('email unique case-insensitively; many people may have none', () => {
   const db = openDb();
-  person(db, 'Ann');
-  assert.throws(() => person(db, 'ann'));
+  person(db, 'Ann@example.com');
+  assert.throws(() => person(db, 'ann@example.com'));
+  person(db, null);
+  person(db, null);
 });
 
 test('used position cannot be deleted', () => {
@@ -142,7 +144,7 @@ test('logAudit truncates and stores', () => {
 test('migration time comes from the injected clock (no direct new Date())', () => {
   const clock = { now: () => new Date('2030-02-03T04:05:06.000Z') };
   const db = openDb(':memory:', { clock });
-  assert.deepEqual(db.prepare('SELECT applied_at FROM schema_migrations').all().map((r) => r.applied_at), ['2030-02-03T04:05:06.000Z', '2030-02-03T04:05:06.000Z', '2030-02-03T04:05:06.000Z']);
+  assert.deepEqual(db.prepare('SELECT applied_at FROM schema_migrations').all().map((r) => r.applied_at), ['2030-02-03T04:05:06.000Z', '2030-02-03T04:05:06.000Z']);
   db.close();
   // Without a clock SQLite's own clock records a valid ISO time.
   const plain = openDb();

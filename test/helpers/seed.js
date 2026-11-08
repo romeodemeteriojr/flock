@@ -28,25 +28,25 @@ function resolve(target) {
   throw new TypeError('addPerson needs a container, test app or database');
 }
 
-export async function addPerson(target, { name, username, role = 'member', password = 'test-pass-1', active = true }) {
+export async function addPerson(target, { name, email, role = 'member', password = 'test-pass-1', active = true }) {
   const { data, hasher } = resolve(target);
-  const person = await data.people.create({ name, username, role, createdAt: '2025-01-01T00:00:00.000Z' });
+  const person = await data.people.create({ name, email, role, createdAt: '2025-01-01T00:00:00.000Z' });
   if (password !== null) await data.people.setPassword(person.id, await hasher.hash(password));
   if (!active) await data.people.update(person.id, { active: false });
   return person.id;
 }
 
-export async function loginAs(app, username, password = 'test-pass-1') {
-  const res = await app.request('POST', '/api/login', { body: { username, password } });
-  if (res.status !== 200) throw new Error(`loginAs failed for ${username}: ${res.status}`);
+export async function loginAs(app, email, password = 'test-pass-1') {
+  const res = await app.request('POST', '/api/login', { body: { email, password } });
+  if (res.status !== 200) throw new Error(`loginAs failed for ${email}: ${res.status}`);
   const set = res.headers['set-cookie'];
   return String(Array.isArray(set) ? set[0] : set).split(';')[0];
 }
 
 export async function seedAdminAndMember(app, db = app) {
-  const adminId = await addPerson(db, { name: 'Ada Admin', username: 'ada', role: 'admin' });
-  const memberId = await addPerson(db, { name: 'Max Member', username: 'max', role: 'member' });
-  const adminCookie = await loginAs(app, 'ada');
-  const memberCookie = await loginAs(app, 'max');
+  const adminId = await addPerson(db, { name: 'Ada Admin', email: 'ada@example.com', role: 'admin' });
+  const memberId = await addPerson(db, { name: 'Max Member', email: 'max@example.com', role: 'member' });
+  const adminCookie = await loginAs(app, 'ada@example.com');
+  const memberCookie = await loginAs(app, 'max@example.com');
   return { adminId, memberId, adminCookie, memberCookie };
 }

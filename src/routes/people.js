@@ -24,7 +24,6 @@ function checkKeys(body, allowed) {
 const idSchema = v.string({ pattern: /^[1-9][0-9]{0,9}$/ });
 const roleSchema = v.enum(['admin', 'member']);
 const activeSchema = v.boolean();
-const usernameSchema = v.string({ pattern: /^[A-Za-z0-9._-]{3,30}$/ });
 
 function parseId(raw) {
   return Number(check(idSchema, String(raw), 'That person id is not valid.'));
@@ -38,6 +37,7 @@ function cleanName(value) {
 }
 
 function inviteOut(req, config, invite) {
+  if (!invite) return null;
   const base = config.publicUrl ?? `${config.secureCookies ? 'https' : 'http'}://${req.headers.host ?? 'localhost'}`;
   const host = new URL(base).hostname;
   return {
@@ -54,12 +54,9 @@ export function register(router, ctx) {
 
   router.add('POST', '/api/people', async ({ req, body, user }) => {
     if (!isObj(body)) throw new ValidationError('Please send the person details.');
-    checkKeys(body, ['name', 'username', 'email', 'role']);
-    const input = { name: cleanName(body.name), email: body.email };
+    checkKeys(body, ['name', 'email', 'role']);
+    const input = { name: cleanName(body.name), email: body.email }; // email is checked by the service
     if (body.role !== undefined) input.role = check(roleSchema, body.role, 'The role must be admin or member.');
-    if (body.username !== undefined && body.username !== null && body.username !== '') {
-      input.username = check(usernameSchema, body.username, 'The username must be 3 to 30 letters, digits, dots, underscores or dashes.');
-    }
     const { person, invite } = await people().create(user, input);
     return { status: 201, json: { person, invite: inviteOut(req, ctx.config, invite) } };
   }, opts);
@@ -84,8 +81,8 @@ export function register(router, ctx) {
     return { status: 200, json: { person, invite: inviteOut(req, ctx.config, invite) } };
   }, opts);
 
-  router.add('POST', '/api/people/:id/reset-password', async ({ req, params, user }) => {
-    const { person, invite } = await people().resetPassword(user, parseId(params.id));
+  router.add('POST', '/api/people/:id/reset-login', async ({ req, params, user }) => {
+    const { person, invite } = await people().resetLogin(user, parseId(params.id));
     return { status: 200, json: { person, invite: inviteOut(req, ctx.config, invite) } };
   }, opts);
 }

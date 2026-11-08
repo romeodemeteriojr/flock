@@ -57,7 +57,7 @@ export function register(router, ctx) {
     if (throttle.isLimited(ip)) throw new TooManyRequestsError(LOCKED_MESSAGE, 60);
     let result;
     try {
-      result = await auth.login(textOrNone(field(body, 'username')), textOrNone(field(body, 'password')));
+      result = await auth.login(textOrNone(field(body, 'email')), textOrNone(field(body, 'password')));
     } catch (e) {
       throttle.fail(ip); // only failures count toward the per-IP limit
       throw e;

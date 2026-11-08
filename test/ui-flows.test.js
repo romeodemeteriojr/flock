@@ -45,15 +45,15 @@ function wellBuilt(page, where = page.hash()) {
   assert.deepEqual(page.injectionProblems(), [], `typed text became markup on ${where}`);
 }
 
-async function logIn(page, username, password) {
-  await page.submit('login', { username, password });
+async function logIn(page, email, password) {
+  await page.submit('login', { email, password });
 }
 
 // Join through the one-time link, then use an ordinary login afterwards.
-async function joinInvite(w, username, token, next = NEW_PASSWORD) {
+async function joinInvite(w, email, token, next = NEW_PASSWORD) {
   const page = await w.open();
   await page.goto(`#/welcome?token=${token}`);
-  assert.ok(page.text().includes(username), page.text());
+  assert.ok(page.text().includes(email), page.text());
   await page.submit('welcome', { password: next, confirm: next });
   assert.equal(page.hash(), '#/', page.text());
   return page;
@@ -84,25 +84,25 @@ test('UAT 1: join with the printed invite, then change a password voluntarily', 
   assert.equal(page.hash(), '#/login');
 
   const before = page.fetchLog.length;
-  await page.submit('login', { username: '', password: '' });
-  said(page, /Please type your username and password\./);
+  await page.submit('login', { email: '', password: '' });
+  said(page, /Please type your email and password\./);
   assert.equal(page.fetchLog.length, before);
-  await logIn(page, 'demo-admin', 'not the password');
-  said(page, /Wrong username or password/);
-  assert.match(page.html(), /value="demo-admin"/);
+  await logIn(page, 'demo-admin@example.com', 'not the password');
+  said(page, /Wrong email or password/);
+  assert.match(page.html(), /value="demo-admin@example\.com"/);
   assert.equal(page.focused?.attrs.get('id'), 'login-password');
 
   const token = w.demo.invite.token;
   await page.goto(`#/welcome?token=${token}`);
-  said(page, /Your username is demo-admin/);
+  said(page, /You will log in with demo-admin@example\.com/);
   wellBuilt(page, 'welcome');
   await page.submit('welcome', { password: NEW_PASSWORD, confirm: 'not the same' });
   said(page, /The two passwords are not the same/);
   assert.equal(countCalls(page, 'POST', /^\/api\/welcome$/), 0);
   await page.submit('welcome', { password: 'short', confirm: 'short' });
   said(page, /at least 8 characters/);
-  await page.submit('welcome', { password: 'demo-admin', confirm: 'demo-admin' });
-  said(page, /same as your username/);
+  await page.submit('welcome', { password: 'demo-admin@example.com', confirm: 'demo-admin@example.com' });
+  said(page, /same as your email/);
   const results = await Promise.all([
     page.submit('welcome', { password: NEW_PASSWORD, confirm: NEW_PASSWORD }),
     page.submit('welcome', { password: NEW_PASSWORD, confirm: NEW_PASSWORD }),
@@ -118,7 +118,7 @@ test('UAT 1: join with the printed invite, then change a password voluntarily', 
   await other.goto(`#/welcome?token=${token}`);
   said(other, /This link has expired or was already used/);
   await other.goto('#/login');
-  await logIn(other, 'demo-admin', NEW_PASSWORD);
+  await logIn(other, 'demo-admin@example.com', NEW_PASSWORD);
   assert.equal(other.hash(), '#/');
 
   await page.goto('#/password');
@@ -141,9 +141,9 @@ test('UAT 1: join with the printed invite, then change a password voluntarily', 
   assert.equal(page.hash(), '#/');
   assert.ok(page.toasts().some((x) => /Your new password is saved/.test(x)));
   await other.clickButton('Log out');
-  await logIn(other, 'demo-admin', NEW_PASSWORD);
-  said(other, /Wrong username or password/);
-  await logIn(other, 'demo-admin', changed);
+  await logIn(other, 'demo-admin@example.com', NEW_PASSWORD);
+  said(other, /Wrong email or password/);
+  await logIn(other, 'demo-admin@example.com', changed);
   assert.equal(other.hash(), '#/');
 });
 
@@ -151,19 +151,19 @@ test('UAT 1: join with the printed invite, then change a password voluntarily', 
 
 test('UAT 2: five wrong passwords lock the account for a few minutes', async (t) => {
   const w = await world(t);
-  const page = await joinInvite(w, 'demo-admin', w.demo.invite.token);
+  const page = await joinInvite(w, 'demo-admin@example.com', w.demo.invite.token);
   await page.clickButton('Log out');
   assert.equal(page.hash(), '#/login');
 
-  for (let i = 0; i < 5; i++) await logIn(page, 'demo-admin', `wrong try number ${i}`);
+  for (let i = 0; i < 5; i++) await logIn(page, 'demo-admin@example.com', `wrong try number ${i}`);
   // Even the right password is refused while locked.
-  await logIn(page, 'demo-admin', NEW_PASSWORD);
+  await logIn(page, 'demo-admin@example.com', NEW_PASSWORD);
   said(page, /Too many tries\. Please wait a few minutes\./);
   assert.equal(page.hash(), '#/login');
   wellBuilt(page);
 
   w.clock.advance(6 * 60 * 1000);
-  await logIn(page, 'demo-admin', NEW_PASSWORD);
+  await logIn(page, 'demo-admin@example.com', NEW_PASSWORD);
   assert.equal(page.hash(), '#/', page.text());
 });
 
@@ -172,7 +172,7 @@ test('UAT 2: five wrong passwords lock the account for a few minutes', async (t)
 const SERVICE_DATE = addDays(todayStr(new Date()), 2); // inside the "next 4 weeks"
 const inviteFrom = (page, name) => {
   assert.ok(page.text().includes(`Invite for ${name}`), page.text());
-  const m = /Tap this link to choose your password: (\S+) Your username/.exec(page.text());
+  const m = /Tap this link to choose your password: (\S+) You will log in/.exec(page.text());
   assert.ok(m, `no invite box for ${name}. ON SCREEN: ${page.text()}`);
   return m[1];
 };
@@ -184,7 +184,7 @@ const positionId = async (page, team, name) => {
 
 test('UAT 3 to 8: scheduler adds people, a team, positions, a service, assigns, sees gaps and reminders', async (t) => {
   const w = await world(t);
-  const page = await joinInvite(w, 'demo-admin', w.demo.invite.token);
+  const page = await joinInvite(w, 'demo-admin@example.com', w.demo.invite.token);
   const mutations = () => page.fetchLog.filter((c) => c.method !== 'GET').map((c) => `${c.method} ${c.path}`);
 
   // --- People: add two people ---
@@ -193,12 +193,12 @@ test('UAT 3 to 8: scheduler adds people, a team, positions, a service, assigns, 
   wellBuilt(page);
   await page.clickButton('Add person');
   await page.type('new-name', 'Pat Example');
-  assert.match(page.html(), /data-suggest>pat\.example</, 'the suggested username follows the name');
   await page.submit('add-person', { name: '' });
   said(page, /Please type a name\./);
   wellBuilt(page, 'add person with an error');
   // A double click adds one person, not two.
-  await Promise.all([page.submit('add-person', { name: 'Pat Example' }), page.submit('add-person', { name: 'Pat Example' })]);
+  const pat = { name: 'Pat Example', email: 'pat.example@example.com' };
+  await Promise.all([page.submit('add-person', pat), page.submit('add-person', pat)]);
   assert.equal(countCalls(page, 'POST', /^\/api\/people$/), 1);
   const patLink = inviteFrom(page, 'Pat Example');
   assert.match(tokenFromLink(patLink), /^[A-Za-z0-9_-]{43}$/);
@@ -208,16 +208,16 @@ test('UAT 3 to 8: scheduler adds people, a team, positions, a service, assigns, 
   assert.equal(page.has('#invite-box'), false, 'the invite is gone once Done is pressed');
   notSaid(page, new RegExp(rx(patLink)));
   await page.clickButton('Add person');
-  await page.submit('add-person', { name: 'Quinn Example' });
+  await page.submit('add-person', { name: 'Quinn Example', email: 'quinn.example@example.com' });
   inviteFrom(page, 'Quinn Example');
   await page.clickButton('Done');
-  said(page, /Pat Example \(pat\.example\)/);
-  said(page, /Quinn Example \(quinn\.example\)/);
+  said(page, /Pat Example \(pat\.example@example\.com\)/);
+  said(page, /Quinn Example \(quinn\.example@example\.com\)/);
 
-  // The same username twice is refused in plain words.
+  // The same email twice is refused in plain words.
   await page.clickButton('Add person');
-  await page.submit('add-person', { name: 'Someone Else', username: 'pat.example' });
-  said(page, /username is already taken/);
+  await page.submit('add-person', { name: 'Someone Else', email: 'pat.example@example.com' });
+  said(page, /That email is already used by someone else/);
   await page.clickButton('Cancel');
 
   // --- Teams: a team and a position ---
@@ -325,18 +325,18 @@ async function resetByScheduler(admin, name) {
   await admin.goto('#/people');
   const id = personId(admin, name);
   await admin.click('reset-ask', id);
-  said(admin, new RegExp(`Make a new invite link for ${rx(name)}\\? Their current password stops working right away`));
-  const resets = countCalls(admin, 'POST', /reset-password/);
+  said(admin, new RegExp(`Reset the login of ${rx(name)}\\? Their password and any linked sign-in`));
+  const resets = countCalls(admin, 'POST', /reset-login/);
   await Promise.all([admin.click('reset-yes', id), admin.click('reset-yes', id)]);
-  assert.equal(countCalls(admin, 'POST', /reset-password/), resets + 1, 'a double click resets once');
+  assert.equal(countCalls(admin, 'POST', /reset-login/), resets + 1, 'a double click resets once');
   const token = tokenFromLink(inviteFrom(admin, name));
   await admin.clickButton('Done');
   return { id, token };
 }
 
-async function volunteerOnPhone(w, admin, name, username) {
+async function volunteerOnPhone(w, admin, name, email) {
   const { id, token } = await resetByScheduler(admin, name);
-  const phone = await joinInvite(w, username, token);
+  const phone = await joinInvite(w, email, token);
   return { phone, id, jar: phone.jar, token };
 }
 
@@ -344,7 +344,7 @@ async function volunteerOnPhone(w, admin, name, username) {
 
 test('UAT 9 to 11: volunteer sees My schedule, says yes and no, adds and removes a day off', async (t) => {
   const w = await world(t);
-  const admin = await joinInvite(w, 'demo-admin', w.demo.invite.token);
+  const admin = await joinInvite(w, 'demo-admin@example.com', w.demo.invite.token);
 
   // Give Alice two waiting requests and a confirmed one, so each button has something to act on.
   const services = await admin.api.get(`/api/services?from=${todayStr(new Date())}&to=${addDays(todayStr(new Date()), 60)}`);
@@ -457,11 +457,11 @@ test('UAT 9 to 11: volunteer sees My schedule, says yes and no, adds and removes
 
 test('UAT 12 to 15: change access level, deactivate, reset password, log out, session expiry', async (t) => {
   const w = await world(t);
-  const admin = await joinInvite(w, 'demo-admin', w.demo.invite.token);
-  const bob = await volunteerOnPhone(w, admin, 'Demo Bob', 'demo.bob');
+  const admin = await joinInvite(w, 'demo-admin@example.com', w.demo.invite.token);
+  const bob = await volunteerOnPhone(w, admin, 'Demo Bob', 'demo.bob@example.com');
   const bobLogin = async () => {
     const p = await w.open();
-    await logIn(p, 'demo.bob', NEW_PASSWORD);
+    await logIn(p, 'demo.bob@example.com', NEW_PASSWORD);
     return p;
   };
   await admin.goto('#/people');
@@ -524,8 +524,8 @@ test('UAT 12 to 15: change access level, deactivate, reset password, log out, se
   await bob.phone.goto('#/blockouts');
   assert.equal(bob.phone.hash(), '#/login');
   said(bob.phone, /Please log in again\./);
-  await logIn(bob.phone, 'demo.bob', NEW_PASSWORD);
-  said(bob.phone, /Wrong username or password/);
+  await logIn(bob.phone, 'demo.bob@example.com', NEW_PASSWORD);
+  said(bob.phone, /Wrong email or password/);
   assert.equal(bob.phone.hash(), '#/login');
 
   // Reactivate: the same password works again.
@@ -541,8 +541,8 @@ test('UAT 12 to 15: change access level, deactivate, reset password, log out, se
   await again.goto('#/blockouts');
   assert.equal(again.hash(), '#/login', 'a reset ends the old logins');
   const stale = await w.open();
-  await logIn(stale, 'demo.bob', NEW_PASSWORD);
-  said(stale, /Wrong username or password/);
+  await logIn(stale, 'demo.bob@example.com', NEW_PASSWORD);
+  said(stale, /Wrong email or password/);
   await stale.goto(`#/welcome?token=${reset.token}`);
   await stale.submit('welcome', { password: 'bobs newest password', confirm: 'bobs newest password' });
   assert.equal(stale.hash(), '#/');
@@ -565,7 +565,7 @@ test('UAT 12 to 15: change access level, deactivate, reset password, log out, se
   assert.equal(admin.hash(), '#/login');
   said(admin, /Please log in again\./);
   assert.equal(admin.has('nav'), false);
-  await logIn(admin, 'demo-admin', NEW_PASSWORD);
+  await logIn(admin, 'demo-admin@example.com', NEW_PASSWORD);
   assert.equal(admin.hash(), '#/', admin.text());
 });
 
@@ -581,7 +581,7 @@ const HOSTILE = {
 
 test('UAT 20 (odd text): hostile and odd text is shown as plain text on every page', async (t) => {
   const w = await world(t);
-  const admin = await joinInvite(w, 'demo-admin', w.demo.invite.token);
+  const admin = await joinInvite(w, 'demo-admin@example.com', w.demo.invite.token);
 
   // Typed in through the forms, like a real (mischievous) scheduler would.
   await admin.goto('#/teams');
@@ -596,7 +596,7 @@ test('UAT 20 (odd text): hostile and odd text is shown as plain text on every pa
 
   await admin.goto('#/people');
   await admin.clickButton('Add person');
-  await admin.submit('add-person', { name: HOSTILE.person });
+  await admin.submit('add-person', { name: HOSTILE.person, email: 'eve@example.com' });
   const eveLink = inviteFrom(admin, HOSTILE.person);
   await admin.clickButton('Done');
   said(admin, /<b onmouseover=alert\(3\)>Eve<\/b>/);
@@ -636,10 +636,10 @@ test('UAT 20 (odd text): hostile and odd text is shown as plain text on every pa
   wellBuilt(admin, 'reminders');
 
   // The same person's own view: menu, schedule, days off.
-  const username = (await admin.api.get('/api/people')).find((p) => p.name === HOSTILE.person).username;
+  const email = (await admin.api.get('/api/people')).find((p) => p.name === HOSTILE.person).email;
   const phone = await w.open();
   await phone.goto(`#/welcome?token=${tokenFromLink(eveLink)}`);
-  said(phone, new RegExp(rx(username)));
+  said(phone, new RegExp(rx(email)));
   wellBuilt(phone, 'welcome with a hostile name');
   await phone.submit('welcome', { password: NEW_PASSWORD, confirm: NEW_PASSWORD });
   said(phone, /Logged in as <b onmouseover=alert\(3\)>Eve<\/b>/);
@@ -665,7 +665,7 @@ test('UAT 20 (odd text): hostile and odd text is shown as plain text on every pa
 
 test('UAT 20: double clicks, odd names, stale tabs, rapid page changes and the back button', async (t) => {
   const w = await world(t);
-  const admin = await joinInvite(w, 'demo-admin', w.demo.invite.token);
+  const admin = await joinInvite(w, 'demo-admin@example.com', w.demo.invite.token);
   const tab2 = await w.open(admin.jar); // the same login in a second tab
 
   // Very long and odd names.
@@ -680,23 +680,22 @@ test('UAT 20: double clicks, odd names, stale tabs, rapid page changes and the b
   said(admin, /The name must be 1 to 80 characters long\./);
   wellBuilt(admin, 'too-long name');
   const exact = 'M'.repeat(80);
-  await admin.submit('add-person', { name: exact });
+  await admin.submit('add-person', { name: exact, email: 'm80@example.com' });
   said(admin, new RegExp(`Invite for ${exact}`));
   await admin.clickButton('Done');
   said(admin, new RegExp(exact), 'an 80-letter name is shown whole');
   await admin.clickButton('Add person');
   await admin.submit('add-person', { name: '   ' });
   said(admin, /Please type a name\./);
-  await admin.submit('add-person', { name: 'Zoë 🎺 Trumpet' });
+  await admin.submit('add-person', { name: 'Zoë 🎺 Trumpet', email: 'zoe@example.com' });
   said(admin, /Invite for Zoë 🎺 Trumpet/);
   await admin.clickButton('Done');
-  said(admin, /Zoë 🎺 Trumpet \(zoe\.trumpet\)/);
+  said(admin, /Zoë 🎺 Trumpet \(zoe@example\.com\)/);
   await admin.clickButton('Add person');
   await admin.submit('add-person', { name: '🎺🎺🎺' });
-  said(admin, /Invite for 🎺🎺🎺/, 'a name with no letters still gets a username');
+  said(admin, /🎺🎺🎺 is added\. Without an email they cannot log in/, 'someone without an email can still be added');
   wellBuilt(admin, 'emoji names');
-  await admin.clickButton('Done');
-  assert.match(admin.text(), /🎺🎺🎺 \(\S+\)/);
+  said(admin, /No email, cannot log in/);
 
   // A team name that already exists, and deleting a team that is in use: told in words, page still works.
   await admin.goto('#/teams');
@@ -743,7 +742,7 @@ test('UAT 20: double clicks, odd names, stale tabs, rapid page changes and the b
   for (const h of ['#/people', '#/teams', '#/services', '#/schedule', '#/gaps', '#/people']) tab2.win.location.hash = h;
   await tab2.settle();
   assert.equal(tab2.hash(), '#/people');
-  said(tab2, /Everyone in the church who can log in\./);
+  said(tab2, /Everyone in the church you schedule\./);
   assert.equal(tab2.has('.toast-error'), false);
   notSaid(tab2, /What still needs someone|The next 8 weeks/);
   wellBuilt(tab2, 'after rapid changes');
@@ -766,9 +765,9 @@ test('UAT 20: double clicks, odd names, stale tabs, rapid page changes and the b
   // A volunteer's days-off form: a very long reason is cut off or refused, never crashes.
   const alice = await volunteerOnPhone(w, await (async () => {
     const a = await w.open();
-    await logIn(a, 'demo-admin', NEW_PASSWORD);
+    await logIn(a, 'demo-admin@example.com', NEW_PASSWORD);
     return a;
-  })(), 'Demo Alice', 'demo.alice');
+  })(), 'Demo Alice', 'demo.alice@example.com');
   await alice.phone.goto('#/blockouts');
   assert.match(alice.phone.html(), /id="bo-reason"[^>]*maxlength="200"/);
   const day = addDays(todayStr(new Date()), 150);
@@ -781,8 +780,8 @@ test('UAT 20: double clicks, odd names, stale tabs, rapid page changes and the b
 
 test('UAT 16 to 19 (what a computer can check): every page has named controls, one heading, one "you are here" and sensible focus', async (t) => {
   const w = await world(t);
-  const admin = await joinInvite(w, 'demo-admin', w.demo.invite.token);
-  const alice = await volunteerOnPhone(w, admin, 'Demo Alice', 'demo.alice');
+  const admin = await joinInvite(w, 'demo-admin@example.com', w.demo.invite.token);
+  const alice = await volunteerOnPhone(w, admin, 'Demo Alice', 'demo.alice@example.com');
 
   for (const [who, page] of [['scheduler', admin], ['volunteer', alice.phone]]) {
     const allowed = routes.filter((r) => r.label && (who === 'scheduler' || r.role !== 'admin'));
@@ -808,7 +807,7 @@ test('UAT 16 to 19 (what a computer can check): every page has named controls, o
   // The login and password pages have labelled fields too.
   const out = await w.open();
   wellBuilt(out, 'login');
-  assert.match(out.html(), /<label for="login-username">Username or email<\/label>/);
+  assert.match(out.html(), /<label for="login-email">Email<\/label>/);
   assert.match(out.html(), /<label for="login-password">Password<\/label>/);
 });
 

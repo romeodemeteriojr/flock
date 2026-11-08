@@ -22,7 +22,7 @@ async function boot() {
 test('availability service: default until chosen, then the choice; bad values refused', async () => {
   const { data } = makeData();
   const svc = createAvailabilityService({ data, clock: fixedClock(new Date(NOW)) });
-  const p = await data.people.create({ name: 'Pat', username: 'pat', passwordHash: 'x', createdAt: NOW });
+  const p = await data.people.create({ name: 'Pat', email: 'pat@example.com', passwordHash: 'x', createdAt: NOW });
   assert.equal(DEFAULT_EVERY_WEEKS, 2);
   assert.deepEqual(await svc.getMine(p.id), { everyWeeks: 2, isDefault: true, updatedAt: null });
   const saved = await svc.setMine(p.id, { everyWeeks: 4 });

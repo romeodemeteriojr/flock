@@ -21,12 +21,12 @@ export async function buildChurch(container, { members = 70, schedulers = 5, sun
   const { services } = container;
   const schedulerIds = [];
   for (let i = 1; i <= schedulers; i++) {
-    schedulerIds.push(await addPerson(container, { name: `Scheduler ${i}`, username: `sched${i}`, role: 'admin', password: PASSWORD }));
+    schedulerIds.push(await addPerson(container, { name: `Scheduler ${i}`, email: `sched${i}@example.com`, role: 'admin', password: PASSWORD }));
   }
   const actor = { id: schedulerIds[0] };
   const memberIds = [];
   for (let i = 1; i <= members; i++) {
-    memberIds.push(await addPerson(container, { name: `Member ${i}`, username: `member${i}`, password: PASSWORD }));
+    memberIds.push(await addPerson(container, { name: `Member ${i}`, email: `member${i}@example.com`, password: PASSWORD }));
   }
 
   const positionIds = [];

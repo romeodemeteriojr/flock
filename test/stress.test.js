@@ -57,10 +57,10 @@ function no500(client) {
   assert.deepEqual(bad.map((r) => `${r.method} ${r.path} ${r.status}`), []);
 }
 
-async function loggedIn(client, username) {
+async function loggedIn(client, handle) {
   const b = client.browser();
-  const res = await b.login(username, PASSWORD);
-  assert.equal(res.status, 200, `${username} logs in`);
+  const res = await b.login(`${handle}@example.com`, PASSWORD);
+  assert.equal(res.status, 200, `${handle} logs in`);
   return b;
 }
 
@@ -68,7 +68,7 @@ test('stress: 50 members log in at the same moment, each gets their own working 
   const ctx = await boot();
   try {
     const browsers = Array.from({ length: 50 }, () => ctx.client.browser());
-    const results = await Promise.all(browsers.map((b, i) => b.login(`member${i + 1}`, PASSWORD)));
+    const results = await Promise.all(browsers.map((b, i) => b.login(`member${i + 1}@example.com`, PASSWORD)));
     assert.deepEqual(results.map((r) => r.status), Array(50).fill(200));
     const cookies = new Set(browsers.map((b) => b.cookie));
     assert.equal(cookies.size, 50, 'every login has a different session token');
@@ -76,7 +76,7 @@ test('stress: 50 members log in at the same moment, each gets their own working 
 
     // All 50 use their session at once and each sees only themselves.
     const me = await Promise.all(browsers.map((b) => b.get('/api/me')));
-    me.forEach((r, i) => assert.equal(r.json.person.username, `member${i + 1}`));
+    me.forEach((r, i) => assert.equal(r.json.person.email, `member${i + 1}@example.com`));
     no500(ctx.client);
     healthy(ctx.db);
   } finally { await ctx.done(); }
@@ -85,10 +85,10 @@ test('stress: 50 members log in at the same moment, each gets their own working 
 test('stress: concurrent wrong passwords for one account are all counted (no lost lockout updates)', async () => {
   const ctx = await boot();
   try {
-    const tries = await Promise.all(Array.from({ length: 8 }, () => ctx.client.browser().login('member70', 'wrong-password')));
+    const tries = await Promise.all(Array.from({ length: 8 }, () => ctx.client.browser().login('member70@example.com', 'wrong-password')));
     const statuses = tries.map((r) => r.status).sort();
     assert.deepEqual(statuses, [401, 401, 401, 401, 401, 429, 429, 429], 'exactly 5 failures counted, then locked');
-    const row = ctx.db.prepare("SELECT failed_logins, locked_until FROM people WHERE username = 'member70'").get();
+    const row = ctx.db.prepare("SELECT failed_logins, locked_until FROM people WHERE email = 'member70@example.com'").get();
     assert.equal(row.failed_logins, 5);
     assert.ok(row.locked_until, 'the account is locked');
     no500(ctx.client);
@@ -250,9 +250,9 @@ test('stress: simultaneous resets: one audit entry each, exactly one invite can 
     const schedulers = await Promise.all([1, 2, 3, 4, 5].map((i) => loggedIn(client, `sched${i}`)));
     const victim = await loggedIn(client, 'member7');
     const id = church.memberIds[6];
-    const res = await Promise.all(schedulers.map((s) => s.post(`/api/people/${id}/reset-password`)));
+    const res = await Promise.all(schedulers.map((s) => s.post(`/api/people/${id}/reset-login`)));
     assert.deepEqual(res.map((r) => r.status), Array(5).fill(200));
-    assert.equal(auditCount(db, 'person.reset_password', `person ${id}`), 5);
+    assert.equal(auditCount(db, 'person.reset_login', `person ${id}`), 5);
     assert.equal((await victim.get('/api/me')).status, 401, 'the old session ended');
 
     const tokens = res.map((r) => tokenFromLink(r.json.invite.link));
@@ -269,11 +269,11 @@ test('stress: simultaneous resets: one audit entry each, exactly one invite can 
 
     // Resetting 20 different people at once: 20 audit entries, 20 usable invites.
     const ids = church.memberIds.slice(10, 30);
-    const many = await Promise.all(ids.map((pid, i) => schedulers[i % 5].post(`/api/people/${pid}/reset-password`)));
+    const many = await Promise.all(ids.map((pid, i) => schedulers[i % 5].post(`/api/people/${pid}/reset-login`)));
     assert.deepEqual(many.map((r) => r.status), Array(20).fill(200));
     const logins = await Promise.all(many.map((r) => client.browser().welcome(tokenFromLink(r.json.invite.link), 'my own password 1')));
     assert.deepEqual(logins.map((r) => r.status), Array(20).fill(200));
-    assert.equal(auditCount(db, 'person.reset_password'), 25);
+    assert.equal(auditCount(db, 'person.reset_login'), 25);
     no500(client);
     healthy(db);
   } finally { await ctx.done(); }
@@ -340,11 +340,11 @@ test('stress: everything at once, then the database is intact and the audit log 
 
     // Wave 2: everyone holding a slot answers it, while schedulers reset passwords
     // of people who hold nothing (their sessions end, nothing else changes).
-    const held = db.prepare("SELECT s.id, p.username FROM slots s JOIN people p ON p.id = s.person_id WHERE s.status = 'pending'").all();
-    const byName = new Map(members.map((m, i) => [`member${i + 1}`, m]));
+    const held = db.prepare("SELECT s.id, p.email FROM slots s JOIN people p ON p.id = s.person_id WHERE s.status = 'pending'").all();
+    const byName = new Map(members.map((m, i) => [`member${i + 1}@example.com`, m]));
     const wave2 = await Promise.all([
-      ...held.map((h, i) => byName.get(h.username).post(`/api/me/slots/${h.id}/${i % 2 ? 'decline' : 'accept'}`)),
-      ...church.memberIds.slice(60, 70).map((id, i) => schedulers[i % 5].post(`/api/people/${id}/reset-password`)),
+      ...held.map((h, i) => byName.get(h.email).post(`/api/me/slots/${h.id}/${i % 2 ? 'decline' : 'accept'}`)),
+      ...church.memberIds.slice(60, 70).map((id, i) => schedulers[i % 5].post(`/api/people/${id}/reset-login`)),
     ]);
     assert.ok(wave2.every((r) => r.status === 200));
 

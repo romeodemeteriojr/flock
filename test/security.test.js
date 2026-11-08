@@ -40,12 +40,12 @@ async function withApp(fn, extra) {
 }
 
 async function adminAndMember(ctx) {
-  const adminId = await addPerson(ctx.app, { name: 'Ada Admin', username: 'ada', role: 'admin' });
-  const memberId = await addPerson(ctx.app, { name: 'Max Member', username: 'max' });
+  const adminId = await addPerson(ctx.app, { name: 'Ada Admin', email: 'ada@example.com', role: 'admin' });
+  const memberId = await addPerson(ctx.app, { name: 'Max Member', email: 'max@example.com' });
   const admin = ctx.client.browser();
   const member = ctx.client.browser();
-  assert.equal((await admin.login('ada', 'test-pass-1')).status, 200);
-  assert.equal((await member.login('max', 'test-pass-1')).status, 200);
+  assert.equal((await admin.login('ada@example.com', 'test-pass-1')).status, 200);
+  assert.equal((await member.login('max@example.com', 'test-pass-1')).status, 200);
   return { adminId, memberId, admin, member };
 }
 
@@ -75,7 +75,7 @@ test('matrix: every protected /api route is 401 when logged out', () => withApp(
     assert.equal((await fake.call(r.method, fillPath(r.pattern), MUTATING.has(r.method) ? {} : undefined)).status, 401, key(r));
   }
   assert.equal((await anon.get('/api/health')).status, 200);
-  assert.equal((await anon.post('/api/login', { username: 'nobody', password: 'nothing-here' })).status, 401);
+  assert.equal((await anon.post('/api/login', { email: 'nobody@example.com', password: 'nothing-here' })).status, 401);
 }));
 
 test('matrix: every admin route is 403 for a member, and nothing changes', () => withApp(async (ctx) => {
@@ -123,9 +123,9 @@ test('matrix: CSRF: every mutating route needs X-Flock (only login is exempt), c
 
 async function twoVolunteers(ctx) {
   const { admin } = await adminAndMember(ctx);
-  const annId = await addPerson(ctx.app, { name: 'Ann Volunteer', username: 'ann.secret' });
-  const beaId = await addPerson(ctx.app, { name: 'Bea Volunteer', username: 'bea.secret' });
-  const calId = await addPerson(ctx.app, { name: 'Cal Elsewhere', username: 'cal.secret' });
+  const annId = await addPerson(ctx.app, { name: 'Ann Volunteer', email: 'ann.secret@example.com' });
+  const beaId = await addPerson(ctx.app, { name: 'Bea Volunteer', email: 'bea.secret@example.com' });
+  const calId = await addPerson(ctx.app, { name: 'Cal Elsewhere', email: 'cal.secret@example.com' });
   const team = (await admin.post('/api/teams', { name: 'Band' })).json;
   const drums = (await admin.post(`/api/teams/${team.id}/positions`, { name: 'Drums' })).json;
   const keys = (await admin.post(`/api/teams/${team.id}/positions`, { name: 'Keys' })).json;
@@ -142,8 +142,8 @@ async function twoVolunteers(ctx) {
   await assign(calOnly.slots[0].id, calId);
   const ann = ctx.client.browser();
   const bea = ctx.client.browser();
-  await ann.login('ann.secret', 'test-pass-1');
-  await bea.login('bea.secret', 'test-pass-1');
+  await ann.login('ann.secret@example.com', 'test-pass-1');
+  await bea.login('bea.secret@example.com', 'test-pass-1');
   const blk = (await bea.post('/api/me/blockouts', { startDate: '2025-02-02', reason: 'Bea private reason' })).json.blockout;
   return { admin, ann, bea, annId, beaId, calId, shared, beaOnly, calOnly, blk, drums, keys };
 }
@@ -160,7 +160,7 @@ test('isolation: a volunteer sees only names and positions of co-volunteers on t
   assert.deepEqual(wide.items.map((i) => i.slotId), [s.shared.slots[0].id]);
 }));
 
-test('isolation: nothing a volunteer can read leaks another volunteer\'s schedule, blockouts, username or ids', () => withApp(async (ctx) => {
+test('isolation: nothing a volunteer can read leaks another volunteer\'s schedule, blockouts, email or ids', () => withApp(async (ctx) => {
   const s = await twoVolunteers(ctx);
   const before = ctx.client.responses.length;
   // Every GET a member may call (none of them takes an id: a member only ever
@@ -200,31 +200,31 @@ test('isolation: a volunteer cannot answer, see or delete another volunteer\'s s
 test('cookies: HttpOnly, SameSite=Lax, Path=/, Secure only when configured or behind HTTPS', async () => {
   const flags = (res) => String(res.headers['set-cookie']).split(';').map((x) => x.trim());
   await withApp(async (ctx) => {
-    await addPerson(ctx.app, { name: 'Max Member', username: 'max' });
+    await addPerson(ctx.app, { name: 'Max Member', email: 'max@example.com' });
     const b = ctx.client.browser();
-    const plain = flags(await b.post('/api/login', { username: 'max', password: 'test-pass-1' }));
+    const plain = flags(await b.post('/api/login', { email: 'max@example.com', password: 'test-pass-1' }));
     for (const f of ['HttpOnly', 'SameSite=Lax', 'Path=/']) assert.ok(plain.includes(f), f);
     assert.ok(!plain.includes('Secure'));
-    const proxied = flags(await b.post('/api/login', { username: 'max', password: 'test-pass-1' }, { headers: { 'X-Forwarded-Proto': 'https' } }));
+    const proxied = flags(await b.post('/api/login', { email: 'max@example.com', password: 'test-pass-1' }, { headers: { 'X-Forwarded-Proto': 'https' } }));
     assert.ok(proxied.includes('Secure'));
-    b.cookie = cookieFrom(await b.post('/api/login', { username: 'max', password: 'test-pass-1' }));
+    b.cookie = cookieFrom(await b.post('/api/login', { email: 'max@example.com', password: 'test-pass-1' }));
     const out = flags(await b.post('/api/logout'));
     assert.ok(out.includes('Max-Age=0') && out.includes('HttpOnly') && out.includes('SameSite=Lax'));
   });
   await withApp(async (ctx) => {
-    await addPerson(ctx.app, { name: 'Max Member', username: 'max' });
-    const secure = flags(await ctx.client.browser().post('/api/login', { username: 'max', password: 'test-pass-1' }));
+    await addPerson(ctx.app, { name: 'Max Member', email: 'max@example.com' });
+    const secure = flags(await ctx.client.browser().post('/api/login', { email: 'max@example.com', password: 'test-pass-1' }));
     for (const f of ['HttpOnly', 'SameSite=Lax', 'Secure']) assert.ok(secure.includes(f), f);
   }, { config: { ...loadConfig({ FLOCK_SECURE_COOKIES: '1' }), dbPath: ':memory:' } });
 });
 
 test('sessions: every login gets a new token; a planted cookie is never adopted', () => withApp(async (ctx) => {
-  await addPerson(ctx.app, { name: 'Max Member', username: 'max' });
+  await addPerson(ctx.app, { name: 'Max Member', email: 'max@example.com' });
   const planted = 'flock_session=attacker-chosen-value-1234567890';
   const b = ctx.client.browser(planted);
   const tokens = new Set();
   for (let i = 0; i < 3; i++) {
-    const res = await b.call('POST', '/api/login', { username: 'max', password: 'test-pass-1' });
+    const res = await b.call('POST', '/api/login', { email: 'max@example.com', password: 'test-pass-1' });
     const c = cookieFrom(res);
     assert.notEqual(c, planted);
     assert.match(c, /^flock_session=[A-Za-z0-9_-]{32,}$/);
@@ -249,19 +249,19 @@ const secretsHasher = recordingHasher();
 
 test('secrets: hashes, credentials and invite tokens stay out of public responses, audit and logs', () => withApp(async (ctx) => {
   const { admin } = await adminAndMember(ctx);
-  const created = (await admin.post('/api/people', { name: 'Tess Invite', username: 'tess' })).json;
+  const created = (await admin.post('/api/people', { name: 'Tess Invite', email: 'tess@example.com' })).json;
   const renewed = (await admin.post(`/api/people/${created.person.id}/invite`)).json;
   const invite1 = tokenFromLink(created.invite.link);
   const invite2 = tokenFromLink(renewed.invite.link);
   const tess = ctx.client.browser();
-  assert.equal((await tess.login('tess', 'not yet chosen')).status, 401);
+  assert.equal((await tess.login('tess@example.com', 'not yet chosen')).status, 401);
   assert.equal((await tess.welcome(invite2, 'tess-own-pass-9')).status, 200);
   assert.equal((await tess.post('/api/password', { oldPassword: 'tess-own-pass-9', newPassword: 'tess-first-change-9' })).status, 200);
-  const reset = (await admin.post(`/api/people/${created.person.id}/reset-password`)).json;
+  const reset = (await admin.post(`/api/people/${created.person.id}/reset-login`)).json;
   const invite3 = tokenFromLink(reset.invite.link);
   assert.equal((await tess.welcome(invite3, 'tess-second-pass-9')).status, 200);
   assert.equal((await tess.post('/api/password', { oldPassword: 'tess-second-pass-9', newPassword: 'tess-final-pass-9' })).status, 200);
-  for (let i = 0; i < 6; i++) await ctx.client.browser().post('/api/login', { username: 'max', password: `wrong-guess-${i}` });
+  for (let i = 0; i < 6; i++) await ctx.client.browser().post('/api/login', { email: 'max@example.com', password: `wrong-guess-${i}` });
   await admin.get('/api/people');
   await admin.get('/api/me');
   await tess.get('/api/me');
@@ -290,30 +290,30 @@ test('secrets: hashes, credentials and invite tokens stay out of public response
   for (const r of ctx.client.responses) {
     for (const secret of [...hashes, ...tokenHashes, ...tokens, ...passwords, ...inviteHashes]) assert.ok(!r.text.includes(secret), `${r.method} ${r.path} body contains a secret`);
     assert.ok(!/passwordHash|password_hash|tokenHash|failedLogins|lockedUntil/.test(r.text));
-    const handsOut = r.method === 'POST' && (r.path === '/api/people' || r.path.endsWith('/reset-password') || r.path.endsWith('/invite'));
+    const handsOut = r.method === 'POST' && (r.path === '/api/people' || r.path.endsWith('/reset-login') || r.path.endsWith('/invite'));
     if (!handsOut) for (const invite of invites) assert.ok(!r.text.includes(invite), `${r.method} ${r.path} repeats an invite token`);
     for (const invite of invites) assert.ok(!r.path.includes(invite), 'an invite token reached an HTTP URL');
   }
 }, { hasher: secretsHasher }));
 
 test('login: lockout after 5 wrong passwords, then throttle per IP, over HTTP', () => withApp(async (ctx) => {
-  await addPerson(ctx.app, { name: 'Max Member', username: 'max' });
+  await addPerson(ctx.app, { name: 'Max Member', email: 'max@example.com' });
   const b = ctx.client.browser();
-  for (let i = 0; i < 5; i++) assert.equal((await b.post('/api/login', { username: 'max', password: 'nope-nope' })).status, 401);
-  const locked = await b.post('/api/login', { username: 'max', password: 'test-pass-1' });
+  for (let i = 0; i < 5; i++) assert.equal((await b.post('/api/login', { email: 'max@example.com', password: 'nope-nope' })).status, 401);
+  const locked = await b.post('/api/login', { email: 'max@example.com', password: 'test-pass-1' });
   assert.equal(locked.status, 429, 'even the right password is refused while locked');
   assert.ok(Number(locked.headers['retry-after']) > 0);
   assert.equal(locked.headers['set-cookie'], undefined);
   ctx.clock.advance(16 * 60 * 1000);
-  assert.equal((await b.post('/api/login', { username: 'max', password: 'test-pass-1' })).status, 200, 'the lock ends');
+  assert.equal((await b.post('/api/login', { email: 'max@example.com', password: 'test-pass-1' })).status, 200, 'the lock ends');
   // Per-IP throttle: 20 attempts in 5 minutes, whatever the usernames.
   ctx.clock.advance(6 * 60 * 1000);
-  for (let i = 0; i < 20; i++) await b.post('/api/login', { username: `ghost${i}`, password: 'x-x-x-x-x' });
-  const throttled = await b.post('/api/login', { username: 'max', password: 'test-pass-1' });
+  for (let i = 0; i < 20; i++) await b.post('/api/login', { email: `ghost${i}@example.com`, password: 'x-x-x-x-x' });
+  const throttled = await b.post('/api/login', { email: 'max@example.com', password: 'test-pass-1' });
   assert.equal(throttled.status, 429);
   assert.ok(Number(throttled.headers['retry-after']) > 0);
   ctx.clock.advance(5 * 60 * 1000 + 1);
-  assert.equal((await b.post('/api/login', { username: 'max', password: 'test-pass-1' })).status, 200);
+  assert.equal((await b.post('/api/login', { email: 'max@example.com', password: 'test-pass-1' })).status, 200);
 }));
 
 // ---------- transport-level limits ----------
@@ -419,13 +419,13 @@ function assertSafe(html, where) {
 
 async function hostileWorld(ctx) {
   const { admin, adminId } = await adminAndMember(ctx);
-  const created = await admin.post('/api/people', { name: HOSTILE.name, username: 'hal.test' });
+  const created = await admin.post('/api/people', { name: HOSTILE.name, email: 'hal.test@example.com' });
   assert.equal(created.status, 201, created.text);
   const halId = created.json.person.id;
   const team = (await admin.post('/api/teams', { name: HOSTILE.team })).json;
   const pos = (await admin.post(`/api/teams/${team.id}/positions`, { name: HOSTILE.position })).json;
   assert.ok(team.id && pos.id);
-  const annId = await addPerson(ctx.app, { name: 'Ann Volunteer', username: 'ann' });
+  const annId = await addPerson(ctx.app, { name: 'Ann Volunteer', email: 'ann@example.com' });
   for (const id of [halId, annId]) assert.equal((await admin.put(`/api/people/${id}/positions`, { positionIds: [pos.id] })).status, 200);
   const s1 = (await admin.post('/api/services', { date: '2025-01-12', title: HOSTILE.title, slots: [{ positionId: pos.id, count: 2 }] })).json;
   const s2 = (await admin.post('/api/services', { date: '2025-01-19', title: HOSTILE.title, slots: [{ positionId: pos.id }] })).json;
@@ -436,7 +436,7 @@ async function hostileWorld(ctx) {
   const blk = await hal.post('/api/me/blockouts', { startDate: '2025-01-19', reason: HOSTILE.reason });
   assert.equal(blk.status, 201, blk.text);
   const ann = ctx.client.browser();
-  await ann.login('ann', 'test-pass-1');
+  await ann.login('ann@example.com', 'test-pass-1');
   return { admin, adminId, hal, ann, halId, annId, team, pos, s1, s2 };
 }
 

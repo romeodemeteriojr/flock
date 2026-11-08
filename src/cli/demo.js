@@ -24,12 +24,12 @@ function nextSunday(today) {
 /** Fill an empty database. Returns { invite, counts }. */
 export async function seedDemo({ services, clock }) {
   const { people, teams, calendar, assignments, blockouts } = services;
-  const admin = await people.create(null, { name: 'Demo Admin', username: 'demo-admin', role: 'admin' });
+  const admin = await people.create(null, { name: 'Demo Admin', email: 'demo-admin@example.com', role: 'admin' });
   const actor = admin.person;
 
   const folks = [];
   for (const first of PEOPLE) {
-    const { person } = await people.create(actor, { name: `Demo ${first}`, username: `demo.${first.toLowerCase()}` });
+    const { person } = await people.create(actor, { name: `Demo ${first}`, email: `demo.${first.toLowerCase()}@example.com` });
     folks.push(person);
   }
 

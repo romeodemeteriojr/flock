@@ -1,7 +1,7 @@
 CREATE TABLE people (
   id INTEGER PRIMARY KEY,
   name TEXT NOT NULL,
-  username TEXT NOT NULL UNIQUE COLLATE NOCASE,
+  email TEXT UNIQUE COLLATE NOCASE, -- the login; NULL = can be scheduled but cannot log in
   password_hash TEXT,
   role TEXT NOT NULL CHECK(role IN ('admin','member')),
   active INTEGER NOT NULL DEFAULT 1,
@@ -23,6 +23,16 @@ CREATE TABLE sessions (
   created_at TEXT NOT NULL
 );
 CREATE INDEX idx_sessions_person ON sessions(person_id);
+-- Linked sign-in provider accounts (decision 0006). (provider, subject) is the
+-- provider's stable id for the account (OIDC iss + sub); one account per provider per person.
+CREATE TABLE identities (
+  provider TEXT NOT NULL,
+  subject TEXT NOT NULL,
+  person_id INTEGER NOT NULL REFERENCES people(id) ON DELETE CASCADE,
+  created_at TEXT NOT NULL,
+  PRIMARY KEY (provider, subject),
+  UNIQUE (person_id, provider)
+);
 CREATE TABLE teams (
   id INTEGER PRIMARY KEY,
   name TEXT NOT NULL UNIQUE COLLATE NOCASE,

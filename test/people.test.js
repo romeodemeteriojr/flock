@@ -20,7 +20,7 @@ test('members get 403 and logged-out users 401 on every route', async () => {
   const { app, s, call } = await boot();
   try {
     const routes = [['GET', '/api/people'], ['POST', '/api/people', { name: 'X Y' }],
-      ['PATCH', `/api/people/${s.memberId}`, { name: 'Z' }], ['POST', `/api/people/${s.memberId}/reset-password`, {}],
+      ['PATCH', `/api/people/${s.memberId}`, { name: 'Z' }], ['POST', `/api/people/${s.memberId}/reset-login`, {}],
       ['POST', `/api/people/${s.memberId}/invite`, {}]];
     for (const [m, p, b] of routes) {
       assert.equal((await call(m, p, b, s.memberCookie)).status, 403, `${m} ${p}`);
@@ -32,9 +32,9 @@ test('members get 403 and logged-out users 401 on every route', async () => {
 test('create returns an invite once; claiming it chooses a password and logs in', async () => {
   const { app, call } = await boot();
   try {
-    const r = await call('POST', '/api/people', { name: '  Sam Jones ', username: 'Sam_J' });
+    const r = await call('POST', '/api/people', { name: '  Sam Jones ', email: 'Sam_J@example.com' });
     assert.equal(r.status, 201);
-    assert.equal(r.json.person.username, 'sam_j');
+    assert.equal(r.json.person.email, 'sam_j@example.com');
     assert.equal(r.json.person.name, 'Sam Jones');
     assert.equal(r.json.person.role, 'member');
     assert.equal(r.json.person.joined, false);
@@ -49,18 +49,23 @@ test('create returns an invite once; claiming it chooses a password and logs in'
   } finally { await app.close(); }
 });
 
-test('username generation and duplicates', async () => {
-  const { app, call } = await boot();
+test('emails: optional, unique case-insensitively, and locked once the person joined', async () => {
+  const { app, s, call } = await boot();
   try {
-    const a = await call('POST', '/api/people', { name: 'Sam Jones' });
-    assert.equal(a.json.person.username, 'sam.jones');
-    const b = await call('POST', '/api/people', { name: 'Sam  Jones' });
-    assert.equal(b.json.person.username, 'sam.jones2');
-    const c = await call('POST', '/api/people', { name: 'Zoë' });
-    assert.match(c.json.person.username, /^[a-z0-9._-]{3,30}$/);
-    const d = await call('POST', '/api/people', { name: 'Dup', username: 'SAM.JONES' });
+    const a = await call('POST', '/api/people', { name: 'Sam Jones', email: 'sam@example.com' });
+    assert.equal(a.status, 201);
+    assert.ok(a.json.invite.link);
+    const d = await call('POST', '/api/people', { name: 'Dup', email: 'SAM@example.com' });
     assert.equal(d.status, 409);
-    assert.equal(d.json.error, 'That username is already taken');
+    assert.equal(d.json.error, 'That email is already used by someone else');
+    const none = await call('POST', '/api/people', { name: 'Gran' });
+    assert.equal(none.status, 201);
+    assert.equal(none.json.person.email, null);
+    assert.equal(none.json.invite, null);
+    assert.equal((await call('PATCH', `/api/people/${a.json.person.id}`, { email: 'sam2@example.com' })).json.person.email, 'sam2@example.com');
+    const locked = await call('PATCH', `/api/people/${s.memberId}`, { email: 'other@example.com' });
+    assert.equal(locked.status, 409);
+    assert.match(locked.json.error, /Reset login first/);
   } finally { await app.close(); }
 });
 
@@ -75,7 +80,7 @@ test('listing has no secrets, sorted by name, with positionIds', async () => {
     assert.deepEqual(r.json.map((p) => p.name), ['Ada Admin', 'Max Member']);
     assert.deepEqual(r.json[1].positionIds, [1]);
     assert.deepEqual(Object.keys(r.json[0]).sort(),
-      ['active', 'email', 'id', 'joined', 'name', 'positionIds', 'role', 'username']);
+      ['active', 'email', 'id', 'joined', 'name', 'positionIds', 'role']);
     assert.doesNotMatch(r.text, /scrypt|password_hash/);
   } finally { await app.close(); }
 });
@@ -112,10 +117,10 @@ test('deactivate kills sessions and blocks login; reactivate works', async () =>
     assert.equal(r.status, 200);
     assert.equal(r.json.person.active, false);
     assert.equal((await call('GET', '/api/me', undefined, s.memberCookie)).status, 401);
-    assert.equal((await app.request('POST', '/api/login', { body: { username: 'max', password: 'test-pass-1' }, headers: X })).status, 401);
+    assert.equal((await app.request('POST', '/api/login', { body: { email: 'max@example.com', password: 'test-pass-1' }, headers: X })).status, 401);
     assert.equal(db.prepare('SELECT COUNT(*) c FROM people WHERE id = ?').get(s.memberId).c, 1);
     assert.equal((await call('PATCH', `/api/people/${s.memberId}`, { active: true })).status, 200);
-    await loginAs(app, 'max');
+    await loginAs(app, 'max@example.com');
   } finally { await app.close(); }
 });
 
@@ -123,7 +128,7 @@ test('reset-password flow', async () => {
   const { app, db, s, call } = await boot();
   try {
     db.prepare('UPDATE people SET failed_logins = 5, locked_until = ? WHERE id = ?').run('2999-01-01T00:00:00.000Z', s.memberId);
-    const r = await call('POST', `/api/people/${s.memberId}/reset-password`, {});
+    const r = await call('POST', `/api/people/${s.memberId}/reset-login`, {});
     assert.equal(r.status, 200);
     assert.deepEqual(Object.keys(r.json), ['person', 'invite']);
     assert.equal((await call('GET', '/api/me', undefined, s.memberCookie)).status, 401);
@@ -131,7 +136,7 @@ test('reset-password flow', async () => {
     assert.equal(accepted.status, 200);
     const me = await call('GET', '/api/me', undefined, cookieFrom(accepted));
     assert.equal(me.json.person.hasPassword, true);
-    assert.equal((await call('POST', '/api/people/9999/reset-password', {})).status, 404);
+    assert.equal((await call('POST', '/api/people/9999/reset-login', {})).status, 404);
   } finally { await app.close(); }
 });
 
@@ -141,14 +146,15 @@ test('validation errors', async () => {
     const bads = [
       ['POST', '/api/people', {}], ['POST', '/api/people', { name: '   ' }],
       ['POST', '/api/people', { name: 'x'.repeat(81) }], ['POST', '/api/people', { name: 5 }],
-      ['POST', '/api/people', { name: 'A B', username: 'ab' }], ['POST', '/api/people', { name: 'A B', username: 'a b c' }],
-      ['POST', '/api/people', { name: 'A B', username: 'x'.repeat(31) }],
+      ['POST', '/api/people', { name: 'A B', email: 'ab' }], ['POST', '/api/people', { name: 'A B', email: 'a b@c.de' }],
+      ['POST', '/api/people', { name: 'A B', email: 5 }], ['POST', '/api/people', { name: 'A B', username: 'ab' }],
+      ['PATCH', `/api/people/${s.memberId}`, { email: 'nope' }],
       ['POST', '/api/people', { name: 'A B', role: 'boss' }], ['POST', '/api/people', { name: 'A B', extra: 1 }],
       ['POST', '/api/people', []],
       ['PATCH', `/api/people/${s.memberId}`, {}], ['PATCH', `/api/people/${s.memberId}`, { active: 'no' }],
       ['PATCH', `/api/people/${s.memberId}`, { role: 'x' }], ['PATCH', `/api/people/${s.memberId}`, { name: '' }],
       ['PATCH', '/api/people/abc', { name: 'Q' }], ['PATCH', '/api/people/0', { name: 'Q' }],
-      ['PATCH', '/api/people/1.5', { name: 'Q' }], ['POST', '/api/people/abc/reset-password', {}],
+      ['PATCH', '/api/people/1.5', { name: 'Q' }], ['POST', '/api/people/abc/reset-login', {}],
     ];
     for (const [m, p, b] of bads) {
       const r = await call(m, p, b);
@@ -161,11 +167,11 @@ test('validation errors', async () => {
 test('audit rows are written without secrets', async () => {
   const { app, db, s, call } = await boot();
   try {
-    const c = await call('POST', '/api/people', { name: 'Sam Jones' });
+    const c = await call('POST', '/api/people', { name: 'Sam Jones', email: 'sam@example.com' });
     await call('PATCH', `/api/people/${s.memberId}`, { active: false });
-    const rs = await call('POST', `/api/people/${s.memberId}/reset-password`, {});
+    const rs = await call('POST', `/api/people/${s.memberId}/reset-login`, {});
     const rows = db.prepare('SELECT * FROM audit ORDER BY id').all();
-    assert.deepEqual(rows.map((r) => r.action), ['person.create', 'person.update', 'person.reset_password']);
+    assert.deepEqual(rows.map((r) => r.action), ['person.create', 'person.update', 'person.reset_login']);
     for (const r of rows) {
       assert.equal(r.actor_id, s.adminId);
       assert.ok(!r.detail.includes(tokenFromLink(c.json.invite.link)) && !r.detail.includes(tokenFromLink(rs.json.invite.link)));

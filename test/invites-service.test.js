@@ -19,7 +19,7 @@ function setup(t, overrides = {}) {
   t.after(() => c.close());
   return { ...c, auth: c.services.auth, people: c.services.people, logs };
 }
-const create = (s, input = {}) => s.people.create(null, { name: 'Pat Smith', username: 'pat.smith', ...input });
+const create = (s, input = {}) => s.people.create(null, { name: 'Pat Smith', email: 'pat.smith@example.com', ...input });
 
 test('invite: created once for 7 days; the stored row contains only its hash', async (t) => {
   const s = setup(t);
@@ -33,7 +33,7 @@ test('invite: created once for 7 days; the stored row contains only its hash', a
     personId: person.id, tokenHash: tokenHash(invite.token), createdAt: NOW, expiresAt: invite.expiresAt,
   });
   assert.equal(await s.data.invites.findByTokenHash(invite.token), null);
-  assert.deepEqual(await s.auth.inviteInfo(invite.token), { name: 'Pat Smith', username: 'pat.smith' });
+  assert.deepEqual(await s.auth.inviteInfo(invite.token), { name: 'Pat Smith', email: 'pat.smith@example.com' });
   assert.equal(inviteLink('https://flock.example.org///', invite.token), `https://flock.example.org/#/welcome?token=${invite.token}`);
 });
 
@@ -53,7 +53,7 @@ test('invite: exact expiry boundary, including the millisecond before it', async
   const s = setup(t);
   const { invite } = await create(s);
   s.clock.set(Date.parse(invite.expiresAt) - 1);
-  assert.equal((await s.auth.inviteInfo(invite.token)).username, 'pat.smith');
+  assert.equal((await s.auth.inviteInfo(invite.token)).email, 'pat.smith@example.com');
   s.clock.advance(1);
   await gone(s.auth.inviteInfo(invite.token));
   await gone(s.auth.acceptInvite(invite.token, GOOD));
@@ -70,7 +70,7 @@ test('invite: a replacement cancels the previous link, but joined/inactive peopl
   await gone(s.auth.inviteInfo(next.invite.token));
   await s.auth.acceptInvite(latest.invite.token, GOOD);
   await assert.rejects(s.people.invite(null, person.id), ValidationError);
-  const other = await create(s, { name: 'Lee', username: 'lee.example' });
+  const other = await create(s, { name: 'Lee', email: 'lee.example@example.com' });
   await s.data.people.update(other.person.id, { active: false });
   await assert.rejects(s.people.invite(null, other.person.id), ValidationError);
   await assert.rejects(s.people.invite(null, 9999), NotFoundError);
@@ -80,15 +80,15 @@ test('invite: reset immediately clears the password, lockout and all sessions', 
   const s = setup(t);
   const { person, invite } = await create(s);
   const first = await s.auth.acceptInvite(invite.token, GOOD);
-  const second = await s.auth.login(person.username, GOOD);
+  const second = await s.auth.login(person.email, GOOD);
   await s.data.people.setLoginFailures(person.id, { failedLogins: 5, lockedUntil: '2025-03-02T10:00:00.000Z' });
-  const reset = await s.people.resetPassword(null, person.id);
+  const reset = await s.people.resetLogin(null, person.id);
   const p = await s.data.people.findAuthById(person.id);
   assert.deepEqual([p.passwordHash, p.failedLogins, p.lockedUntil], [null, 0, null]);
   assert.equal(reset.person.joined, false);
   assert.equal(await s.auth.authenticate(first.token), null);
   assert.equal(await s.auth.authenticate(second.token), null);
-  await assert.rejects(s.auth.login(person.username, GOOD), UnauthenticatedError);
+  await assert.rejects(s.auth.login(person.email, GOOD), UnauthenticatedError);
   assert.equal((await s.auth.acceptInvite(reset.invite.token, 'a different password')).person.id, person.id);
 });
 
@@ -98,7 +98,7 @@ test('invite: deactivated people cannot claim links; reactivation restores a sti
   await s.data.people.update(person.id, { active: false });
   await gone(s.auth.inviteInfo(invite.token));
   await gone(s.auth.acceptInvite(invite.token, GOOD));
-  const reset = await s.people.resetPassword(null, person.id);
+  const reset = await s.people.resetLogin(null, person.id);
   await gone(s.auth.inviteInfo(reset.invite.token));
   await s.data.people.update(person.id, { active: true });
   assert.equal((await s.auth.acceptInvite(reset.invite.token, GOOD)).person.id, person.id);
@@ -107,9 +107,9 @@ test('invite: deactivated people cannot claim links; reactivation restores a sti
 test('invite: weak passwords do not consume the link', async (t) => {
   const s = setup(t);
   const { invite } = await create(s);
-  for (const password of ['short', 'PAT.SMITH', ' '.repeat(8), 'x'.repeat(201), undefined]) {
+  for (const password of ['short', 'PAT.SMITH@example.com', ' '.repeat(8), 'x'.repeat(201), undefined]) {
     await assert.rejects(s.auth.acceptInvite(invite.token, password), ValidationError);
-    assert.equal((await s.auth.inviteInfo(invite.token)).username, 'pat.smith');
+    assert.equal((await s.auth.inviteInfo(invite.token)).email, 'pat.smith@example.com');
   }
   await s.auth.acceptInvite(invite.token, GOOD);
 });
@@ -127,7 +127,7 @@ test('invite: people without a password cannot log in or accumulate failed-login
   const s = setup(t);
   const { person } = await create(s);
   for (let i = 0; i < 8; i++) {
-    await assert.rejects(s.auth.login(person.username, GOOD), (e) => e instanceof UnauthenticatedError && e.message === 'Wrong username or password');
+    await assert.rejects(s.auth.login(person.email, GOOD), (e) => e instanceof UnauthenticatedError && e.message === 'Wrong email or password');
   }
   const p = await s.data.people.findAuthById(person.id);
   assert.deepEqual([p.failedLogins, p.lockedUntil], [0, null]);
@@ -172,8 +172,8 @@ test('invite: a session-write failure rolls back password and token consumption'
 
 test('invite: pending schedulers do not bypass last-joined-scheduler protection', async (t) => {
   const s = setup(t);
-  const id = await addPerson(s, { name: 'Ada', username: 'ada.admin', role: 'admin' });
-  const pending = await create(s, { name: 'Next Admin', username: 'next.admin', role: 'admin' });
+  const id = await addPerson(s, { name: 'Ada', email: 'ada.admin@example.com', role: 'admin' });
+  const pending = await create(s, { name: 'Next Admin', email: 'next.admin@example.com', role: 'admin' });
   await assert.rejects(s.people.update({ id }, id, { role: 'member' }), ConflictError);
   // An unused invitation may still be deactivated when a joined scheduler remains.
   await s.people.update({ id }, pending.person.id, { active: false });
@@ -188,11 +188,11 @@ test('invite: a reset immediately after login commits cannot recreate its sessio
   await s.auth.acceptInvite(invite.token, GOOD);
   const data = { ...s.data, tx: async (fn) => {
     const result = await s.data.tx(fn);
-    await s.people.resetPassword(null, person.id);
+    await s.people.resetLogin(null, person.id);
     return result;
   } };
   const auth = createAuthService({ ...s, data });
-  const login = await auth.login(person.username, GOOD);
+  const login = await auth.login(person.email, GOOD);
   assert.equal(await s.data.sessions.findByTokenHash(tokenHash(login.token)), null);
   assert.equal(await s.auth.authenticate(login.token), null);
 });
@@ -201,7 +201,7 @@ test('invite: raw links, tokens, passwords and hashes never reach the logger or 
   const s = setup(t);
   const created = await create(s);
   const accepted = await s.auth.acceptInvite(created.invite.token, GOOD);
-  const reset = await s.people.resetPassword(null, created.person.id);
+  const reset = await s.people.resetLogin(null, created.person.id);
   const text = JSON.stringify(s.logs) + JSON.stringify(await s.data.audit.list());
   for (const secret of [created.invite.token, tokenHash(created.invite.token), reset.invite.token, accepted.token, GOOD]) assert.ok(!text.includes(secret));
 });

@@ -20,8 +20,8 @@ async function setup({ blocked = [] } = {}) {
     async isBlocked(personId, date) { blockCalls.push([personId, date]); return blockedSet.has(`${personId}:${date}`); },
   };
   const svc = createAssignmentsService({ data, clock, blockouts, logger: silentLogger() });
-  const person = async (name, username, { active = true } = {}) => {
-    const p = await data.people.create({ name, username, passwordHash: 'x', createdAt: NOW });
+  const person = async (name, handle, { active = true } = {}) => {
+    const p = await data.people.create({ name, email: `${handle}@example.com`, passwordHash: 'x', createdAt: NOW });
     if (!active) await data.people.update(p.id, { active: false });
     return p;
   };
@@ -290,7 +290,7 @@ test('mySchedule: pending and accepted only, 12 weeks from today, coVolunteers a
   assert.equal(r.nextServing.slotId, p1);
   // Privacy: nothing about other people beyond name and position.
   const text = JSON.stringify(r);
-  assert.doesNotMatch(text, /Rae Ray|quinn"|personId|username/);
+  assert.doesNotMatch(text, /Rae Ray|quinn|personId|@example\.com/);
 
   const fromPast = await svc.mySchedule(pat.id, { from: '2024-12-29' });
   assert.deepEqual(fromPast.items.map((i) => i.slotId), [past, p1]);

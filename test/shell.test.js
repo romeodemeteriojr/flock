@@ -241,7 +241,7 @@ test('api calls onUnauthorized on 401 (but not for a failed login)', async () =>
   const api = createApi(fakeFetch(() => ({ status: 401, body: { error: 'Please log in' } })), { onUnauthorized: () => n++ });
   await assert.rejects(api.get('/api/me'), (e) => e.status === 401 && e.message === 'Please log in');
   assert.equal(n, 1);
-  await assert.rejects(api.post('/api/login', { username: 'a', password: 'b' }), (e) => e.status === 401);
+  await assert.rejects(api.post('/api/login', { email: 'a@example.com', password: 'b' }), (e) => e.status === 401);
   assert.equal(n, 1);
   // hooks can also be set later
   let later = 0;
@@ -271,7 +271,7 @@ test('api works against the real server: 401, wrong login, X-Flock and voluntary
     setup: (a) => a.router.add('GET', '/api/test-login', () => ({ status: 200, json: { ok: true } })),
   });
   try {
-    await addPerson(db, { name: 'New <Person>', username: 'newbie' });
+    await addPerson(db, { name: 'New <Person>', email: 'newbie@example.com' });
     let cookie = '';
     const jarFetch = async (u, init) => {
       const res = await fetch(t.url + u, { ...init, headers: { ...init.headers, ...(cookie ? { Cookie: cookie } : {}) } });
@@ -283,10 +283,10 @@ test('api works against the real server: 401, wrong login, X-Flock and voluntary
     const api = createApi(jarFetch, { onUnauthorized: () => unauth++ });
     await assert.rejects(api.get('/api/me'), (e) => e.status === 401);
     assert.equal(unauth, 1);
-    await assert.rejects(api.post('/api/login', { username: 'newbie', password: 'wrong-password' }),
-      (e) => e.status === 401 && e.message === 'Wrong username or password');
+    await assert.rejects(api.post('/api/login', { email: 'newbie@example.com', password: 'wrong-password' }),
+      (e) => e.status === 401 && e.message === 'Wrong email or password');
     assert.equal(unauth, 1);
-    const r = await api.post('/api/login', { username: 'newbie', password: 'test-pass-1' });
+    const r = await api.post('/api/login', { email: 'newbie@example.com', password: 'test-pass-1' });
     assert.equal(typeof r.person.id, 'number');
     assert.equal((await api.get('/api/me')).person.name, 'New <Person>');
     assert.deepEqual(await api.get('/api/test-login'), { ok: true });
@@ -301,16 +301,16 @@ test('api works against the real server: 401, wrong login, X-Flock and voluntary
 
 test('login view has labelled fields with the right autocomplete', () => {
   const s = loginView.render({ user: null });
-  assert.match(s, /<label for="login-username">Username or email<\/label>/);
-  assert.match(s, /<input id="login-username"[^>]*autocomplete="username"/);
+  assert.match(s, /<label for="login-email">Email<\/label>/);
+  assert.match(s, /<input id="login-email"[^>]*type="email"[^>]*autocomplete="username"/);
   assert.match(s, /<label for="login-password">Password<\/label>/);
   assert.match(s, /<input id="login-password"[^>]*type="password"[^>]*autocomplete="current-password"/);
   assert.match(s, /<button type="submit"[^>]*>Log in<\/button>/);
   assert.ok(!s.includes('form-error'));
 });
 
-test('login view escapes error text and username', () => {
-  const s = loginView.render({ user: null }, { error: '<img src=x>Bad & "wrong"', username: '"><script>' });
+test('login view escapes error text and email', () => {
+  const s = loginView.render({ user: null }, { error: '<img src=x>Bad & "wrong"', email: '"><script>' });
   assert.ok(s.includes('&lt;img src=x&gt;Bad &amp; &quot;wrong&quot;'));
   assert.ok(s.includes('value="&quot;&gt;&lt;script&gt;"'));
   assert.ok(!s.includes('<img'));

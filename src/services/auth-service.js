@@ -19,7 +19,7 @@ export const DEFAULT_SESSION_DAYS = 14;
 export const INVITE_DAYS = 7;
 export const INVITE_GONE_MESSAGE = 'This link has expired or was already used. Ask your scheduler for a new one.';
 
-export const INVALID_LOGIN_MESSAGE = 'Wrong username or password';
+export const INVALID_LOGIN_MESSAGE = 'Wrong email or password';
 // One message for every refusal, so it never tells whether an email is in Flock.
 export const SSO_FAILED_MESSAGE = 'That sign-in did not work. If you are new, ask your scheduler to add your email.';
 export const LOCKED_MESSAGE = 'Too many tries. Please wait a few minutes.';
@@ -39,17 +39,17 @@ export function inviteLink(baseUrl, token) {
 /**
  * Password rules. Returns a plain-English message, or null when the password is fine.
  * @param {unknown} pw
- * @param {{username?: string}} [opts]
+ * @param {{email?: string|null}} [opts]
  * @returns {string|null}
  */
-export function validatePassword(pw, { username } = {}) {
+export function validatePassword(pw, { email } = {}) {
   if (typeof pw !== 'string') return 'Please enter a password.';
   const len = [...pw].length;
   if (len < MIN_PASSWORD_LENGTH) return `Your password must be at least ${MIN_PASSWORD_LENGTH} characters long.`;
   if (len > MAX_PASSWORD_LENGTH) return `Your password can be at most ${MAX_PASSWORD_LENGTH} characters long.`;
   if (pw.trim() === '') return 'Your password cannot be only spaces.';
-  if (typeof username === 'string' && username !== '' && pw.trim().toLowerCase() === username.trim().toLowerCase()) {
-    return 'Your password cannot be the same as your username.';
+  if (typeof email === 'string' && email !== '' && pw.trim().toLowerCase() === email.trim().toLowerCase()) {
+    return 'Your password cannot be the same as your email.';
   }
   return null;
 }
@@ -57,14 +57,14 @@ export function validatePassword(pw, { username } = {}) {
 /**
  * The public view of a person: never contains the hash, lockout state or tokens.
  * @param {object|null|undefined} person  A Person or AuthPerson from the data layer.
- * @returns {{id: number, name: string, username: string, role: string, hasPassword: boolean, active: boolean}|null}
+ * @returns {{id: number, name: string, email: string|null, role: string, hasPassword: boolean, active: boolean}|null}
  */
 export function publicPerson(person) {
   if (!person) return null;
   return {
     id: person.id,
     name: person.name,
-    username: person.username,
+    email: person.email ?? null,
     role: person.role,
     hasPassword: !!person.hasPassword,
     active: !!person.active,
@@ -105,8 +105,8 @@ export function createAuthService(deps) {
     return Number.isFinite(days) && days > 0 ? days : DEFAULT_SESSION_DAYS;
   };
 
-  // A hash of a random password, checked for unknown usernames so timing does
-  // not reveal which usernames exist. Made once per service, lazily.
+  // A hash of a random password, checked for unknown emails so timing does
+  // not reveal which emails exist. Made once per service, lazily.
   let dummy = null;
   const dummyHash = () => (dummy ??= hasher.hash(random.token(16)));
   const burn = async (pw) => { await hasher.verify(pw, await dummyHash()); };
@@ -116,7 +116,7 @@ export function createAuthService(deps) {
     const invite = await d.invites.findByTokenHash(tokenHash(token));
     if (!invite || !(Date.parse(invite.expiresAt) > nowDate().getTime())) return null;
     const person = await d.people.findById(invite.personId);
-    return person && person.active ? { invite, person } : null;
+    return person && person.active && person.email ? { invite, person } : null;
   }
 
   async function createSession(personId) {
@@ -148,14 +148,14 @@ export function createAuthService(deps) {
     async inviteInfo(token) {
       const found = await findLiveInvite(data, token);
       if (!found) throw new NotFoundError(INVITE_GONE_MESSAGE);
-      return { name: found.person.name, username: found.person.username };
+      return { name: found.person.name, email: found.person.email };
     },
 
     /** Use an invite once: set a password, end old sessions and log the person in. */
     async acceptInvite(token, newPassword) {
       const found = await findLiveInvite(data, token);
       if (!found) throw new NotFoundError(INVITE_GONE_MESSAGE);
-      const err = validatePassword(newPassword, { username: found.person.username });
+      const err = validatePassword(newPassword, { email: found.person.email });
       if (err) throw new ValidationError(err);
       const hash = await hasher.hash(newPassword);
       const result = await data.tx(async (d) => {
@@ -173,18 +173,15 @@ export function createAuthService(deps) {
     },
 
     /**
-     * Check a username and password and start a session.
+     * Check an email and password and start a session.
      * @returns {Promise<{person: object, token: string}>}  The public person and the raw session token (for the cookie only).
      * @throws {UnauthenticatedError} wrong password, unknown or inactive person (same message for all)
      * @throws {TooManyRequestsError} the person is locked out (retryAfterSec set)
      */
-    async login(username, password) {
+    async login(email, password) {
       const invalid = (reason) => new UnauthenticatedError(INVALID_LOGIN_MESSAGE, { details: { reason } });
       const pwOk = typeof password === 'string' && password.length <= MAX_PASSWORD_INPUT;
-      // Usernames never contain '@', so anything with one is an email.
-      const found = typeof username === 'string' && username !== ''
-        ? await (username.includes('@') ? data.people.findAuthByEmail(username.trim()) : data.people.findAuthByUsername(username))
-        : null;
+      const found = typeof email === 'string' && email.trim() !== '' ? await data.people.findAuthByEmail(email) : null;
 
       if (!found) {
         await burn(pwOk ? password : 'x');
@@ -345,7 +342,7 @@ export function createAuthService(deps) {
           || !(await hasher.verify(oldPassword, person.passwordHash))) {
         throw new ValidationError('Your current password is not correct.');
       }
-      const err = validatePassword(newPassword, { username: person.username });
+      const err = validatePassword(newPassword, { email: person.email });
       if (err) throw new ValidationError(err);
       if (newPassword === oldPassword) throw new ValidationError('Your new password must be different from your current one.');
       const hash = await hasher.hash(newPassword);

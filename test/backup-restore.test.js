@@ -63,9 +63,9 @@ async function populate(c) {
   for (let i = 0; i < 16; i++) await services.assignments.respond(church.memberIds[i], slots[i].id, i % 4 ? 'accept' : 'decline');
   for (let i = 30; i < 40; i++) await services.blockouts.add(church.memberIds[i], { startDate: '2025-01-19', endDate: '2025-01-26', reason: `Holiday ${i}` });
   const tokens = [];
-  for (let i = 1; i <= 10; i++) tokens.push((await services.auth.login(`member${i}`, PASSWORD)).token);
-  tokens.push((await services.auth.login('sched1', PASSWORD)).token);
-  const reset = await services.people.resetPassword(church.actor, church.memberIds[69]);
+  for (let i = 1; i <= 10; i++) tokens.push((await services.auth.login(`member${i}@example.com`, PASSWORD)).token);
+  tokens.push((await services.auth.login('sched1@example.com', PASSWORD)).token);
+  const reset = await services.people.resetLogin(church.actor, church.memberIds[69]);
   return { church, tokens, invite: reset.invite };
 }
 
@@ -73,15 +73,15 @@ async function populate(c) {
 function relationships(db) {
   const q = (sql) => db.prepare(sql).all().map((r) => ({ ...r }));
   return {
-    slots: q(`SELECT sv.date, sv.time, sv.title, t.name AS team, p.name AS position, pe.username, s.status, s.assigned_at, s.responded_at
+    slots: q(`SELECT sv.date, sv.time, sv.title, t.name AS team, p.name AS position, pe.email, s.status, s.assigned_at, s.responded_at
       FROM slots s JOIN services sv ON sv.id = s.service_id JOIN positions p ON p.id = s.position_id
       JOIN teams t ON t.id = p.team_id LEFT JOIN people pe ON pe.id = s.person_id ORDER BY s.id`),
-    qualifications: q(`SELECT pe.username, t.name AS team, p.name AS position FROM person_positions pp
+    qualifications: q(`SELECT pe.email, t.name AS team, p.name AS position FROM person_positions pp
       JOIN people pe ON pe.id = pp.person_id JOIN positions p ON p.id = pp.position_id JOIN teams t ON t.id = p.team_id
-      ORDER BY pe.username, t.name, p.name`),
-    blockouts: q(`SELECT pe.username, b.start_date, b.end_date, b.reason FROM blockouts b JOIN people pe ON pe.id = b.person_id ORDER BY b.id`),
-    sessions: q(`SELECT pe.username, s.token_hash, s.expires_at FROM sessions s JOIN people pe ON pe.id = s.person_id ORDER BY s.id`),
-    people: q('SELECT id, name, username, password_hash, role, active, failed_logins, locked_until, created_at FROM people ORDER BY id'),
+      ORDER BY pe.email, t.name, p.name`),
+    blockouts: q(`SELECT pe.email, b.start_date, b.end_date, b.reason FROM blockouts b JOIN people pe ON pe.id = b.person_id ORDER BY b.id`),
+    sessions: q(`SELECT pe.email, s.token_hash, s.expires_at FROM sessions s JOIN people pe ON pe.id = s.person_id ORDER BY s.id`),
+    people: q('SELECT id, name, email, password_hash, role, active, failed_logins, locked_until, created_at FROM people ORDER BY id'),
     invites: q('SELECT person_id, token_hash, expires_at, created_at FROM invites ORDER BY person_id'),
     audit: q('SELECT * FROM audit ORDER BY id'),
     migrations: q('SELECT name FROM schema_migrations ORDER BY name'),
@@ -141,16 +141,16 @@ test('restore: sessions and password hashes still work in the restored app, over
     for (const [i, token] of state.tokens.entries()) {
       const me = await call('GET', '/api/me', { cookie: `${COOKIE_NAME}=${token}` });
       assert.equal(me.status, 200);
-      assert.equal(me.json.person.username, i < 10 ? `member${i + 1}` : 'sched1');
+      assert.equal(me.json.person.email, i < 10 ? `member${i + 1}@example.com` : 'sched1@example.com');
     }
     // Stored password hashes still verify, for everyone.
-    for (const username of ['sched1', 'sched5', 'member1', 'member42', 'member69']) {
-      assert.equal((await call('POST', '/api/login', { body: { username, password: PASSWORD } })).status, 200, username);
+    for (const handle of ['sched1', 'sched5', 'member1', 'member42', 'member69']) {
+      assert.equal((await call('POST', '/api/login', { body: { email: `${handle}@example.com`, password: PASSWORD } })).status, 200, handle);
     }
     const joined = await call('POST', '/api/welcome', { body: { token: state.invite.token, password: 'member70 own password' } });
     assert.equal(joined.status, 200, 'an unused invite from before the backup works');
     assert.equal(joined.json.person.hasPassword, true);
-    assert.equal((await call('POST', '/api/login', { body: { username: 'member1', password: 'not-the-password' } })).status, 401);
+    assert.equal((await call('POST', '/api/login', { body: { email: 'member1@example.com', password: 'not-the-password' } })).status, 401);
     // The schedule is there: member1 declined (i=0), member2 accepted.
     const sched = await call('GET', '/api/me/schedule', { cookie: `${COOKIE_NAME}=${state.tokens[1]}` });
     assert.deepEqual(sched.json.items.map((i) => [i.date, i.status]), [['2025-01-12', 'accepted']]);
@@ -246,6 +246,5 @@ test('export: the CSV holds the schedule and no password hash, session token or 
   assert.ok(secrets.length > 80);
   for (const s of secrets) assert.ok(!csv.includes(s), 'a secret is in the export');
   for (const s of secrets) assert.ok(!r.out.includes(s) && !r.err.includes(s), 'a secret is in the CLI output');
-  assert.doesNotMatch(csv, /fast\$|scrypt\$|password|token|username/i);
-  assert.doesNotMatch(csv, /\b(member|sched)\d+\b/, 'usernames are not exported');
+  assert.doesNotMatch(csv, /fast\$|scrypt\$|password|token|@example\.com/i, 'no secrets or emails are exported');
 });

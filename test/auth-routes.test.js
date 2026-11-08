@@ -25,13 +25,14 @@ async function boot(opts = {}) {
   return { app, db, clock };
 }
 
-const login = (app, username, password, headers = {}) =>
-  app.request('POST', '/api/login', { body: { username, password }, headers: { ...X, ...headers } });
+// People are named by a handle; their login is <handle>@example.com.
+const login = (app, handle, password, headers = {}) =>
+  app.request('POST', '/api/login', { body: { email: `${handle}@example.com`, password }, headers: { ...X, ...headers } });
 
 test('login success sets cookie with flags and returns person', async () => {
   const { app, db } = await boot();
   try {
-    await addPerson(db, { name: 'Ann Example', username: 'ann' });
+    await addPerson(db, { name: 'Ann Example', email: 'ann@example.com' });
     const r = await login(app, 'ann', 'test-pass-1');
     assert.equal(r.status, 200);
     assert.deepEqual(Object.keys(r.json.person).sort(), ['id', 'name', 'role']);
@@ -49,10 +50,10 @@ test('Secure flag with secureCookies or X-Forwarded-Proto', async () => {
   const { app, db } = await boot({ config: { ...loadConfig({}), secureCookies: true } });
   const b = await boot();
   try {
-    await addPerson(db, { name: 'Ann', username: 'ann' });
+    await addPerson(db, { name: 'Ann', email: 'ann@example.com' });
     const r = await login(app, 'ann', 'test-pass-1');
     assert.match(r.headers['set-cookie'][0], /; Secure/);
-    await addPerson(b.db, { name: 'Ann', username: 'ann' });
+    await addPerson(b.db, { name: 'Ann', email: 'ann@example.com' });
     const r2 = await login(b.app, 'ann', 'test-pass-1', { 'X-Forwarded-Proto': 'https' });
     assert.match(r2.headers['set-cookie'][0], /; Secure/);
   } finally { await app.close(); await b.app.close(); }
@@ -61,14 +62,14 @@ test('Secure flag with secureCookies or X-Forwarded-Proto', async () => {
 test('wrong password, unknown user and inactive give the same 401', async () => {
   const { app, db } = await boot();
   try {
-    await addPerson(db, { name: 'Ann', username: 'ann' });
-    await addPerson(db, { name: 'Gone', username: 'gone', active: false });
+    await addPerson(db, { name: 'Ann', email: 'ann@example.com' });
+    await addPerson(db, { name: 'Gone', email: 'gone@example.com', active: false });
     const a = await login(app, 'ann', 'nope-nope');
     const b = await login(app, 'nobody', 'nope-nope');
     const c = await login(app, 'gone', 'test-pass-1');
     for (const r of [a, b, c]) {
       assert.equal(r.status, 401);
-      assert.deepEqual(r.json, { error: 'Wrong username or password' });
+      assert.deepEqual(r.json, { error: 'Wrong email or password' });
       assert.equal(r.headers['set-cookie'], undefined);
     }
   } finally { await app.close(); }
@@ -77,7 +78,7 @@ test('wrong password, unknown user and inactive give the same 401', async () => 
 test('lockout after 5 wrong tries gives 429', async () => {
   const { app, db } = await boot();
   try {
-    await addPerson(db, { name: 'Ann', username: 'ann' });
+    await addPerson(db, { name: 'Ann', email: 'ann@example.com' });
     for (let i = 0; i < 5; i++) assert.equal((await login(app, 'ann', 'bad-bad-bad')).status, 401);
     const r = await login(app, 'ann', 'test-pass-1');
     assert.equal(r.status, 429);
@@ -98,8 +99,8 @@ test('per-IP throttle: 20 attempts per 5 minutes', async () => {
 test('logout invalidates the cookie and clears it', async () => {
   const { app, db } = await boot();
   try {
-    await addPerson(db, { name: 'Ann', username: 'ann' });
-    const cookie = await loginAs(app, 'ann');
+    await addPerson(db, { name: 'Ann', email: 'ann@example.com' });
+    const cookie = await loginAs(app, 'ann@example.com');
     assert.equal((await app.request('GET', '/api/me', { cookie })).status, 200);
     const out = await app.request('POST', '/api/logout', { cookie, headers: X });
     assert.equal(out.status, 200);
@@ -113,13 +114,13 @@ test('logout invalidates the cookie and clears it', async () => {
 test('GET /api/me returns the person; no hash or token in bodies', async () => {
   const { app, db } = await boot();
   try {
-    await addPerson(db, { name: 'Ann', username: 'ann' });
+    await addPerson(db, { name: 'Ann', email: 'ann@example.com' });
     const lr = await login(app, 'ann', 'test-pass-1');
     const cookie = lr.headers['set-cookie'][0].split(';')[0];
     const token = cookie.split('=')[1];
     const me = await app.request('GET', '/api/me', { cookie });
     assert.equal(me.status, 200);
-    assert.equal(me.json.person.username, 'ann');
+    assert.equal(me.json.person.email, 'ann@example.com');
     const pw = await app.request('POST', '/api/password', { cookie, headers: X, body: { oldPassword: 'x', newPassword: 'y' } });
     for (const r of [lr, me, pw]) {
       assert.doesNotMatch(r.text, /scrypt|password_hash|passwordHash/);
@@ -131,9 +132,9 @@ test('GET /api/me returns the person; no hash or token in bodies', async () => {
 test('password change flow keeps this session and kills others', async () => {
   const { app, db } = await boot();
   try {
-    await addPerson(db, { name: 'Ann', username: 'ann' });
-    const c1 = await loginAs(app, 'ann');
-    const c2 = await loginAs(app, 'ann');
+    await addPerson(db, { name: 'Ann', email: 'ann@example.com' });
+    const c1 = await loginAs(app, 'ann@example.com');
+    const c2 = await loginAs(app, 'ann@example.com');
     const bad = await app.request('POST', '/api/password', { cookie: c1, headers: X, body: { oldPassword: 'wrong-one', newPassword: 'brand-new-pw' } });
     assert.equal(bad.status, 400);
     assert.match(bad.json.error, /current password/);
@@ -152,9 +153,9 @@ test('password change flow keeps this session and kills others', async () => {
 test('people without passwords cannot log in or gain sessions', async () => {
   const { app, db } = await boot();
   try {
-    const id = await addPerson(db, { name: 'New', username: 'newbie', password: null });
+    const id = await addPerson(db, { name: 'New', email: 'newbie@example.com', password: null });
     const lr = await login(app, 'newbie', 'test-pass-1');
-    assert.deepEqual([lr.status, lr.json], [401, { error: 'Wrong username or password' }]);
+    assert.deepEqual([lr.status, lr.json], [401, { error: 'Wrong email or password' }]);
     assert.equal(lr.headers['set-cookie'], undefined);
     assert.equal(db.prepare('SELECT failed_logins FROM people WHERE id = ?').get(id).failed_logins, 0);
     assert.equal((await app.request('GET', '/api/test-login')).status, 401);
@@ -164,15 +165,15 @@ test('people without passwords cannot log in or gain sessions', async () => {
 test('CSRF header required on non-GET requests except login', async () => {
   const { app, db } = await boot();
   try {
-    await addPerson(db, { name: 'Ann', username: 'ann' });
-    const cookie = await loginAs(app, 'ann');
+    await addPerson(db, { name: 'Ann', email: 'ann@example.com' });
+    const cookie = await loginAs(app, 'ann@example.com');
     const r = await app.request('POST', '/api/test-post', { cookie });
     assert.deepEqual([r.status, r.json], [403, { error: 'Request not allowed' }]);
     assert.equal((await app.request('POST', '/api/logout', { cookie })).status, 403);
     assert.equal((await app.request('POST', '/api/test-post', { cookie, headers: { 'X-Flock': '0' } })).status, 403);
     assert.equal((await app.request('POST', '/api/test-post', { cookie, headers: X })).status, 200);
     // login itself does not need the header
-    const l = await app.request('POST', '/api/login', { body: { username: 'ann', password: 'test-pass-1' } });
+    const l = await app.request('POST', '/api/login', { body: { email: 'ann@example.com', password: 'test-pass-1' } });
     assert.equal(l.status, 200);
   } finally { await app.close(); }
 });
@@ -195,7 +196,7 @@ test('login-level and admin-level routes', async () => {
 test('per-IP throttle: successful logins do not count', async () => {
   const { app, db } = await boot();
   try {
-    await addPerson(db, { name: 'Ann', username: 'ann' });
+    await addPerson(db, { name: 'Ann', email: 'ann@example.com' });
     for (let i = 0; i < 31; i++) assert.equal((await login(app, 'ann', 'test-pass-1')).status, 200);
   } finally { await app.close(); }
 });

@@ -1,7 +1,7 @@
 // Errors thrown by the data layer. Every adapter (SQLite now, maybe PostgreSQL later)
 // must translate its own driver errors into these, so callers never see driver codes.
 
-/** A unique rule was broken (for example a username or team name that is already taken). */
+/** A unique rule was broken (for example an email or team name that is already taken). */
 export class DuplicateError extends Error {
   /** @param {string} [message] */
   constructor(message = 'That already exists') {

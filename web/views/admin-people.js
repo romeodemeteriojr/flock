@@ -15,24 +15,14 @@ export const title = 'People';
 
 // ---------- pure helpers (tested directly) ----------
 
-// Keep people whose name or username contains every word typed (ignores case).
+// Keep people whose name or email contains every word typed (ignores case).
 export function filterPeople(people, query) {
   const words = String(query ?? '').toLowerCase().split(/\s+/).filter(Boolean);
   if (!words.length) return people;
   return people.filter((p) => {
-    const hay = `${p.name} ${p.username}`.toLowerCase();
+    const hay = `${p.name} ${p.email ?? ''}`.toLowerCase();
     return words.every((w) => hay.includes(w));
   });
-}
-
-// Same idea as the server: "Sam Ortiz" -> "sam.ortiz".
-export function suggestUsername(name) {
-  let base = String(name ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
-    .split(/[^a-z0-9]+/).filter(Boolean).join('.');
-  base = base.slice(0, 24).replace(/\.+$/, '');
-  if (!base) return '';
-  if (base.length < 3) base = (base + '.user').slice(0, 24);
-  return base;
 }
 
 // Turn an API error into plain words for the scheduler.
@@ -43,7 +33,6 @@ export function friendlyMessage(err) {
       return "That would leave nobody in charge. There must always be at least one active scheduler, so make someone else a scheduler first.";
     }
     if (/own account/i.test(text)) return "You can't deactivate your own account.";
-    if (/username/i.test(text)) return 'That username is already taken. Please pick a different one, or leave it empty.';
   }
   return text || 'Something went wrong. Please try again.';
 }
@@ -56,7 +45,7 @@ const nextRole = (p) => (p.role === 'admin' ? 'member' : 'admin');
 function roleConfirmPanel(p, target) {
   const yes = target === 'admin' ? 'Yes, make a scheduler' : 'Yes, make a volunteer';
   const text = target === 'admin'
-    ? html`Make ${p.name} a scheduler? ${p.name} will be able to change the whole schedule and see every volunteer's name and username.`
+    ? html`Make ${p.name} a scheduler? ${p.name} will be able to change the whole schedule and see every volunteer's name and email.`
     : html`Make ${p.name} a volunteer? ${p.name} will only see their own schedule.`;
   return html`<div class="confirm" role="alertdialog" aria-label="Confirm">
     <p>${text}</p>
@@ -82,9 +71,9 @@ function inviteBox(invite) {
 function confirmPanel(p, kind) {
   if (kind === 'reset') {
     return html`<div class="confirm" role="alertdialog" aria-label="Confirm">
-      <p>Make a new invite link for <strong>${p.name}</strong>? Their current password stops working right away, and they are logged out everywhere.</p>
+      <p>Reset the login of <strong>${p.name}</strong>? Their password and any linked sign-in (such as Google) stop working right away, they are logged out everywhere, and you get a new invite link for them.</p>
       <div class="btn-row">
-        <button type="button" class="btn btn-primary" data-action="reset-yes" data-id="${p.id}">Yes, make a new link</button>
+        <button type="button" class="btn btn-primary" data-action="reset-yes" data-id="${p.id}">Yes, reset login</button>
         <button type="button" class="btn" data-action="cancel">No, go back</button>
       </div></div>`;
   }
@@ -104,16 +93,18 @@ function confirmPanel(p, kind) {
     </div></div>`;
 }
 
+// The email is the login: it can only change before the person joins (Reset login unlocks it).
 function editPanel(p) {
   return html`<form class="form confirm" data-form="edit-name" data-id="${p.id}" novalidate>
     <div class="field">
       <label for="edit-name-${p.id}">Name</label>
       <input id="edit-name-${p.id}" name="name" type="text" maxlength="80" required value="${p.name}">
     </div>
+    ${p.joined ? html`<p class="hint">They log in with ${p.email}. To change it, use Reset login first.</p>` : html`
     <div class="field">
-      <label for="edit-email-${p.id}">Email (optional, for logging in)</label>
+      <label for="edit-email-${p.id}">Email (needed to log in)</label>
       <input id="edit-email-${p.id}" name="email" type="email" maxlength="254" autocapitalize="none" spellcheck="false" value="${p.email ?? ''}">
-    </div>
+    </div>`}
     <div class="btn-row">
       <button type="submit" class="btn btn-primary">Save</button>
       <button type="button" class="btn" data-action="cancel">Cancel</button>
@@ -153,9 +144,10 @@ function personRow(p, m) {
     <div class="person${p.active ? '' : ' is-inactive'}">
       ${avatar(p.name)}
       <div class="person-text">
-        <p class="person-name"><strong>${p.name}</strong> <span class="hint">(${p.username}${p.email ? `, ${p.email}` : ''})</span></p>
+        <p class="person-name"><strong>${p.name}</strong>${p.email ? html` <span class="hint">(${p.email})</span>` : ''}</p>
         <p class="person-chips"><span class="chip chip-plain">${roleWord(p)}</span>
-        ${!p.joined && p.active ? html`<span class="chip chip-plain">Not joined yet</span>` : ''}
+        ${!p.email && p.active ? html`<span class="chip chip-plain">No email, cannot log in</span>` : ''}
+        ${p.email && !p.joined && p.active ? html`<span class="chip chip-plain">Not joined yet</span>` : ''}
         ${p.active ? '' : html`<span class="chip chip-bad">Deactivated</span>`}</p>
       </div>
     </div>
@@ -163,8 +155,8 @@ function personRow(p, m) {
       ${roleButton}
       ${iconButton('edit', 'Edit name', { dataAction: 'edit', dataId: p.id })}
       ${iconButton('list-check', 'What can they do?', { dataAction: 'positions', dataId: p.id })}
-      ${!p.joined && p.active ? iconButton('send', 'Copy new invite', { dataAction: 'invite', dataId: p.id }) : ''}
-      ${iconButton('key', 'Reset password', { dataAction: 'reset-ask', dataId: p.id })}
+      ${p.email && !p.joined && p.active ? iconButton('send', 'Copy new invite', { dataAction: 'invite', dataId: p.id }) : ''}
+      ${p.email ? iconButton('key', 'Reset login', { dataAction: 'reset-ask', dataId: p.id }) : ''}
       ${activeButton}
     </div>
     ${extra}
@@ -180,7 +172,6 @@ export function renderList(m) {
 
 export function renderScreen(m) {
   if (m.loading) return String(skeleton('Loading…', 'list', 4));
-  const suggestion = suggestUsername(m.newName);
   return String(html`
     ${m.error ? html`<p class="form-error" role="alert">${m.error}</p>` : ''}
     ${toasts([[m.notice, 'ok']])}
@@ -193,14 +184,9 @@ export function renderScreen(m) {
           <input id="new-name" name="name" type="text" maxlength="80" required data-action="new-name" value="${m.newName}">
         </div>
         <div class="field">
-          <label for="new-username">Username (optional)</label>
-          <input id="new-username" name="username" type="text" autocapitalize="none" spellcheck="false" aria-describedby="new-username-hint">
-          <p class="hint" id="new-username-hint">Leave it empty and we will use: <strong data-suggest>${suggestion || 'a username made from the name'}</strong></p>
-        </div>
-        <div class="field">
-          <label for="new-email">Email (optional)</label>
+          <label for="new-email">Email</label>
           <input id="new-email" name="email" type="email" maxlength="254" autocapitalize="none" spellcheck="false" aria-describedby="new-email-hint">
-          <p class="hint" id="new-email-hint">They can log in with this email, or with Google if it is a Google account.</p>
+          <p class="hint" id="new-email-hint">How they log in, with a password or with Google. Leave it empty for someone who will not log in; you can still schedule them.</p>
         </div>
         <div class="field">
           <label class="check"><input type="checkbox" name="scheduler"> Make this person a scheduler</label>
@@ -218,7 +204,7 @@ export function renderScreen(m) {
       </div>
     </div>
     <div class="field search-field">
-      <label for="people-search">Search by name or username</label>
+      <label for="people-search">Search by name or email</label>
       <div class="input-icon">${iconSlot('search')}<input id="people-search" type="search" data-action="search" autocomplete="off" value="${m.query}"></div>
     </div>
     <div data-list>${raw(renderList(m))}</div>
@@ -295,16 +281,16 @@ export function createScreen({ api, root, ctx = {}, win = globalThis }) {
     },
     invite: (id) => attempt(async () => {
       const p = find(id);
-      if (!p || p.joined || !p.active) return;
+      if (!p || p.joined || !p.active || !p.email) return;
       const r = await api.post(`/api/people/${p.id}/invite`, {});
-      m.invite = { name: r.person.name, username: r.person.username, ...r.invite };
+      m.invite = { name: r.person.name, email: r.person.email, ...r.invite };
       m.panel = null;
     }),
     'reset-yes': (id) => attempt(async () => {
       const p = find(id);
       if (m.panel?.kind !== 'reset' || m.panel.id !== Number(id) || !p) return;
-      const r = await api.post(`/api/people/${p.id}/reset-password`, {});
-      m.invite = { name: r.person.name, username: r.person.username, ...r.invite };
+      const r = await api.post(`/api/people/${p.id}/reset-login`, {});
+      m.invite = { name: r.person.name, email: r.person.email, ...r.invite };
       m.people = m.people.map((person) => person.id === p.id ? r.person : person);
       m.panel = null;
     }),
@@ -350,15 +336,14 @@ export function createScreen({ api, root, ctx = {}, win = globalThis }) {
   const forms = {
     'add-person': (form) => attempt(async () => {
       const name = String(form.elements.name.value ?? '').trim();
-      const username = String(form.elements.username.value ?? '').trim();
       if (!name) { m.error = 'Please type a name.'; return; }
       const body = { name };
-      if (username) body.username = username;
       const email = String(form.elements.email?.value ?? '').trim();
       if (email) body.email = email;
       if (form.elements.scheduler.checked) body.role = 'admin';
       const r = await api.post('/api/people', body);
-      m.invite = { name: r.person.name, username: r.person.username, ...r.invite };
+      m.invite = r.invite ? { name: r.person.name, email: r.person.email, ...r.invite } : null;
+      if (!r.invite) m.notice = `${r.person.name} is added. Without an email they cannot log in, but you can schedule them.`;
       m.adding = false;
       m.newName = '';
       await reload();
@@ -367,12 +352,13 @@ export function createScreen({ api, root, ctx = {}, win = globalThis }) {
       const id = Number(form.dataset.id);
       const name = String(form.elements.name.value ?? '').trim();
       if (!name) { m.error = 'Please type a name.'; return; }
-      const email = String(form.elements.email?.value ?? '').trim();
+      // No email field once they joined: the email is locked then.
+      const email = form.elements.email ? String(form.elements.email.value ?? '').trim() : undefined;
       const old = m.people.find((x) => x.id === id)?.email ?? '';
-      await api.patch(`/api/people/${id}`, email === old ? { name } : { name, email });
+      await api.patch(`/api/people/${id}`, email === undefined || email === old ? { name } : { name, email });
       m.panel = null;
       await reload();
-      m.notice = 'Name saved.';
+      m.notice = 'Saved.';
     }),
   };
 
@@ -390,11 +376,7 @@ export function createScreen({ api, root, ctx = {}, win = globalThis }) {
     const el = e.target?.closest?.('[data-action]');
     if (!el) return;
     if (el.dataset.action === 'search') { m.query = el.value; paintList(); }
-    if (el.dataset.action === 'new-name') {
-      m.newName = el.value;
-      const s = root.querySelector('[data-suggest]');
-      if (s) s.textContent = suggestUsername(m.newName) || 'a username made from the name';
-    }
+    if (el.dataset.action === 'new-name') m.newName = el.value;
   });
   root.addEventListener('submit', (e) => {
     const form = e.target?.closest?.('form[data-form]');
@@ -419,7 +401,7 @@ export function createScreen({ api, root, ctx = {}, win = globalThis }) {
 
 export function render(state) { // eslint-disable-line no-unused-vars
   return String(html`
-    ${pageHead(title, 'Everyone in the church who can log in.')}
+    ${pageHead(title, 'Everyone in the church you schedule.')}
     <div data-screen>${skeleton('Loading…', 'list', 4)}</div>
   `);
 }

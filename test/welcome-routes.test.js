@@ -16,7 +16,7 @@ async function setup(t, env = {}) {
   return { app, clock, client, admin: client.browser(seeded.adminCookie), member: client.browser(seeded.memberCookie), ...seeded };
 }
 const makeInvite = async (s) => {
-  const result = await s.admin.post('/api/people', { name: 'Pat Smith', username: 'pat.smith' });
+  const result = await s.admin.post('/api/people', { name: 'Pat Smith', email: 'pat.smith@example.com' });
   assert.equal(result.status, 201);
   return result.json;
 };
@@ -60,7 +60,7 @@ test('welcome routes: checking greets the person; claiming logs them in and cons
   const token = tokenFromLink(created.invite.link);
   const guest = s.client.browser();
   const checked = await guest.post('/api/welcome/check', { token });
-  assert.deepEqual([checked.status, checked.json], [200, { name: 'Pat Smith', username: 'pat.smith' }]);
+  assert.deepEqual([checked.status, checked.json], [200, { name: 'Pat Smith', email: 'pat.smith@example.com' }]);
   const accepted = await guest.welcome(token, 'my password 1');
   assert.equal(accepted.status, 200);
   assert.equal(accepted.json.person.id, created.person.id);
@@ -108,7 +108,7 @@ test('welcome routes: twenty failures share one throttle; login uses a different
   }
   assert.equal((await guest.post('/api/welcome/check', { token: 'bad' })).status, 429);
   assert.equal((await guest.post('/api/welcome', { token: 'bad', password: 'my password 1' })).status, 429);
-  assert.equal((await guest.login('ada', 'test-pass-1')).status, 200, 'welcome failures do not block login');
+  assert.equal((await guest.login('ada@example.com', 'test-pass-1')).status, 200, 'welcome failures do not block login');
   s.clock.advance(5 * 60 * 1000 + 1);
   assert.equal((await guest.post('/api/welcome/check', { token: 'bad' })).status, 404);
 });
@@ -132,9 +132,9 @@ test('welcome routes: only schedulers can reinvite unjoined people; reset ends o
   const guest = s.client.browser();
   assert.equal((await guest.welcome(tokenFromLink(created.invite.link), 'my password 1')).status, 404);
   assert.equal((await guest.welcome(tokenFromLink(fresh.json.invite.link), 'my password 1')).status, 200);
-  const reset = await s.admin.post(`/api/people/${created.person.id}/reset-password`, {});
+  const reset = await s.admin.post(`/api/people/${created.person.id}/reset-login`, {});
   assert.equal(reset.status, 200);
   assert.equal((await guest.get('/api/me')).status, 401);
-  assert.equal((await guest.login('pat.smith', 'my password 1')).status, 401);
+  assert.equal((await guest.login('pat.smith@example.com', 'my password 1')).status, 401);
   assert.equal((await guest.welcome(tokenFromLink(reset.json.invite.link), 'my new password')).status, 200);
 });

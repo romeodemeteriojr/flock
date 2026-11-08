@@ -35,7 +35,7 @@ const childEnv = (dir, extra = {}) => ({ PATH: process.env.PATH, HOME: dir, ...e
  * The scheduling story after the first scheduler exists. Returns a transcript
  * of every API answer (status and JSON) so runs can be compared.
  */
-async function story(app, { adminUser, adminToken }) {
+async function story(app, { adminEmail, adminToken }) {
   const client = createClient(app);
   const log = [];
   const note = (label, res) => { log.push({ label, status: res.status, json: res.json ?? null, requestId: res.headers['x-request-id'] }); return res; };
@@ -43,7 +43,7 @@ async function story(app, { adminUser, adminToken }) {
 
   // The first scheduler follows an invite, chooses a password and is logged in.
   const info = note('admin invite', await admin.post('/api/welcome/check', { token: adminToken }));
-  assert.equal(info.json.username, adminUser);
+  assert.equal(info.json.email, adminEmail);
   const first = note('admin joined', await admin.welcome(adminToken, 'pat-own-password-1'));
   assert.equal(first.status, 200);
   assert.equal(first.json.person.hasPassword, true);
@@ -56,7 +56,7 @@ async function story(app, { adminUser, adminToken }) {
   assert.ok(team.id && vocals.id && guitar.id);
 
   // A person, added with a one-time invite.
-  const added = note('add person', await admin.post('/api/people', { name: 'Rae Example', username: 'rae.example' }));
+  const added = note('add person', await admin.post('/api/people', { name: 'Rae Example', email: 'rae.example@example.com' }));
   assert.equal(added.status, 201);
   const rae = added.json.person;
   assert.equal(rae.joined, false);
@@ -120,9 +120,9 @@ async function story(app, { adminUser, adminToken }) {
   const off = note('deactivate', await admin.patch(`/api/people/${rae.id}`, { active: false }));
   assert.equal(off.json.person.active, false);
   assert.equal(note('rae after deactivation', await phone.get('/api/me/schedule')).status, 401);
-  const again = note('rae login again', await client.browser().post('/api/login', { username: 'rae.example', password: 'rae-own-password-1' }));
+  const again = note('rae login again', await client.browser().post('/api/login', { email: 'rae.example@example.com', password: 'rae-own-password-1' }));
   assert.equal(again.status, 401);
-  assert.deepEqual(again.json, { error: 'Wrong username or password' });
+  assert.deepEqual(again.json, { error: 'Wrong email or password' });
   const list = note('people', await admin.get('/api/people')).json;
   assert.equal(list.find((p) => p.id === rae.id).active, false);
   return log;
@@ -131,13 +131,13 @@ async function story(app, { adminUser, adminToken }) {
 test('e2e: first scheduler from the command line, then the whole volunteer story over HTTP', async () => {
   const t = tmp();
   try {
-    const made = spawnSync(process.execPath, [BIN, 'create-admin', 'pat.example', 'Pat Example', '--db', t.db], { env: childEnv(t.dir), encoding: 'utf8', cwd: t.dir });
+    const made = spawnSync(process.execPath, [BIN, 'create-admin', 'pat.example@example.com', 'Pat Example', '--db', t.db], { env: childEnv(t.dir), encoding: 'utf8', cwd: t.dir });
     assert.equal(made.status, 0, made.stderr);
     const adminToken = tokenFromLink(made.stdout.match(/Invite link \([^\n]+\): (\S+)/)[1]);
     // The command line hashed with the real scrypt hasher, so the app uses it too.
     const app = await startTestApp({ db: openDb(t.db), container: { clock: fixedClock(NOW), hasher: scryptHasher({ random: seededRandom('salt') }) } });
     try {
-      const log = await story(app, { adminUser: 'pat.example', adminToken });
+      const log = await story(app, { adminEmail: 'pat.example@example.com', adminToken });
       assert.ok(log.length > 25, `only ${log.length} steps`);
       // The audit trail recorded the scheduler's changes.
       const actions = (await app.data.audit.list(200)).map((a) => a.action);
@@ -153,8 +153,8 @@ test('e2e: determinism: the same inputs and a fixed clock give identical API out
   const run = async () => {
     const app = await startTestApp({ config: { ...loadConfig({}), publicUrl: 'https://flock.example.org' }, container: { clock: fixedClock(NOW), random: seededRandom('e2e') } });
     try {
-      const created = await app.container.services.people.create(null, { name: 'Pat Example', username: 'pat.example', role: 'admin' });
-      return await story(app, { adminUser: 'pat.example', adminToken: created.invite.token });
+      const created = await app.container.services.people.create(null, { name: 'Pat Example', email: 'pat.example@example.com', role: 'admin' });
+      return await story(app, { adminEmail: 'pat.example@example.com', adminToken: created.invite.token });
     } finally { await app.close(); }
   };
   const a = await run();

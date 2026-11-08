@@ -42,7 +42,7 @@ const inviteLinkOf = (out) => out.match(/Invite link \([^\n]+\): (\S+)/)[1];
 test('create-admin prints an invite once and the account can join', async () => {
   const t = tmp();
   try {
-    const r = flock(t.dir, ['create-admin', 'pastor.test', 'Pat Test', '--db', t.db]);
+    const r = flock(t.dir, ['create-admin', 'pastor.test@example.com', 'Pat Test', '--db', t.db]);
     assert.equal(r.code, 0, r.err);
     const link = inviteLinkOf(r.out);
     const token = tokenFromLink(link);
@@ -69,18 +69,21 @@ test('create-admin prints an invite once and the account can join', async () => 
   } finally { t.done(); }
 });
 
-test('create-admin refuses an existing username and never takes a password', () => {
+test('create-admin refuses an existing email, a bad email, and never takes a password', () => {
   const t = tmp();
   try {
-    assert.equal(flock(t.dir, ['create-admin', 'pat.test', 'Pat Test'], { db: t.db }).code, 0);
-    const dup = flock(t.dir, ['create-admin', 'PAT.test', 'Other Person'], { db: t.db });
+    assert.equal(flock(t.dir, ['create-admin', 'pat.test@example.com', 'Pat Test'], { db: t.db }).code, 0);
+    const dup = flock(t.dir, ['create-admin', 'PAT.test@example.com', 'Other Person'], { db: t.db });
     assert.notEqual(dup.code, 0);
     assert.match(dup.err, /already exists/);
     assert.ok(!/Invite link/.test(dup.out));
-    const withPw = flock(t.dir, ['create-admin', 'x.user', 'X User', 'secret123'], { db: t.db });
+    const withPw = flock(t.dir, ['create-admin', 'x.user@example.com', 'X User', 'secret123'], { db: t.db });
     assert.notEqual(withPw.code, 0);
-    const bad = flock(t.dir, ['create-admin', 'x.user', 'X User', '--password', 'secret123'], { db: t.db });
+    const bad = flock(t.dir, ['create-admin', 'x.user@example.com', 'X User', '--password', 'secret123'], { db: t.db });
     assert.notEqual(bad.code, 0);
+    const notEmail = flock(t.dir, ['create-admin', 'pat', 'Pat'], { db: t.db });
+    assert.notEqual(notEmail.code, 0);
+    assert.match(notEmail.err, /valid email/);
   } finally { t.done(); }
 });
 
@@ -95,7 +98,7 @@ test('demo seeds valid fake data and refuses a non-empty database', async () => 
       const people = await data.people.list();
       assert.equal(people.length, 13);
       assert.equal(people.filter((p) => p.name.startsWith('Demo ')).length, 13);
-      assert.ok(people.some((p) => p.username === 'demo-admin' && p.role === 'admin' && !p.hasPassword));
+      assert.ok(people.some((p) => p.email === 'demo-admin@example.com' && p.role === 'admin' && !p.hasPassword));
       const teams = await data.teams.list();
       assert.deepEqual(teams.map((x) => x.name).sort(), ['Band', 'Greeters', 'Kids', 'Sound']);
       const positionIds = new Set(teams.flatMap((x) => x.positions.map((p) => p.id)));
@@ -123,7 +126,7 @@ test('demo seeds valid fake data and refuses a non-empty database', async () => 
 test('CLI invite links honor FLOCK_PUBLIC_URL', () => {
   const t = tmp();
   try {
-    const r = flock(t.dir, ['create-admin', 'pat.test', 'Pat Test'], { db: t.db, publicUrl: 'https://flock.example.org/' });
+    const r = flock(t.dir, ['create-admin', 'pat.test@example.com', 'Pat Test'], { db: t.db, publicUrl: 'https://flock.example.org/' });
     assert.equal(r.code, 0, r.err);
     assert.ok(inviteLinkOf(r.out).startsWith('https://flock.example.org/#/welcome?token='));
   } finally { t.done(); }
@@ -132,7 +135,7 @@ test('CLI invite links honor FLOCK_PUBLIC_URL', () => {
 test('demo refuses a database that already has an admin', () => {
   const t = tmp();
   try {
-    assert.equal(flock(t.dir, ['create-admin', 'pat.test', 'Pat Test'], { db: t.db }).code, 0);
+    assert.equal(flock(t.dir, ['create-admin', 'pat.test@example.com', 'Pat Test'], { db: t.db }).code, 0);
     assert.notEqual(flock(t.dir, ['demo'], { db: t.db }).code, 0);
   } finally { t.done(); }
 });
@@ -198,7 +201,7 @@ test('export quotes cells and guards against CSV injection', async () => {
   const t = tmp();
   try {
     await withContainer(t.db, async ({ services }) => {
-      const { person } = await services.people.create(null, { name: '=cmd|"x"', username: 'evil.one', role: 'admin' });
+      const { person } = await services.people.create(null, { name: '=cmd|"x"', email: 'evil.one@example.com', role: 'admin' });
       const team = await services.teams.createTeam(person, { name: 'Team, "A"' });
       const pos = await services.teams.createPosition(person, team.id, { name: '@lead' });
       await services.teams.setQualifications(person, person.id, [pos.id]);
@@ -227,7 +230,7 @@ test('export date filter keeps only the range and validates dates', async () => 
   const t = tmp();
   try {
     await withContainer(t.db, async ({ services }) => {
-      const { person } = await services.people.create(null, { name: 'Demo Admin', username: 'demo-admin', role: 'admin' });
+      const { person } = await services.people.create(null, { name: 'Demo Admin', email: 'demo-admin@example.com', role: 'admin' });
       const team = await services.teams.createTeam(person, { name: 'Band' });
       const pos = await services.teams.createPosition(person, team.id, { name: 'Drums' });
       for (const date of ['2999-01-07', '2999-01-14', '2999-01-21']) {
@@ -251,7 +254,7 @@ test('--db wins over FLOCK_DB', async () => {
   const t = tmp();
   try {
     const other = path.join(t.dir, 'other.db');
-    assert.equal(flock(t.dir, ['create-admin', 'pat.test', 'Pat Test', '--db', other], { db: t.db }).code, 0);
+    assert.equal(flock(t.dir, ['create-admin', 'pat.test@example.com', 'Pat Test', '--db', other], { db: t.db }).code, 0);
     assert.ok(existsSync(other));
     assert.ok(!existsSync(t.db));
   } finally { t.done(); }

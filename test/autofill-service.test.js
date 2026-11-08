@@ -222,7 +222,7 @@ async function setup() {
   const c = makeContainer();
   const { data, services } = c;
   const at = '2025-01-01T00:00:00.000Z';
-  const admin = await data.people.create({ name: 'Ada Admin', username: 'ada', role: 'admin', passwordHash: 'x', createdAt: at });
+  const admin = await data.people.create({ name: 'Ada Admin', email: 'ada@example.com', role: 'admin', passwordHash: 'x', createdAt: at });
   const band = await data.teams.create({ name: 'Band' });
   const drums = await data.positions.create(band.id, { name: 'Drums' });
   const add = async (name, username, everyWeeks) => {

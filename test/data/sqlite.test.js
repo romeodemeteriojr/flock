@@ -10,7 +10,7 @@ runContract('sqlite', makeData);
 
 test('sqlite: deleting a person cascades to their invite', async () => {
   const { db, data } = makeData();
-  const p = await data.people.create({ name: 'A', username: 'a', createdAt: 'x' });
+  const p = await data.people.create({ name: 'A', email: 'a@example.com', createdAt: 'x' });
   await data.invites.replace({ personId: p.id, tokenHash: 'invite-hash', createdAt: 'x', expiresAt: 'y' });
   db.prepare('DELETE FROM people WHERE id = ?').run(p.id);
   assert.equal(await data.invites.findByTokenHash('invite-hash'), null);
@@ -90,7 +90,7 @@ test('sqlite: a failing tx rolls back everything and the next tx still works', a
   const bad = data.tx(async (d) => {
     const t = await d.teams.create({ name: 'Band' });
     await d.positions.create(t.id, { name: 'Drums' });
-    await d.people.create({ name: 'A', username: 'a', role: 'member', createdAt: 'x' });
+    await d.people.create({ name: 'A', email: 'a@example.com', role: 'member', createdAt: 'x' });
     await sleep(5);
     throw new Error('fail');
   });
@@ -159,7 +159,7 @@ test('sqlite: repository results are plain objects, not driver rows', async () =
   const { data } = makeData();
   const t = await data.teams.create({ name: 'Band' });
   assert.equal(Object.getPrototypeOf(t), Object.prototype);
-  const p = await data.people.create({ name: 'A', username: 'a', role: 'member', createdAt: 'x' });
+  const p = await data.people.create({ name: 'A', email: 'a@example.com', role: 'member', createdAt: 'x' });
   assert.equal(Object.getPrototypeOf(p), Object.prototype);
   assert.equal(Object.getPrototypeOf(await data.people.findAuthById(p.id)), Object.prototype);
 });

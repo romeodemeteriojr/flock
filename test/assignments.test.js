@@ -17,9 +17,9 @@ async function boot() {
   const drums = await data.positions.create(team.id, { name: 'Drums' });
   const keys = await data.positions.create(team.id, { name: 'Keys' });
   await data.qualifications.setForPerson(s.memberId, [drums.id, keys.id]);
-  const otherId = await addPerson(db, { name: 'Olive Other', username: 'olive' });
+  const otherId = await addPerson(db, { name: 'Olive Other', email: 'olive@example.com' });
   await data.qualifications.setForPerson(otherId, [drums.id, keys.id]);
-  const otherCookie = await loginAs(app, 'olive');
+  const otherCookie = await loginAs(app, 'olive@example.com');
   async function service(date, positions = [drums.id, keys.id]) {
     const svc = await data.services.create({ date, title: 'Sunday service' });
     return (await data.slots.createMany(svc.id, positions)).map((x) => x.id);
@@ -75,7 +75,7 @@ test('assign conflicts come back as 409 with a code; force overrides all but ina
     assert.equal(typeof dbl.json.error, 'string');
     assert.equal((await call('PUT', `/api/slots/${b}/assign`, adminCookie, { personId: memberId, force: true })).status, 200);
 
-    const newbie = await addPerson(db, { name: 'Nina New', username: 'nina' });
+    const newbie = await addPerson(db, { name: 'Nina New', email: 'nina@example.com' });
     const [c] = await service('2025-01-19');
     const nq = await call('PUT', `/api/slots/${c}/assign`, adminCookie, { personId: newbie });
     assert.deepEqual([nq.status, nq.json.code], [409, 'not_qualified']);
@@ -85,7 +85,7 @@ test('assign conflicts come back as 409 with a code; force overrides all but ina
     assert.deepEqual([bl.status, bl.json.code], [409, 'blocked']);
     assert.equal((await call('PUT', `/api/slots/${c}/assign`, adminCookie, { personId: memberId, force: true })).status, 200);
 
-    const gone = await addPerson(db, { name: 'Gail Gone', username: 'gail', active: false });
+    const gone = await addPerson(db, { name: 'Gail Gone', email: 'gail@example.com', active: false });
     for (const force of [false, true]) {
       const r = await call('PUT', `/api/slots/${c}/assign`, adminCookie, { personId: gone, force });
       assert.deepEqual([r.status, r.json.code], [409, 'inactive']);

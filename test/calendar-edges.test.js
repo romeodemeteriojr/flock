@@ -27,9 +27,9 @@ async function church(iso, tz = 'Europe/London') {
   inZone(tz);
   const clock = fixedClock(iso);
   const c = makeContainer({ clock });
-  const adminId = await addPerson(c, { name: 'Ada Admin', username: 'ada', role: 'admin' });
-  const memberId = await addPerson(c, { name: 'Max Member', username: 'max' });
-  const otherId = await addPerson(c, { name: 'Olive Other', username: 'olive' });
+  const adminId = await addPerson(c, { name: 'Ada Admin', email: 'ada@example.com', role: 'admin' });
+  const memberId = await addPerson(c, { name: 'Max Member', email: 'max@example.com' });
+  const otherId = await addPerson(c, { name: 'Olive Other', email: 'olive@example.com' });
   const actor = { id: adminId };
   const team = await c.services.teams.createTeam(actor, { name: 'Band' });
   const pos = await c.services.teams.createPosition(actor, team.id, { name: 'Keys' });
@@ -121,7 +121,7 @@ test('DST: the US changeover Sundays behave the same (America/New_York)', async 
 test('DST: a session lasts exactly its length in real time across the changeover', async () => {
   const { c, clock, s } = await church('2025-03-16T12:00:00Z');
   try {
-    const { token } = await s.auth.login('max', 'test-pass-1');
+    const { token } = await s.auth.login('max@example.com', 'test-pass-1');
     clock.set('2025-03-30T11:59:59Z'); // 14 days minus one second, across the spring changeover
     assert.ok(await s.auth.authenticate(token));
     clock.set('2025-03-30T12:00:00Z');
@@ -157,8 +157,8 @@ test('past: answers, assignments and blockouts in the past are refused over HTTP
   const app = await startTestApp({ container: { clock } });
   try {
     const { services } = app.container;
-    const adminId = await addPerson(app, { name: 'Ada Admin', username: 'ada', role: 'admin' });
-    const memberId = await addPerson(app, { name: 'Max Member', username: 'max' });
+    const adminId = await addPerson(app, { name: 'Ada Admin', email: 'ada@example.com', role: 'admin' });
+    const memberId = await addPerson(app, { name: 'Max Member', email: 'max@example.com' });
     const actor = { id: adminId };
     const team = await services.teams.createTeam(actor, { name: 'Band' });
     const pos = await services.teams.createPosition(actor, team.id, { name: 'Keys' });
@@ -168,8 +168,8 @@ test('past: answers, assignments and blockouts in the past are refused over HTTP
     const svc = await services.calendar.createService(actor, { date: '2025-01-05', slots: [{ positionId: pos.id }] });
     await services.assignments.assign(actor, svc.slots[0].id, { personId: memberId });
     clock.set('2025-01-08T12:00:00Z');
-    const admin = await loginAs(app, 'ada');
-    const member = await loginAs(app, 'max');
+    const admin = await loginAs(app, 'ada@example.com');
+    const member = await loginAs(app, 'max@example.com');
     const h = { 'X-Flock': '1' };
     const accept = await app.request('POST', `/api/me/slots/${svc.slots[0].id}/accept`, { cookie: member, headers: h });
     assert.equal(accept.status, 409);

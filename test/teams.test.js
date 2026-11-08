@@ -102,7 +102,7 @@ test('qualifications are replaced; unknown ids rejected; visibility', async () =
     const t = (await call('POST', '/api/teams', 'admin', { name: 'Band' })).json.id;
     const a = (await call('POST', `/api/teams/${t}/positions`, 'admin', { name: 'Drums' })).json.id;
     const b = (await call('POST', `/api/teams/${t}/positions`, 'admin', { name: 'Bass' })).json.id;
-    const gone = await addPerson(db, { name: 'Old Timer', username: 'old', active: false });
+    const gone = await addPerson(db, { name: 'Old Timer', email: 'old@example.com', active: false });
 
     let r = await call('PUT', `/api/people/${s.memberId}/positions`, 'admin', { positionIds: [a, b] });
     assert.equal(r.status, 200);

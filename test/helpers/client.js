@@ -21,8 +21,8 @@ export function createClient(app) {
         responses.push({ method, path, ...res });
         return res;
       },
-      async login(username, password) {
-        const res = await b.call('POST', '/api/login', { username, password });
+      async login(email, password) {
+        const res = await b.call('POST', '/api/login', { email, password });
         if (res.status === 200) b.cookie = cookieFrom(res);
         return res;
       },

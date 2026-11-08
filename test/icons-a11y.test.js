@@ -163,7 +163,7 @@ const member = { id: 3, name: 'Priya Demo', role: 'member' };
 test('icons-a11y: every button and link in login is accessible', () => {
   const results = viewStates(login, [
     ['empty', () => login.render({})],
-    ['error', () => login.render({}, { error: 'Wrong password', username: 'test' })],
+    ['error', () => login.render({}, { error: 'Wrong password', email: 'test@example.com' })],
   ], 'login');
   const errs = flatErrors(results);
   assert.equal(errs.length, 0, `login a11y errors: ${errs.join('; ')}`);
@@ -172,7 +172,7 @@ test('icons-a11y: every button and link in login is accessible', () => {
 test('icons-a11y: every button and link in welcome is accessible', () => {
   const results = viewStates(welcome, [
     ['checking', () => welcome.render({})],
-    ['choose-password', () => welcome.render({}, { info: { name: 'Pat Demo', username: 'pat.demo' } })],
+    ['choose-password', () => welcome.render({}, { info: { name: 'Pat Demo', email: 'pat.demo@example.com' } })],
     ['gone', () => welcome.render({}, { error: 'This link has expired or was already used.' })],
   ], 'welcome');
   assert.deepEqual(flatErrors(results), []);
@@ -219,7 +219,7 @@ test('icons-a11y: every button and link in my-blockouts is accessible', () => {
 
 test('icons-a11y: every button and link in people is accessible', () => {
   const pm = (extra = {}) => ({
-    people: [{ id: 3, name: 'Priya Demo', username: 'priya.demo', role: 'member', active: true, positionIds: [10] }],
+    people: [{ id: 3, name: 'Priya Demo', email: 'priya.demo@example.com', role: 'member', active: true, positionIds: [10] }],
     teams: [{ id: 1, name: 'Band', positions: [{ id: 10, name: 'Drums', qualifiedPersonIds: [3] }] }],
     query: '', loading: false, adding: false, newName: '',
     panel: null, secret: null, error: '', notice: '', me: 1, ...extra
@@ -326,7 +326,7 @@ test('icons-a11y: all icons used across all views are valid', () => {
 
   // People
   allHtml.push(String(people.renderScreen({
-    people: [{ id: 1, name: 'Test', username: 't', role: 'admin', active: true, positionIds: [] }],
+    people: [{ id: 1, name: 'Test', email: 't@example.com', role: 'admin', active: true, positionIds: [] }],
     teams: [], query: '', loading: false, adding: false, newName: '', panel: null, secret: null, error: '', notice: '', me: 1
   })));
 

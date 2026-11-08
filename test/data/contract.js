@@ -47,9 +47,11 @@ export function runContract(name, makeData) {
     let data;
     const fresh = async () => { ({ data } = await makeData()); return data; };
 
-    const person = async (username, extra = {}) => {
-      const p = await data.people.create({ name: extra.name ?? `P ${username}`, username, role: extra.role ?? 'member', createdAt: T });
-      if (extra.passwordHash !== null) await data.people.setPassword(p.id, extra.passwordHash ?? 'hash-' + username);
+    // A person by handle: email <handle>@example.com unless extra.email says otherwise (null = none).
+    const person = async (handle, extra = {}) => {
+      const email = extra.email !== undefined ? extra.email : `${handle}@example.com`;
+      const p = await data.people.create({ name: extra.name ?? `P ${handle}`, email, role: extra.role ?? 'member', createdAt: T });
+      if (extra.passwordHash !== null) await data.people.setPassword(p.id, extra.passwordHash ?? 'hash-' + handle);
       return data.people.findById(p.id);
     };
 
@@ -71,19 +73,19 @@ export function runContract(name, makeData) {
         await fresh();
         const p = await person('ann', { name: 'Ann', role: 'admin', passwordHash: null });
         assert.equal(typeof p.id, 'number');
-        assert.deepEqual(p, { id: p.id, name: 'Ann', username: 'ann', email: null, role: 'admin', hasPassword: false, joined: false, active: true, createdAt: T, positionIds: [] });
+        assert.deepEqual(p, { id: p.id, name: 'Ann', email: 'ann@example.com', role: 'admin', hasPassword: false, joined: false, active: true, createdAt: T, positionIds: [] });
         assert.equal((await data.people.findAuthById(p.id)).passwordHash, null);
         noSecrets(p, 'people.create');
       });
 
-      test('create rejects a duplicate username case-insensitively', async () => {
+      test('create rejects a duplicate email case-insensitively', async () => {
         await fresh();
         await person('Ann');
         await assert.rejects(person('ann'), DuplicateError);
         await assert.rejects(person('ANN'), (e) => e instanceof DuplicateError && typeof e.message === 'string' && e.message !== '');
       });
 
-      test('findById, findAuthById, findAuthByUsername', async () => {
+      test('findById, findAuthById, findAuthByEmail', async () => {
         await fresh();
         const p = await person('ann');
         const f = await data.people.findById(p.id);
@@ -94,31 +96,27 @@ export function runContract(name, makeData) {
         assert.equal(a.passwordHash, 'hash-ann');
         assert.equal(a.failedLogins, 0);
         assert.equal(a.lockedUntil, null);
-        assert.equal(a.username, 'ann');
+        assert.equal(a.email, 'ann@example.com');
         assert.equal(a.active, true);
-        const b = await data.people.findAuthByUsername('ANN');
+        const b = await data.people.findAuthByEmail(' ANN@Example.com ');
         assert.equal(b.id, p.id);
         assert.equal(b.passwordHash, 'hash-ann');
-        assert.equal(await data.people.findAuthByUsername('nobody'), null);
-        assert.equal(await data.people.findAuthByUsername(''), null);
+        assert.equal(await data.people.findAuthByEmail('nobody@example.com'), null);
+        assert.equal(await data.people.findAuthByEmail(''), null);
         assert.equal(await data.people.findAuthById(999), null);
         noSnakeCase(a, 'findAuthById');
       });
 
       test('email: optional, unique, found case-insensitively', async () => {
         await fresh();
-        const ann = await data.people.create({ name: 'Ann', username: 'ann', email: 'ann@example.com', createdAt: T });
+        const ann = await data.people.create({ name: 'Ann', email: 'ann@example.com', createdAt: T });
         assert.equal(ann.email, 'ann@example.com');
-        const bob = await person('bob');
+        const bob = await person('bob', { email: null });
         assert.equal(bob.email, null);
-        assert.equal((await data.people.findAuthByEmail('ANN@example.com')).id, ann.id);
-        assert.equal(await data.people.findAuthByEmail('nobody@example.com'), null);
-        assert.equal(await data.people.findAuthByEmail(''), null);
-        await assert.rejects(data.people.update(bob.id, { email: 'ann@example.com' }), (e) => e instanceof DuplicateError && /email/.test(e.message));
-        await assert.rejects(data.people.create({ name: 'X', username: 'x', email: 'ann@example.com', createdAt: T }), DuplicateError);
+        await assert.rejects(data.people.update(bob.id, { email: 'ANN@example.com' }), (e) => e instanceof DuplicateError && /email/.test(e.message));
         assert.equal((await data.people.update(bob.id, { email: 'bob@example.com' })).email, 'bob@example.com');
         assert.equal((await data.people.update(bob.id, { email: null })).email, null);
-        await person('cy'); // two people without email do not clash
+        await person('cy', { email: null }); // several people without an email do not clash
       });
 
       test('list sorts by name, includes positionIds, no secrets', async () => {
@@ -126,7 +124,7 @@ export function runContract(name, makeData) {
         const w = await world();
         await data.qualifications.setForPerson(w.bob.id, [w.keys.id, w.drums.id]);
         const list = await data.people.list();
-        assert.deepEqual(list.map((p) => p.username), ['ann', 'bob', 'cy']);
+        assert.deepEqual(list.map((p) => p.email), ['ann@example.com', 'bob@example.com', 'cy@example.com']);
         assert.deepEqual(list[1].positionIds, [w.drums.id, w.keys.id].sort((a, b) => a - b));
         assert.deepEqual(list[0].positionIds, []);
         noSecrets(list, 'people.list');

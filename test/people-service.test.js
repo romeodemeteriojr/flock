@@ -2,7 +2,7 @@
 // clock, seeded random, fast hasher and a small fake auth service.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createPeopleService, baseUsername } from '../src/services/people-service.js';
+import { createPeopleService } from '../src/services/people-service.js';
 import { fixedClock } from '../src/infra/clock.js';
 import { seededRandom } from '../src/infra/random.js';
 import { fastHasher } from '../src/infra/hasher.js';
@@ -34,7 +34,7 @@ async function setup() {
   const hasher = fastHasher({ env: {} });
   const auth = fakeAuth({ data, random, hasher, clock });
   const people = createPeopleService({ data, clock, auth, logger: silentLogger() });
-  const add = (name, username, role = 'member') => addPerson({ data, hasher }, { name, username, role, password: 'pw-123456' });
+  const add = (name, handle, role = 'member') => addPerson({ data, hasher }, { name, email: `${handle}@example.com`, role, password: 'pw-123456' });
   const adminId = await add('Ada Admin', 'ada', 'admin');
   const memberId = await add('Max Member', 'max');
   const admin = { id: adminId, role: 'admin' };
@@ -46,14 +46,14 @@ test('people service: list is sorted, has positionIds and no secrets', async () 
   const { people } = await setup();
   const list = await people.list();
   assert.deepEqual(list.map((p) => p.name), ['Ada Admin', 'Max Member']);
-  assert.deepEqual(Object.keys(list[0]), ['id', 'name', 'username', 'email', 'role', 'active', 'joined', 'positionIds']);
+  assert.deepEqual(Object.keys(list[0]), ['id', 'name', 'email', 'role', 'active', 'joined', 'positionIds']);
   assert.doesNotMatch(JSON.stringify(list), /fast\$|hash/i);
 });
 
 test('people service: create returns an invite once and stores only its hash', async () => {
   const { people, data, admin, auth } = await setup();
-  const { person, invite } = await people.create(admin, { name: 'Sam Jones', username: ' Sam_J ' });
-  assert.equal(person.username, 'sam_j');
+  const { person, invite } = await people.create(admin, { name: 'Sam Jones', email: ' Sam.J@Example.com ' });
+  assert.equal(person.email, 'sam.j@example.com');
   assert.equal(person.role, 'member');
   assert.equal(person.joined, false);
   assert.equal(person.active, true);
@@ -67,28 +67,46 @@ test('people service: create returns an invite once and stores only its hash', a
   assert.equal(admin2.person.role, 'admin');
 });
 
-test('people service: username generation and duplicates', async () => {
-  const { people, admin } = await setup();
-  assert.equal((await people.create(admin, { name: 'Sam Jones' })).person.username, 'sam.jones');
-  assert.equal((await people.create(admin, { name: 'Sam  Jones' })).person.username, 'sam.jones2');
-  assert.equal((await people.create(admin, { name: 'Sam-Jones' })).person.username, 'sam.jones3');
-  assert.equal((await people.create(admin, { name: 'Zoë' })).person.username, 'zoe');
-  assert.equal(baseUsername('Ab'), 'ab.user');
-  assert.match(baseUsername('X'.repeat(50)), /^x{24}$/);
-  await assert.rejects(people.create(admin, { name: 'Dup', username: 'SAM.JONES' }),
-    (e) => e instanceof ConflictError && e.status === 409 && e.message === 'That username is already taken');
-  await assert.rejects(people.create(admin, { name: 'Dup', username: 'MAX' }), ConflictError);
+test('people service: without an email a person can be scheduled but gets no invite', async () => {
+  const { people, data, admin, auth } = await setup();
+  const { person, invite } = await people.create(admin, { name: 'Gran Smith', email: '  ' });
+  assert.equal(invite, null);
+  assert.equal(person.email, null);
+  assert.equal(auth.calls.newInvite, 0);
+  await assert.rejects(people.invite(admin, person.id), (e) => e instanceof ValidationError && /Add an email/.test(e.message));
+  await assert.rejects(people.resetLogin(admin, person.id), (e) => e instanceof ValidationError && /Add an email/.test(e.message));
+  assert.equal((await data.people.findById(person.id)).joined, false);
 });
 
-test('people service: create validates username and role', async () => {
+test('people service: emails are unique, case-insensitively', async () => {
+  const { people, admin } = await setup();
+  await people.create(admin, { name: 'Sam Jones', email: 'sam@example.com' });
+  await assert.rejects(people.create(admin, { name: 'Dup', email: 'SAM@example.com' }),
+    (e) => e instanceof ConflictError && e.status === 409 && e.message === 'That email is already used by someone else');
+  await assert.rejects(people.create(admin, { name: 'Dup', email: 'MAX@example.com' }), ConflictError);
+});
+
+test('people service: create validates email and role', async () => {
   const { people, admin, auth } = await setup();
-  for (const username of ['ab', 'a b c', 'x'.repeat(31), 5]) {
-    await assert.rejects(people.create(admin, { name: 'A B', username }),
-      (e) => e instanceof ValidationError && /username must be 3 to 30/.test(e.message));
+  for (const email of ['ab', 'a b@c.de', 'x@y', 'two@@x.org', 5, `${'x'.repeat(250)}@x.org`]) {
+    await assert.rejects(people.create(admin, { name: 'A B', email }),
+      (e) => e instanceof ValidationError && /valid email/.test(e.message));
   }
   await assert.rejects(people.create(admin, { name: 'A B', role: 'boss' }),
     (e) => e instanceof ValidationError && e.message === 'The role must be admin or member.');
   assert.equal(auth.calls.newInvite, 0, 'no invite made for bad input');
+});
+
+test('people service: the email is the login, so it is locked once the person joined', async () => {
+  const { people, data, admin, memberId } = await setup();
+  await assert.rejects(people.update(admin, memberId, { email: 'new@example.com' }),
+    (e) => e instanceof ConflictError && /Reset login first/.test(e.message));
+  await people.resetLogin(admin, memberId);
+  assert.equal((await people.update(admin, memberId, { email: 'new@example.com' })).email, 'new@example.com');
+  // Removing the email of someone who has not joined also cancels their invite.
+  const { person, invite } = await people.create(admin, { name: 'Pat', email: 'pat@example.com' });
+  assert.equal((await people.update(admin, person.id, { email: '' })).email, null);
+  assert.equal(await data.invites.findByTokenHash(tokenHash(invite.token)), null);
 });
 
 test('people service: update changes name and role and writes an audit row', async () => {
@@ -150,14 +168,14 @@ test('people service: unknown people give NotFoundError', async () => {
   const { people, admin, auth } = await setup();
   await assert.rejects(people.update(admin, 9999, { name: 'Nope' }),
     (e) => e instanceof NotFoundError && e.message === 'That person was not found');
-  await assert.rejects(people.resetPassword(admin, 9999), NotFoundError);
+  await assert.rejects(people.resetLogin(admin, 9999), NotFoundError);
   assert.equal(auth.calls.newInvite, 0);
 });
 
-test('people service: resetPassword clears the password and returns an invite once', async () => {
+test('people service: resetLogin clears the password and returns an invite once', async () => {
   const { people, data, admin, memberId, session } = await setup();
   await session(memberId, 'm1');
-  const r = await people.resetPassword(admin, memberId);
+  const r = await people.resetLogin(admin, memberId);
   assert.deepEqual(Object.keys(r), ['person', 'invite']);
   const stored = await data.people.findAuthById(memberId);
   assert.equal(stored.passwordHash, null);
@@ -168,12 +186,13 @@ test('people service: resetPassword clears the password and returns an invite on
 
 test('people service: audit rows have no secrets', async () => {
   const { people, data, admin, memberId } = await setup();
-  const c = await people.create(admin, { name: 'Sam Jones' });
+  const c = await people.create(admin, { name: 'Sam Jones', email: 'sam@example.com' });
   await people.update(admin, memberId, { active: false });
-  const rs = await people.resetPassword(admin, memberId);
+  const rs = await people.resetLogin(admin, memberId);
   const rows = (await data.audit.list()).reverse();
-  assert.deepEqual(rows.map((r) => r.action), ['person.create', 'person.update', 'person.reset_password']);
-  assert.equal(rows[0].detail, `person ${c.person.id} (sam.jones) role member`);
+  assert.deepEqual(rows.map((r) => r.action), ['person.create', 'person.update', 'person.reset_login']);
+  assert.equal(rows[0].detail, `person ${c.person.id} role member`);
+  for (const r of rows) assert.ok(!r.detail.includes('@'), 'no email in the audit log');
   const hashes = [tokenHash(c.invite.token), tokenHash(rs.invite.token)];
   for (const r of rows) {
     assert.equal(r.actorId, admin.id);
@@ -184,7 +203,7 @@ test('people service: audit rows have no secrets', async () => {
 
 test('people service: a failed create writes nothing', async () => {
   const { people, data, admin } = await setup();
-  await assert.rejects(people.create(admin, { name: 'X', username: 'ada' }), ConflictError);
+  await assert.rejects(people.create(admin, { name: 'X', email: 'ada@example.com' }), ConflictError);
   assert.equal((await data.audit.list()).length, 0);
   assert.equal((await people.list()).length, 2);
 });

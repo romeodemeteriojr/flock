@@ -56,11 +56,11 @@ export function demoData(today = todayString()) {
     { id: 3, date: addDays(sunday, 14), time: '18:30', title: 'Evening prayer', slots: [slot(8, 12, 8, 'Ada Placeholder', 'pending'), slot(9, 20)] },
   ];
   const PEOPLE = [
-    { id: 1, name: 'Morgan Fictional', username: 'morgan.fictional', role: 'admin', active: true, joined: true, positionIds: [] },
-    { id: 3, name: 'Priya Demo', username: 'priya.demo', role: 'member', active: true, joined: true, positionIds: [10] },
-    { id: 5, name: 'Tomás Sample', username: 'tomas.sample', role: 'member', active: true, joined: false, positionIds: [11] },
-    { id: 6, name: 'Wren Example', username: 'wren.example', role: 'member', active: true, joined: true, positionIds: [20] },
-    { id: 9, name: 'Old Gus Madeup', username: 'gus.madeup', role: 'member', active: false, joined: false, positionIds: [] },
+    { id: 1, name: 'Morgan Fictional', email: 'morgan.fictional@example.com', role: 'admin', active: true, joined: true, positionIds: [] },
+    { id: 3, name: 'Priya Demo', email: 'priya.demo@example.com', role: 'member', active: true, joined: true, positionIds: [10] },
+    { id: 5, name: 'Tomás Sample', email: 'tomas.sample@example.com', role: 'member', active: true, joined: false, positionIds: [11] },
+    { id: 6, name: 'Wren Example', email: 'wren.example@example.com', role: 'member', active: true, joined: true, positionIds: [20] },
+    { id: 9, name: 'Old Gus Madeup', email: 'gus.madeup@example.com', role: 'member', active: false, joined: false, positionIds: [] },
   ];
   const ITEMS = [
     { slotId: 101, date: addDays(sunday, 0), time: '10:00', serviceTitle: 'Sunday service', positionName: 'Sound', teamName: 'Tech', status: 'pending',
@@ -189,7 +189,7 @@ function components(d) {
   ${section('skeleton', 'Loading skeletons', html`${skeleton('Loading…', 'cards', 1)}${skeleton('Loading…', 'list', 2)}${skeleton('Loading…', 'rows', 2)}`)}
   ${section('empty', 'Empty states', html`<div class="gallery-grid">${ART_NAMES.map((a) => emptyState(`Empty state picture: ${a.replace('art-', '')}`, a))}</div>`)}
   ${section('forms', 'Form fields', html`<form class="form card form-card" data-form="demo" novalidate>
-    <p class="form-error" role="alert">Please type your username and password.</p>
+    <p class="form-error" role="alert">Please type your email and password.</p>
     <div class="field"><label for="g-name">Name</label><input id="g-name" type="text" value="Priya Demo"></div>
     <div class="field-pair"><div class="field"><label for="g-date">Date</label><input id="g-date" type="date" value="${d.today}"></div>
     <div class="field"><label for="g-time">Time</label><input id="g-time" type="time" value="10:00"></div></div>
@@ -222,8 +222,8 @@ function pages(d) {
     reminders: { weekOf: d.sunday, list: d.REMINDERS, loading: false, error: '', notice: '' }, ...extra });
   const screen = (h1, body) => html`<h1 tabindex="-1">${h1}</h1>${raw(String(body))}`;
   return html`
-  ${section('p-login', 'Log in', html`${frame('Empty', login.render({}))}${frame('Wrong password', login.render({}, { error: 'Wrong username or password', username: 'priya.demo' }))}`)}
-  ${section('p-welcome', 'Join with an invite', html`${frame('Checking', welcome.render({}))}${frame('Choose a password', welcome.render({}, { info: { name: 'Priya Demo', username: 'priya.demo' } }))}${frame('Link gone', welcome.render({}, { error: 'This link has expired or was already used. Ask your scheduler for a new one.' }))}`)}
+  ${section('p-login', 'Log in', html`${frame('Empty', login.render({}))}${frame('Wrong password', login.render({}, { error: 'Wrong email or password', email: 'priya.demo@example.com' }))}`)}
+  ${section('p-welcome', 'Join with an invite', html`${frame('Checking', welcome.render({}))}${frame('Choose a password', welcome.render({}, { info: { name: 'Priya Demo', email: 'priya.demo@example.com' } }))}${frame('Link gone', welcome.render({}, { error: 'This link has expired or was already used. Ask your scheduler for a new one.' }))}`)}
   ${section('p-password', 'Change my password', html`${frame('Change password', password.render({ user: me }))}${frame('With a problem', password.render({ user: me }, { error: "The two new passwords don't match. Please type them again." }))}`)}
   ${section('p-home', 'My schedule (volunteer home)', html`
     ${frame('Loading', mySchedule.render({}, { today: d.today, loading: true }))}
@@ -243,7 +243,7 @@ function pages(d) {
     ${frame('Loading', people.render({}))}
     ${frame('List', screen('People', people.renderScreen(peopleModel())))}
     ${frame('Adding someone', screen('People', people.renderScreen(peopleModel({ adding: true, newName: 'Noor Imaginary' }))))}
-    ${frame('Invite message', screen('People', people.renderScreen(peopleModel({ invite: { name: 'Noor Imaginary', username: 'noor.imaginary', link: '/#/welcome?token=gallery-example', localOnly: true }, notice: 'Copied.' }))))}
+    ${frame('Invite message', screen('People', people.renderScreen(peopleModel({ invite: { name: 'Noor Imaginary', email: 'noor.imaginary@example.com', link: '/#/welcome?token=gallery-example', localOnly: true }, notice: 'Copied.' }))))}
     ${frame('What can they do?', screen('People', people.renderScreen(peopleModel({ panel: { kind: 'positions', id: 3, checked: new Set([10]) } }))))}
     ${frame('Deactivate?', screen('People', people.renderScreen(peopleModel({ panel: { kind: 'active', id: 5 } }))))}
     ${frame('Make a scheduler?', screen('People', people.renderScreen(peopleModel({ panel: { kind: 'role', id: 6, role: 'admin' } }))))}

@@ -316,7 +316,7 @@ test('logger: one JSON line per event with time, level, msg and fields', () => {
 test('logger: deep redaction of secrets', () => {
   const { logger, lines, entries } = captureLogger();
   logger.info('login', {
-    username: 'ann',
+    email: 'ann@example.com',
     password: 'hunter2-secret',
     newPassword: 'n3w-secret',
     sessionToken: 'tok-abc',
@@ -329,7 +329,7 @@ test('logger: deep redaction of secrets', () => {
     assert.ok(!text.includes(s), s);
   }
   const e = entries()[0];
-  assert.equal(e.username, 'ann');
+  assert.equal(e.email, 'ann@example.com');
   assert.equal(e.password, '[REDACTED]');
   assert.equal(e.headers.cookie, '[REDACTED]');
   assert.equal(e.headers.Authorization, '[REDACTED]');

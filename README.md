@@ -29,42 +29,51 @@ another port with `FLOCK_PORT=3000 npm start`. Set
 use one shared address; otherwise links use the scheduler's current address.
 The command line uses `http://localhost:<port>` if no public URL is set.
 
-**Version 0.2.0 needs a fresh database.** The invite-link schema replaces the
-pre-release schema in place; there is no automatic upgrade from 0.1.0. Keep
-existing files and backups safe, and choose a new `FLOCK_DB` file rather than
-overwriting real data.
+**This version needs a fresh database.** Logins moved from usernames to
+emails by changing the first schema in place; there is no automatic upgrade
+from 0.2.0 or older. Keep existing files and backups safe, and choose a new
+`FLOCK_DB` file rather than overwriting real data.
 
 ## Creating the first scheduler
 
 The first scheduler account is made from the terminal:
 
 ```
-node bin/flock.js create-admin pat.smith 'Pat Smith'
+node bin/flock.js create-admin pat.smith@example.org 'Pat Smith'
 ```
 
-The first word is the username and the quoted part is the full name. Flock
-prints a **one-time invite link**, valid for **7 days**. Open that link,
-check the username shown, and choose a password of at least 8 characters.
-Choosing it also logs you in. Use your username and password next time.
+The first word is your email (it is how you log in) and the quoted part is
+the full name. Flock prints a **one-time invite link**, valid for **7 days**.
+Open that link, check the email shown, and choose a password of at least 8
+characters. Choosing it also logs you in. Use your email and password next
+time, or **Sign in with Google** if it is set up and the email is a Google
+account.
 If Flock runs on another computer, set `FLOCK_PUBLIC_URL` before creating the
 account so that the printed link uses the correct address.
 
 ## Adding people
 
-On **People**, choose **Add person** and enter their name. Flock suggests a
-username, which you can change. Saving opens an invite message: choose
+On **People**, choose **Add person** and enter their name and email. The
+email is how they log in. Saving opens an invite message: choose
 **Copy message** and send it privately through your usual messages app.
-The person taps the link, sees their username and chooses a password, which
-also logs them in. The link works once, for 7 days.
+The person taps the link, sees the email they log in with and chooses a
+password, which also logs them in. The link works once, for 7 days.
+
+Someone without an email (for example a child or a person who does not use
+email) can still be added and scheduled; they just cannot log in.
 
 Someone who has not joined is marked **Not joined yet**. **Copy new invite**
 makes a new link and cancels their previous one. If the message warns about
 localhost, open Flock using its network address or set `FLOCK_PUBLIC_URL`,
 then make a new invite; a localhost link only works on the same computer.
 
-If someone forgets their password, choose **Reset password**. Confirming
-immediately stops their current password and logs them out everywhere,
-then shows a new invite message. Nobody, including the scheduler, can read
+If someone forgets their password, choose **Reset login**. Confirming
+immediately stops their current password and any linked Google sign-in,
+logs them out everywhere, then shows a new invite message.
+
+Once someone has joined, their email is locked: scammers try to get
+schedulers to "update" someone's email so they can log in as them. To change
+a joined person's email, choose **Reset login** first, then edit it. Nobody, including the scheduler, can read
 another person's password. To change your own password, use the key button
 at the top (**Change my password**).
 
@@ -75,14 +84,14 @@ log in. Their past history is kept, and you can reactivate them later.
 ## How volunteers log in on their phones
 
 Volunteers open the Flock address in the browser on their phone, type their
-username and password, and they are in. They stay logged in for 14 days on
+email and password, and they are in. They stay logged in for 14 days on
 that phone. They do not need to install an app.
 
-If a scheduler added their email on People, they can type the email instead
-of the username. When a sign-in provider such as Google is set up (below),
-they can also tap **Sign in with Google**; that works without an invite, but
-only for an email a scheduler already added. To stop someone, deactivate them
-(a password reset does not stop provider sign-in).
+When a sign-in provider such as Google is set up (below), they can also tap
+**Sign in with Google**. That works without an invite, but only for the email
+a scheduler added; the first sign-in links their Google account, and later
+sign-ins use that link. To stop someone, deactivate them (after a Reset login
+they can link again with the same email).
 
 ### Setting up Google sign-in (optional)
 
@@ -117,7 +126,7 @@ Everyone sees:
 
 Schedulers also see:
 
-- **People** lets you add people, set what they can do, reset passwords, make
+- **People** lets you add people, set what they can do, reset logins, make
   someone a scheduler, and deactivate or reactivate people.
 - **Teams** lets you create teams and the positions in each team (for example
   Band: Vocals, Guitar, Drums).
@@ -216,8 +225,8 @@ spreadsheet could mistake for a formula is made safe.
 
 Flock never stores passwords. It stores a scrambled form (a "hash") from
 which the password cannot be worked out. That is why a scheduler can
-**reset** a password but can never **read** one. A reset removes the old hash
-and all sessions, then creates a new invite. Accounts without a chosen
+**reset** a login but can never **read** a password. A reset removes the old
+hash, any linked sign-in and all sessions, then creates a new invite. Accounts without a chosen
 password cannot log in. Only hashes of invite and session tokens are stored;
 invite tokens stay in the link fragment and are sent in POST bodies, not
 HTTP URLs. Treat invite links as private credentials.

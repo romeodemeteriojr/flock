@@ -18,8 +18,8 @@ async function setup({ wrap } = {}) {
   const drums = await data.positions.create(band.id, { name: 'Drums', sort: 2 });
   const piano = await data.positions.create(band.id, { name: 'Piano', sort: 1 });
   const sound = await data.positions.create(tech.id, { name: 'Sound', sort: 1 });
-  const admin = await data.people.create({ name: 'Ada Admin', username: 'ada', passwordHash: 'x', role: 'admin', createdAt: NOW });
-  const pat = await data.people.create({ name: 'Pat Person', username: 'pat', passwordHash: 'x', createdAt: NOW });
+  const admin = await data.people.create({ name: 'Ada Admin', email: 'ada@example.com', passwordHash: 'x', role: 'admin', createdAt: NOW });
+  const pat = await data.people.create({ name: 'Pat Person', email: 'pat@example.com', passwordHash: 'x', createdAt: NOW });
   const count = (table) => db.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get().n;
   return { db, data, clock, svc, admin, pat, pos: { drums: drums.id, piano: piano.id, sound: sound.id }, count };
 }

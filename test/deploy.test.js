@@ -91,7 +91,7 @@ test('DEPLOY.md mentions every command and has no token-like string', () => {
   const d = read('DEPLOY.md');
   for (const c of [
     'fly auth login', 'fly launch --no-deploy --copy-config', 'fly volumes create flock_data --size 1 --region <region>',
-    'fly deploy', `fly ssh console -C "node bin/flock.js create-admin <username> 'Full Name'"`,
+    'fly deploy', `fly ssh console -C "node bin/flock.js create-admin <email> 'Full Name'"`,
     'https://<app>.fly.dev', 'fly certs add', 'fly logs', 'fly releases',
     `fly ssh console -C 'node bin/flock.js backup /data/backup-YYYYMMDD.db'`, 'fly ssh sftp get /data/backup-YYYYMMDD.db',
     '$2.34', 'own computer', 'one machine', 'RESTORE'.toLowerCase(),

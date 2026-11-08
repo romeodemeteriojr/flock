@@ -13,8 +13,8 @@ async function setup() {
   const { db, data } = makeData();
   const clock = fixedClock(new Date(NOW));
   const svc = createBlockoutsService({ data, clock });
-  const pat = await data.people.create({ name: 'Pat Person', username: 'pat', passwordHash: 'x', createdAt: NOW });
-  const quinn = await data.people.create({ name: 'Quinn Quill', username: 'quinn', passwordHash: 'x', createdAt: NOW });
+  const pat = await data.people.create({ name: 'Pat Person', email: 'pat@example.com', passwordHash: 'x', createdAt: NOW });
+  const quinn = await data.people.create({ name: 'Quinn Quill', email: 'quinn@example.com', passwordHash: 'x', createdAt: NOW });
   const team = await data.teams.create({ name: 'Band' });
   const pos = await data.positions.create(team.id, { name: 'Drums' });
   async function slot(personId, date, status, time = '09:00') {

@@ -49,10 +49,10 @@ function buildAt(file, upto) {
 // Data in the shape of the 0001 schema: the oldest one any later migration must keep working.
 function fillV1(db) {
   const at = '2024-06-01T00:00:00.000Z';
-  const person = db.prepare('INSERT INTO people (name, username, password_hash, role, created_at) VALUES (?, ?, ?, ?, ?)');
-  const admin = Number(person.run('Old Admin', 'old.admin', 'fast$s1$' + 'a'.repeat(64), 'admin', at).lastInsertRowid);
+  const person = db.prepare('INSERT INTO people (name, email, password_hash, role, created_at) VALUES (?, ?, ?, ?, ?)');
+  const admin = Number(person.run('Old Admin', 'old.admin@example.com', 'fast$s1$' + 'a'.repeat(64), 'admin', at).lastInsertRowid);
   const ids = [];
-  for (let i = 1; i <= 6; i++) ids.push(Number(person.run(`Old Member ${i}`, `old.member${i}`, 'fast$s1$' + 'b'.repeat(64), 'member', at).lastInsertRowid));
+  for (let i = 1; i <= 6; i++) ids.push(Number(person.run(`Old Member ${i}`, `old.member${i}@example.com`, 'fast$s1$' + 'b'.repeat(64), 'member', at).lastInsertRowid));
   db.prepare('INSERT INTO sessions (token_hash, person_id, expires_at, created_at) VALUES (?, ?, ?, ?)').run(tokenHash(OLD_TOKEN), admin, '2030-01-01T00:00:00.000Z', at);
   const team = Number(db.prepare('INSERT INTO teams (name, sort) VALUES (?, 1)').run('Band').lastInsertRowid);
   const pos = Number(db.prepare('INSERT INTO positions (team_id, name) VALUES (?, ?)').run(team, 'Keys').lastInsertRowid);
@@ -147,9 +147,9 @@ test('upgrade: the upgraded data works through the app (login with an old sessio
       random: seededRandom(3), hasher, logger: silentLogger(),
     });
     try {
-      assert.equal((await c.services.auth.authenticate(OLD_TOKEN)).username, 'old.admin', 'a session from before the upgrade still works');
-      const { token } = await c.services.auth.login('old.member1', 'old-pass-123');
-      assert.equal((await c.services.auth.authenticate(token)).username, 'old.member1');
+      assert.equal((await c.services.auth.authenticate(OLD_TOKEN)).email, 'old.admin@example.com', 'a session from before the upgrade still works');
+      const { token } = await c.services.auth.login('old.member1@example.com', 'old-pass-123');
+      assert.equal((await c.services.auth.authenticate(token)).email, 'old.member1@example.com');
       const schedule = await c.services.assignments.mySchedule(ids.ids[0]);
       assert.deepEqual(schedule.items.map((i) => [i.date, i.status]), [['2024-06-02', 'accepted']]);
     } finally { c.close(); }

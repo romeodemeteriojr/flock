@@ -7,13 +7,13 @@ import { fakeRoot, fakeApi } from './helpers/fakeui.js';
 import { inviteMessage } from '../web/lib/invite.js';
 
 const apiErr = (status, message) => new ApiError({ status, message });
-const P = (id, name, username, extra = {}) => ({ id, name, username, role: 'member', active: true, joined: true, positionIds: [], ...extra });
+const P = (id, name, email, extra = {}) => ({ id, name, email, role: 'member', active: true, joined: true, positionIds: [], ...extra });
 const INVITE = { link: 'https://flock.example.org/#/welcome?token=' + 'i'.repeat(43), localOnly: false };
 const TEAMS = [
   { id: 1, name: 'Band', positions: [{ id: 10, name: 'Drums', qualifiedPersonIds: [2] }, { id: 11, name: 'Keys', qualifiedPersonIds: [] }] },
   { id: 2, name: 'Sound', positions: [{ id: 20, name: 'Mixer', qualifiedPersonIds: [2, 3] }] },
 ];
-const PEOPLE = [P(1, 'Ann Admin', 'ann', { role: 'admin' }), P(2, 'Sam Ortiz', 'sam.ortiz', { positionIds: [10] }), P(3, 'Old Joe', 'joe', { active: false })];
+const PEOPLE = [P(1, 'Ann Admin', 'ann@example.com', { role: 'admin' }), P(2, 'Sam Ortiz', 'sam.ortiz@example.com', { positionIds: [10] }), P(3, 'Old Joe', 'joe@example.com', { active: false })];
 
 async function setup(extra = {}) {
   const api = fakeApi({ 'GET /api/people': PEOPLE, 'GET /api/teams': TEAMS, ...extra });
@@ -25,18 +25,20 @@ async function setup(extra = {}) {
 }
 const flush = () => new Promise((r) => setImmediate(r));
 
-test('list shows name, username, role and Deactivated marker', async () => {
+test('list shows name, email, role and Deactivated marker', async () => {
   const { root } = await setup();
   assert.match(root.innerHTML, /Sam Ortiz/);
-  assert.match(root.innerHTML, /sam\.ortiz/);
+  assert.match(root.innerHTML, /sam\.ortiz@example\.com/);
   assert.match(root.innerHTML, /Scheduler/);
   assert.equal(root.innerHTML.match(/Deactivated<\/span>/g).length, 1);
   assert.match(root.innerHTML, /Reactivate/);
   assert.match(root.innerHTML, /Add person/);
 });
 
-test('filterPeople matches name or username, any case, all words', () => {
+test('filterPeople matches name or email, any case, all words', () => {
   assert.deepEqual(people.filterPeople(PEOPLE, 'SAM').map((p) => p.id), [2]);
+  assert.deepEqual(people.filterPeople(PEOPLE, 'ortiz@example').map((p) => p.id), [2]);
+  assert.deepEqual(people.filterPeople([P(7, 'No Mail', null)], 'mail').map((p) => p.id), [7]);
   assert.deepEqual(people.filterPeople(PEOPLE, 'joe').map((p) => p.id), [3]);
   assert.deepEqual(people.filterPeople(PEOPLE, 'ann admin').map((p) => p.id), [1]);
   assert.deepEqual(people.filterPeople(PEOPLE, 'zzz'), []);
@@ -51,12 +53,6 @@ test('typing in the search box filters the list', async () => {
   assert.ok(!list.includes('Sam Ortiz'));
 });
 
-test('suggestUsername', () => {
-  assert.equal(people.suggestUsername('Sam Ortiz'), 'sam.ortiz');
-  assert.equal(people.suggestUsername('José  Núñez'), 'jose.nunez');
-  assert.equal(people.suggestUsername('<>'), '');
-});
-
 test('hostile names stay text', async () => {
   const bad = '<script>alert(1)</script>';
   const { root } = await setup({ 'GET /api/people': [P(5, bad, 'x"onclick="y')] });
@@ -69,48 +65,57 @@ test('hostile names stay text', async () => {
 
 test('adding a person posts, then shows the one-time invite box', async () => {
   const { api, root } = await setup({
-    'POST /api/people': { person: P(9, 'Sam <b>', 'sam', { joined: false }), invite: INVITE },
+    'POST /api/people': { person: P(9, 'Sam <b>', 'sam@example.com', { joined: false }), invite: INVITE },
   });
   root.click('add-open');
   assert.match(root.innerHTML, /Make this person a scheduler/);
-  root.submit('add-person', { name: ' Sam <b> ', username: '', scheduler: true });
+  root.submit('add-person', { name: ' Sam <b> ', email: '', scheduler: true });
   await flush();
   assert.equal(api.calls[0], 'POST /api/people {"name":"Sam <b>","role":"admin"}');
   assert.match(root.innerHTML, /Invite for Sam &lt;b&gt;/);
-  assert.match(root.innerHTML, /Your username is sam\. The link works for 7 days/);
+  assert.match(root.innerHTML, /You will log in with sam@example\.com\. The link works for 7 days/);
   assert.match(root.innerHTML, /data-action="copy"/);
   root.click('done');
   assert.ok(!root.innerHTML.includes(INVITE.link));
 });
 
-test('add person sends username when given and nothing when name is empty', async () => {
-  const { api, root } = await setup({ 'POST /api/people': { person: P(9, 'Al', 'al.x', { joined: false }), invite: INVITE } });
+test('add person sends the email when given and nothing when name is empty', async () => {
+  const { api, root } = await setup({ 'POST /api/people': { person: P(9, 'Al', 'al.x@example.com', { joined: false }), invite: INVITE } });
   root.click('add-open');
-  root.submit('add-person', { name: '  ', username: '', scheduler: false });
+  root.submit('add-person', { name: '  ', email: '', scheduler: false });
   await flush();
   assert.equal(api.calls.length, 0);
   assert.match(root.innerHTML, /Please type a name/);
-  root.submit('add-person', { name: 'Al', username: 'al.x', scheduler: false });
+  root.submit('add-person', { name: 'Al', email: 'al.x@example.com', scheduler: false });
   await flush();
-  assert.equal(api.calls[0], 'POST /api/people {"name":"Al","username":"al.x"}');
+  assert.equal(api.calls[0], 'POST /api/people {"name":"Al","email":"al.x@example.com"}');
 });
 
-test('username taken 409 is friendly', async () => {
-  const { root } = await setup({ 'POST /api/people': apiErr(409, 'That username is already taken') });
+test('adding someone without an email: no invite, a plain notice instead', async () => {
+  const { root } = await setup({ 'POST /api/people': { person: P(9, 'Gran', null, { joined: false }), invite: null } });
   root.click('add-open');
-  root.submit('add-person', { name: 'Al', username: 'ann', scheduler: false });
+  root.submit('add-person', { name: 'Gran', email: '', scheduler: false });
   await flush();
-  assert.match(root.innerHTML, /That username is already taken\. Please pick a different one/);
+  assert.ok(!root.innerHTML.includes('Invite for'));
+  assert.match(root.innerHTML, /Without an email they cannot log in/);
+});
+
+test('email taken 409 is shown as is', async () => {
+  const { root } = await setup({ 'POST /api/people': apiErr(409, 'That email is already used by someone else') });
+  root.click('add-open');
+  root.submit('add-person', { name: 'Al', email: 'ann@example.com', scheduler: false });
+  await flush();
+  assert.match(root.innerHTML, /That email is already used by someone else/);
 });
 
 test('reset needs confirmation: asking sends nothing, yes sends', async () => {
-  const { api, root } = await setup({ 'POST /api/people/2/reset-password': { person: P(2, 'Sam Ortiz', 'sam.ortiz', { joined: false }), invite: INVITE } });
+  const { api, root } = await setup({ 'POST /api/people/2/reset-login': { person: P(2, 'Sam Ortiz', 'sam.ortiz@example.com', { joined: false }), invite: INVITE } });
   root.click('reset-yes', 2); // no confirm step yet
   await flush();
   assert.equal(api.calls.length, 0);
   root.click('reset-ask', 2);
   assert.equal(api.calls.length, 0);
-  assert.match(root.innerHTML, /Yes, make a new link/);
+  assert.match(root.innerHTML, /Yes, reset login/);
   assert.match(root.innerHTML, /logged out everywhere/);
   root.click('cancel');
   root.click('reset-yes', 2);
@@ -119,7 +124,7 @@ test('reset needs confirmation: asking sends nothing, yes sends', async () => {
   root.click('reset-ask', 2);
   root.click('reset-yes', 2);
   await flush();
-  assert.deepEqual(api.calls, ['POST /api/people/2/reset-password {}']);
+  assert.deepEqual(api.calls, ['POST /api/people/2/reset-login {}']);
   assert.match(root.innerHTML, /Invite for Sam Ortiz/);
   assert.match(root.innerHTML, /Copy message/);
 });
@@ -185,14 +190,14 @@ test('checklist is grouped by team, preticked, and saves with PUT', async () => 
 });
 
 test('copy button guards a missing clipboard and uses it when present', async () => {
-  const api = fakeApi({ 'GET /api/people': PEOPLE, 'GET /api/teams': TEAMS, 'POST /api/people/2/reset-password': { person: P(2, 'Sam Ortiz', 'sam.ortiz', { joined: false }), invite: INVITE } });
+  const api = fakeApi({ 'GET /api/people': PEOPLE, 'GET /api/teams': TEAMS, 'POST /api/people/2/reset-login': { person: P(2, 'Sam Ortiz', 'sam.ortiz@example.com', { joined: false }), invite: INVITE } });
   const written = [];
   const root = fakeRoot();
   const s = people.createScreen({ api, root, win: { navigator: { clipboard: { writeText: async (t) => { written.push(t); } } } } });
   await s.ready;
   root.click('reset-ask', 2); root.click('reset-yes', 2); await flush();
   root.click('copy'); await flush();
-  assert.deepEqual(written, [inviteMessage({ name: 'Sam Ortiz', username: 'sam.ortiz', ...INVITE })]);
+  assert.deepEqual(written, [inviteMessage({ name: 'Sam Ortiz', email: 'sam.ortiz@example.com', ...INVITE })]);
   assert.match(root.innerHTML, /Copied/);
   const root2 = fakeRoot();
   const s2 = people.createScreen({ api, root: root2, win: {} });
@@ -203,7 +208,7 @@ test('copy button guards a missing clipboard and uses it when present', async ()
 });
 
 test('invite copy button shows a check SVG, then the copy SVG after 1.5s', async () => {
-  const api = fakeApi({ 'GET /api/people': PEOPLE, 'GET /api/teams': TEAMS, 'POST /api/people/2/reset-password': { person: P(2, 'Sam Ortiz', 'sam.ortiz', { joined: false }), invite: INVITE } });
+  const api = fakeApi({ 'GET /api/people': PEOPLE, 'GET /api/teams': TEAMS, 'POST /api/people/2/reset-login': { person: P(2, 'Sam Ortiz', 'sam.ortiz@example.com', { joined: false }), invite: INVITE } });
   const timers = [];
   const win = { navigator: { clipboard: { writeText: async () => {} } }, setTimeout: (fn, ms) => { timers.push({ fn, ms }); return timers.length; }, clearTimeout() {} };
   const root = fakeRoot();
@@ -225,19 +230,19 @@ test('invite copying uses the shared HTTP clipboard fallback when the API is abs
   const copied = [];
   const field = { setAttribute() {}, focus() {}, select() {}, setSelectionRange() {}, remove() {} };
   const win = { document: { createElement: () => field, body: { appendChild() {} }, execCommand: () => { copied.push(field.value); return true; } } };
-  const api = fakeApi({ 'GET /api/people': PEOPLE, 'GET /api/teams': TEAMS, 'POST /api/people/2/reset-password': { person: P(2, 'Sam Ortiz', 'sam.ortiz', { joined: false }), invite: INVITE } });
+  const api = fakeApi({ 'GET /api/people': PEOPLE, 'GET /api/teams': TEAMS, 'POST /api/people/2/reset-login': { person: P(2, 'Sam Ortiz', 'sam.ortiz@example.com', { joined: false }), invite: INVITE } });
   const root = fakeRoot();
   const s = people.createScreen({ api, root, win });
   await s.ready;
   root.click('reset-ask', 2); root.click('reset-yes', 2); await flush();
   root.click('copy');
-  assert.deepEqual(copied, [inviteMessage({ name: 'Sam Ortiz', username: 'sam.ortiz', ...INVITE })]);
+  assert.deepEqual(copied, [inviteMessage({ name: 'Sam Ortiz', email: 'sam.ortiz@example.com', ...INVITE })]);
   await flush();
   assert.match(root.innerHTML, /Copied\./);
 });
 
 test('unjoined rows offer a new invite and local-only links explain the limitation', async () => {
-  const pending = P(2, 'Sam Ortiz', 'sam.ortiz', { joined: false });
+  const pending = P(2, 'Sam Ortiz', 'sam.ortiz@example.com', { joined: false });
   const { api, root } = await setup({
     'GET /api/people': [pending],
     'POST /api/people/2/invite': { person: pending, invite: { ...INVITE, localOnly: true } },
@@ -397,7 +402,7 @@ test('toolbar buttons: every one has an accessible name, and each action opens i
   assert.ok(buttons.length >= 4, `expected at least four toolbar buttons, found ${buttons.length}: ${ann}`);
   for (const b of buttons) assert.match(b, /aria-label="[^"]+"/, `a toolbar button has no accessible name: ${b}`);
   // The five actions still exist with their data-action names.
-  for (const [action, name] of [['role-ask', 'Make volunteer'], ['edit', 'Edit name'], ['positions', 'What can they do?'], ['reset-ask', 'Reset password'], ['active-ask', 'Deactivate']]) {
+  for (const [action, name] of [['role-ask', 'Make volunteer'], ['edit', 'Edit name'], ['positions', 'What can they do?'], ['reset-ask', 'Reset login'], ['active-ask', 'Deactivate']]) {
     const re = new RegExp(`data-action="${action}"`);
     const btns = buttons.filter((b) => re.test(b));
     assert.equal(btns.length, 1, `expected exactly one ${action} button: ${ann}`);
@@ -411,7 +416,7 @@ test('toolbar buttons: every one has an accessible name, and each action opens i
   assert.match(root.innerHTML, /What can Ann Admin do\?/);
   root.click('cancel');
   root.click('reset-ask', 1);
-  assert.match(root.innerHTML, /Yes, make a new link/);
+  assert.match(root.innerHTML, /Yes, reset login/);
   root.click('cancel');
   root.click('role-ask', 1);
   assert.match(root.innerHTML, /Make Ann Admin a volunteer\?/);
@@ -432,7 +437,7 @@ test('deactivated row: the active button says Reactivate, and its actions still 
   assert.match(root.innerHTML, /What can Old Joe do\?/);
   root.click('cancel');
   root.click('reset-ask', 3);
-  assert.match(root.innerHTML, /Yes, make a new link/);
+  assert.match(root.innerHTML, /Yes, reset login/);
   root.click('cancel');
   root.click('active-ask', 3);
   assert.match(root.innerHTML, /Reactivate <strong>Old Joe<\/strong>\?/);
@@ -441,7 +446,7 @@ test('deactivated row: the active button says Reactivate, and its actions still 
 test('role confirm panel names the person and the right level', async () => {
   const { root } = await setupAs(9);
   root.click('role-ask', 2);
-  assert.match(root.innerHTML, /Make Sam Ortiz a scheduler\? Sam Ortiz will be able to change the whole schedule and see every volunteer's name and username\./);
+  assert.match(root.innerHTML, /Make Sam Ortiz a scheduler\? Sam Ortiz will be able to change the whole schedule and see every volunteer's name and email\./);
   root.click('cancel');
   root.click('role-ask', 1);
   assert.match(root.innerHTML, /Make Ann Admin a volunteer\? Ann Admin will only see their own schedule\./);

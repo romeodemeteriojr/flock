@@ -25,9 +25,9 @@ async function setup({ sessionDays = 14 } = {}) {
   const hasher = fastHasher({ env: {} });
   const logger = recordingLogger();
   const auth = createAuthService({ data, clock, random: seededRandom('auth'), hasher, logger, config: { sessionDays } });
-  const add = async (username, password, extra = {}) => {
+  const add = async (handle, password, extra = {}) => {
     const p = await data.people.create({
-      name: `Test ${username}`, username, role: extra.role ?? 'member', createdAt: T0,
+      name: `Test ${handle}`, email: `${handle}@example.com`, role: extra.role ?? 'member', createdAt: T0,
     });
     await data.people.setPassword(p.id, await hasher.hash(password));
     if (extra.active === false) await data.people.update(p.id, { active: false });
@@ -47,13 +47,13 @@ const rejectsWith = (p, Cls, check) => assert.rejects(p, (e) => {
 
 test('auth service: login succeeds with a public person and a session token', async () => {
   const s = await setup();
-  const r = await s.auth.login('pat', 'pat-secret-1');
-  assert.deepEqual(r.person, { id: s.pat, name: 'Test pat', username: 'pat', role: 'admin', hasPassword: true, active: true });
+  const r = await s.auth.login('pat@example.com', 'pat-secret-1');
+  assert.deepEqual(r.person, { id: s.pat, name: 'Test pat', email: 'pat@example.com', role: 'admin', hasPassword: true, active: true });
   assert.match(r.token, /^[A-Za-z0-9_-]{43}$/);
   const stored = await s.data.sessions.findByTokenHash(tokenHash(r.token));
   assert.equal(stored.personId, s.pat);
   assert.equal(stored.expiresAt, '2025-03-16T09:00:00.000Z');
-  assert.equal((await s.auth.login('PAT', 'pat-secret-1')).person.id, s.pat, 'case-insensitive username');
+  assert.equal((await s.auth.login('PAT@example.com', 'pat-secret-1')).person.id, s.pat, 'case-insensitive email');
 });
 
 test('auth service: wrong password, unknown, empty and inactive all give the same UnauthenticatedError', async () => {
@@ -62,62 +62,62 @@ test('auth service: wrong password, unknown, empty and inactive all give the sam
   for (const [u, p] of attempts) {
     await rejectsWith(s.auth.login(u, p), UnauthenticatedError, (e) => {
       assert.equal(e.status, 401);
-      assert.equal(e.message, 'Wrong username or password');
+      assert.equal(e.message, 'Wrong email or password');
       assert.equal(e.exposeCode, false);
     });
   }
-  await rejectsWith(s.auth.login('old', 'old-secret-1'), UnauthenticatedError, (e) => assert.equal(e.details.reason, 'inactive'));
+  await rejectsWith(s.auth.login('old@example.com', 'old-secret-1'), UnauthenticatedError, (e) => assert.equal(e.details.reason, 'inactive'));
   assert.equal(s.db.prepare('SELECT COUNT(*) n FROM sessions').get().n, 0);
 });
 
 test('auth service: lockout after 5 failures and unlock by advancing the clock', async () => {
   const s = await setup();
-  for (let i = 0; i < 5; i++) await rejectsWith(s.auth.login('lee', 'wrong-pass'), UnauthenticatedError);
+  for (let i = 0; i < 5; i++) await rejectsWith(s.auth.login('lee@example.com', 'wrong-pass'), UnauthenticatedError);
   const p = await s.data.people.findAuthById(s.lee);
   assert.equal(p.failedLogins, 5);
   assert.equal(p.lockedUntil, new Date(Date.parse(T0) + LOCKOUT_MS).toISOString());
-  await rejectsWith(s.auth.login('lee', 'lee-secret-1'), TooManyRequestsError, (e) => {
+  await rejectsWith(s.auth.login('lee@example.com', 'lee-secret-1'), TooManyRequestsError, (e) => {
     assert.equal(e.status, 429);
     assert.equal(e.retryAfterSec, 300);
     assert.equal(e.message, 'Too many tries. Please wait a few minutes.');
   });
   s.clock.advance(LOCKOUT_MS - 1000);
-  await rejectsWith(s.auth.login('lee', 'lee-secret-1'), TooManyRequestsError, (e) => assert.equal(e.retryAfterSec, 1));
+  await rejectsWith(s.auth.login('lee@example.com', 'lee-secret-1'), TooManyRequestsError, (e) => assert.equal(e.retryAfterSec, 1));
   s.clock.advance(1000);
-  assert.equal((await s.auth.login('lee', 'lee-secret-1')).person.id, s.lee);
+  assert.equal((await s.auth.login('lee@example.com', 'lee-secret-1')).person.id, s.lee);
   const after = await s.data.people.findAuthById(s.lee);
   assert.deepEqual([after.failedLogins, after.lockedUntil], [0, null]);
   // Others are not affected by a lock.
-  for (let i = 0; i < 5; i++) await rejectsWith(s.auth.login('lee', 'wrong-pass'), UnauthenticatedError);
-  assert.equal((await s.auth.login('pat', 'pat-secret-1')).person.id, s.pat);
+  for (let i = 0; i < 5; i++) await rejectsWith(s.auth.login('lee@example.com', 'wrong-pass'), UnauthenticatedError);
+  assert.equal((await s.auth.login('pat@example.com', 'pat-secret-1')).person.id, s.pat);
 });
 
 test('auth service: authenticate, session expiry and logout', async () => {
   const s = await setup({ sessionDays: 3 });
-  const { token } = await s.auth.login('lee', 'lee-secret-1');
+  const { token } = await s.auth.login('lee@example.com', 'lee-secret-1');
   assert.equal((await s.auth.authenticate(token)).id, s.lee);
   assert.equal(await s.auth.authenticate('short'), null);
   assert.equal(await s.auth.authenticate(null), null);
   s.clock.advance(3 * 86400000 - 1);
-  assert.equal((await s.auth.authenticate(token)).username, 'lee');
+  assert.equal((await s.auth.authenticate(token)).email, 'lee@example.com');
   s.clock.advance(1);
   assert.equal(await s.auth.authenticate(token), null);
   assert.equal(await s.data.sessions.findByTokenHash(tokenHash(token)), null, 'expired session removed');
 
-  const t2 = (await s.auth.login('lee', 'lee-secret-1')).token;
+  const t2 = (await s.auth.login('lee@example.com', 'lee-secret-1')).token;
   await s.auth.logout(t2);
   await s.auth.logout(undefined);
   assert.equal(await s.auth.authenticate(t2), null);
 
-  const t3 = (await s.auth.login('lee', 'lee-secret-1')).token;
+  const t3 = (await s.auth.login('lee@example.com', 'lee-secret-1')).token;
   await s.data.people.update(s.lee, { active: false });
   assert.equal(await s.auth.authenticate(t3), null, 'deactivated person is logged out');
 });
 
 test('auth service: changePassword rules and session handling', async () => {
   const s = await setup();
-  const cur = (await s.auth.login('pat', 'pat-secret-1')).token;
-  const other = (await s.auth.login('pat', 'pat-secret-1')).token;
+  const cur = (await s.auth.login('pat@example.com', 'pat-secret-1')).token;
+  const other = (await s.auth.login('pat@example.com', 'pat-secret-1')).token;
   const msg = async (...args) => {
     try { await s.auth.changePassword(...args); return null; } catch (e) { assert.ok(e instanceof ValidationError); return e.message; }
   };
@@ -131,14 +131,14 @@ test('auth service: changePassword rules and session handling', async () => {
   assert.equal(await msg(s.pat, 'pat-secret-1', 'new-secret-9', { currentToken: cur }), null);
   assert.equal((await s.auth.authenticate(cur)).id, s.pat);
   assert.equal(await s.auth.authenticate(other), null);
-  await rejectsWith(s.auth.login('pat', 'pat-secret-1'), UnauthenticatedError);
-  assert.equal((await s.auth.login('pat', 'new-secret-9')).person.id, s.pat);
+  await rejectsWith(s.auth.login('pat@example.com', 'pat-secret-1'), UnauthenticatedError);
+  assert.equal((await s.auth.login('pat@example.com', 'new-secret-9')).person.id, s.pat);
 });
 
 test('auth service: ending all sessions revokes every browser', async () => {
   const s = await setup();
-  const t1 = (await s.auth.login('pat', 'pat-secret-1')).token;
-  const t2 = (await s.auth.login('pat', 'pat-secret-1')).token;
+  const t1 = (await s.auth.login('pat@example.com', 'pat-secret-1')).token;
+  const t2 = (await s.auth.login('pat@example.com', 'pat-secret-1')).token;
   assert.equal(await s.auth.endSessions(s.pat), 2);
   assert.equal(await s.auth.authenticate(t1), null);
   assert.equal(await s.auth.authenticate(t2), null);
@@ -154,10 +154,10 @@ test('auth service: seeded random makes invite tokens repeatable', async () => {
 
 test('auth service: no hash or raw token is ever returned or logged', async () => {
   const s = await setup();
-  const { token, person } = await s.auth.login('pat', 'pat-secret-1');
-  for (let i = 0; i < 5; i++) await s.auth.login('lee', 'bad-bad-bad').catch(() => {});
-  await s.auth.login('lee', 'lee-secret-1').catch(() => {});
-  await s.auth.login('nobody', 'whatever-1').catch(() => {});
+  const { token, person } = await s.auth.login('pat@example.com', 'pat-secret-1');
+  for (let i = 0; i < 5; i++) await s.auth.login('lee@example.com', 'bad-bad-bad').catch(() => {});
+  await s.auth.login('lee@example.com', 'lee-secret-1').catch(() => {});
+  await s.auth.login('nobody@example.com', 'whatever-1').catch(() => {});
   await s.auth.changePassword(s.pat, 'pat-secret-1', 'new-secret-9', { currentToken: token });
   const invite = s.auth.newInvite();
   const me = await s.auth.authenticate(token);

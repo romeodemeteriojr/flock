@@ -4,9 +4,9 @@ Status: accepted
 
 ## TL;DR
 
-- People get an optional **email** (unique, stored lowercase). Schedulers set it
-  when adding or editing a person.
-- The login box takes a **username or an email** with the password.
+- **The email is the login. There are no usernames** (GOV.UK: "use email
+  addresses for usernames"; Planning Center logs in by email or phone).
+- People without an email can be added and scheduled, but cannot log in.
 - **Sign in with <provider>** buttons, one per provider that is set up. Google is
   the first: set `FLOCK_GOOGLE_CLIENT_ID` and `FLOCK_GOOGLE_CLIENT_SECRET`.
   Only people a scheduler already added with that (verified) email get in.
@@ -16,7 +16,12 @@ Status: accepted
 - Accounts are linked by the provider's **stable id** (`iss`/`sub`, OIDC Core
   §5.7), not by email. The email is used once, to link the first sign-in.
 - A password is **optional**: provider-only people have none.
+- **The email is locked once the person joined** (Planning Center's 2024 fix
+  for "profile takeover": a scammer gets a scheduler to change someone's
+  email, then logs in with it). Changing it takes **Reset login** first.
 - No new dependencies: one `fetch` to the provider's token endpoint.
+- 0 to 1: the first schema changed in place (`username` -> `email`, plus
+  `identities`); databases from 0.2.0 or older are not upgraded.
 
 ## Decision
 
@@ -47,10 +52,11 @@ Status: accepted
   SQL, no extra column). Sessions, "at least one joined admin", the "Not joined
   yet" chip and invites all use it. Provider-only people have no password, so
   password login refuses them and **Change my password** is hidden.
-- **Unlinking**: changing a person's email in Flock or **Reset password** unlinks
-  their accounts (sign in again to re-link). A scheduler without a password
-  cannot change their own email (it would log them out). **Deactivate** blocks
-  every way in.
+- **Email lock and Reset login**: once a person joined, an admin cannot change
+  their email. **Reset login** clears the password, linked accounts and
+  sessions, makes a new invite and unlocks the email. **Deactivate** blocks
+  every way in. (Reset alone does not lock someone out: they can link again
+  with the same email.)
 
 ## Adding a provider
 

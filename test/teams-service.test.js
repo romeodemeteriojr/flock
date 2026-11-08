@@ -12,8 +12,8 @@ const NOW = '2025-01-05T12:00:00.000Z';
 async function setup() {
   const { data } = makeData();
   const teams = createTeamsService({ data, clock: fixedClock(NOW), logger: silentLogger() });
-  const add = async (name, username, role = 'member', active = true) => {
-    const p = await data.people.create({ name, username, role, passwordHash: 'x', createdAt: NOW });
+  const add = async (name, handle, role = 'member', active = true) => {
+    const p = await data.people.create({ name, email: `${handle}@example.com`, role, passwordHash: 'x', createdAt: NOW });
     if (!active) await data.people.update(p.id, { active: false });
     return p.id;
   };

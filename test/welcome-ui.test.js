@@ -9,19 +9,19 @@ import { INVITE_GONE_MESSAGE } from '../src/services/auth-service.js';
 async function setup(t) {
   const app = await startTestApp();
   t.after(() => app.close());
-  const created = await app.container.services.people.create(null, { name: 'Pat Example', username: 'pat.example' });
+  const created = await app.container.services.people.create(null, { name: 'Pat Example', email: 'pat.example@example.com' });
   const page = openPage({ url: app.url });
   await page.start();
   await page.goto(`#/welcome?token=${created.invite.token}`);
   return { app, page, created };
 }
 
-test('welcome UI: an invite in the fragment is checked and the username is shown', async (t) => {
+test('welcome UI: an invite in the fragment is checked and the login email is shown', async (t) => {
   const { page, created } = await setup(t);
   const check = page.fetchLog.find((r) => r.path === '/api/welcome/check');
   assert.deepEqual(check.body, { token: created.invite.token });
-  assert.match(page.text(), /Hi Pat Example\. Your username is pat\.example/);
-  assert.match(page.html(), /type="hidden" name="username" autocomplete="username" value="pat\.example"/);
+  assert.match(page.text(), /Hi Pat Example\. You will log in with pat\.example@example\.com/);
+  assert.match(page.html(), /type="hidden" name="email" autocomplete="username" value="pat\.example@example\.com"/);
   assert.equal(page.count('input[type="password"]'), 2);
   assert.deepEqual(page.accessibilityProblems(), []);
 });
@@ -58,7 +58,7 @@ test('welcome UI: open routes work logged in or out, and error/greeting text is 
     assert.equal(resolve('#/welcome?token=example', user).route.view, welcome);
   }
   assert.match(welcome.render({}), /Checking your link…/);
-  const out = welcome.render({}, { info: { name: '<img src=x>', username: '\"><script>' }, error: '<b>bad</b>' });
+  const out = welcome.render({}, { info: { name: '<img src=x>', email: '\"><script>' }, error: '<b>bad</b>' });
   assert.doesNotMatch(out, /<img|<script|<b>/);
   assert.match(out, /&lt;img/);
 });
@@ -70,7 +70,7 @@ test('welcome UI: a stale check cannot overwrite the next page', async () => {
   const mounting = welcome.mount(root, { state: {}, win: { location }, api: { post: () => new Promise((r) => { finish = r; }) } });
   location.hash = '#/login';
   root.innerHTML = 'Login';
-  finish({ name: 'Pat', username: 'pat.example' });
+  finish({ name: 'Pat', email: 'pat.example@example.com' });
   await mounting;
   assert.equal(root.innerHTML, 'Login');
 });

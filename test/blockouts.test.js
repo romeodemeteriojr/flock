@@ -39,8 +39,8 @@ async function boot() {
 test('helpers: single day, range edges, adjacent ranges', async () => {
   const db = openDb();
   const { isBlocked, blockedPersonIds, conflictsFor } = helpers(db);
-  const p = await addPerson(db, { name: 'Pat', username: 'pat' });
-  const q = await addPerson(db, { name: 'Quinn', username: 'quinn' });
+  const p = await addPerson(db, { name: 'Pat', email: 'pat@example.com' });
+  const q = await addPerson(db, { name: 'Quinn', email: 'quinn@example.com' });
   addBlock(db, p, '2025-03-10', '2025-03-10');
   addBlock(db, p, '2025-03-11', '2025-03-12');
   addBlock(db, q, '2025-03-12', '2025-03-14');
@@ -62,8 +62,8 @@ test('helpers: single day, range edges, adjacent ranges', async () => {
 test('conflicts only pending/accepted and own', async () => {
   const db = openDb();
   const { conflictsFor } = helpers(db);
-  const p = await addPerson(db, { name: 'Pat', username: 'pat' });
-  const q = await addPerson(db, { name: 'Quinn', username: 'quinn' });
+  const p = await addPerson(db, { name: 'Pat', email: 'pat@example.com' });
+  const q = await addPerson(db, { name: 'Quinn', email: 'quinn@example.com' });
   addSlot(db, p, '2025-04-06', 'declined', '08:00');
   addSlot(db, p, '2025-04-06', 'open', '10:00');
   const ok = addSlot(db, p, '2025-04-06', 'pending', '11:00');

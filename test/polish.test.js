@@ -210,9 +210,9 @@ const SERVICES = [
   { id: 3, date: '2026-11-22', time: '09:00', title: 'Empty', slots: [] },
 ];
 const PEOPLE = [
-  { id: 1, name: 'Ari Admin', username: 'ari', role: 'admin', active: true, joined: true, positionIds: [] },
-  { id: 2, name: 'Pat Demo', username: 'pat', role: 'member', active: true, joined: true, positionIds: [10] },
-  { id: 3, name: 'Old Rue', username: 'rue', role: 'member', active: false, joined: false, positionIds: [] },
+  { id: 1, name: 'Ari Admin', email: 'ari@example.com', role: 'admin', active: true, joined: true, positionIds: [] },
+  { id: 2, name: 'Pat Demo', email: 'pat@example.com', role: 'member', active: true, joined: true, positionIds: [10] },
+  { id: 3, name: 'Old Rue', email: 'rue@example.com', role: 'member', active: false, joined: false, positionIds: [] },
 ];
 const ITEM = (o = {}) => ({ slotId: 1, date: '2026-11-08', time: '09:00', serviceTitle: 'Sunday service', positionName: 'Sound', teamName: 'Tech', status: 'pending', coVolunteers: [{ name: 'Pat Demo', positionName: 'Keys' }], ...o });
 const CANDS = [{ personId: 2, name: 'Pat Demo', qualified: true, reasons: ['Has never served'] }, { personId: 5, name: 'Kit New', qualified: false, reasons: ['Not set up'] }];
@@ -248,7 +248,7 @@ function allViewHtml() {
   add(login.render({})); add(login.render({}, { error: 'Wrong', username: 'x' }));
   add(password.render({ user: {} })); add(password.render({ user: {} }, { error: 'No' }));
   add(welcome.render({}));
-  add(welcome.render({}, { info: { name: 'Pat Demo', username: 'pat.demo' } }));
+  add(welcome.render({}, { info: { name: 'Pat Demo', email: 'pat.demo@example.com' } }));
   add(welcome.render({}, { error: 'This link has expired or was already used.' }));
   add(notFound.render({}));
   // My schedule, every state.
@@ -265,7 +265,7 @@ function allViewHtml() {
   mb({ list: [{ id: 1, startDate: TODAY, endDate: '2026-11-10', reason: 'Trip' }, { id: 2, startDate: TODAY, endDate: TODAY, reason: '' }], message: 'Saved', problem: 'Bad', conflicts: [{ date: TODAY, positionName: 'Sound' }], busy: true });
   // People.
   const pm = (x = {}) => people.renderScreen({ people: PEOPLE, teams: TEAMS, query: '', loading: false, adding: false, newName: '', panel: null, invite: null, error: '', notice: '', me: 1, ...x });
-  add(people.render({})); add(pm({ loading: true })); add(pm({ error: 'E', notice: 'N', invite: { name: 'Pat Demo', username: 'pat.demo', link: '/#/welcome?token=example', localOnly: true } }));
+  add(people.render({})); add(pm({ loading: true })); add(pm({ error: 'E', notice: 'N', invite: { name: 'Pat Demo', email: 'pat.demo@example.com', link: '/#/welcome?token=example', localOnly: true } }));
   add(pm({ adding: true, newName: 'Kit New' })); add(pm({ people: [] })); add(pm({ query: 'zzz' }));
   for (const panel of [{ kind: 'reset', id: 2 }, { kind: 'active', id: 2 }, { kind: 'active', id: 3 }, { kind: 'role', id: 2, role: 'admin' }, { kind: 'role', id: 1, role: 'member' }, { kind: 'edit', id: 2 }, { kind: 'positions', id: 2, checked: new Set([10]) }]) add(pm({ panel }));
   add(pm({ panel: { kind: 'positions', id: 2, checked: new Set() }, teams: [] }));

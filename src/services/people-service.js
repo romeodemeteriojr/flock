@@ -1,4 +1,4 @@
-// People: add, edit, reset password, deactivate, access level.
+// People: add, edit, reset login, deactivate, access level.
 // Application service: all business rules for this area live here. It never
 // sees HTTP objects and never runs SQL; it talks to the data layer through
 // `deps.data` and throws AppErrors (src/errors.js). Built once by
@@ -6,12 +6,9 @@
 // no secret is ever written to the audit log or the logger.
 import { ConflictError, NotFoundError, ValidationError } from '../errors.js';
 
-export const USERNAME_RE = /^[A-Za-z0-9._-]{3,30}$/;
-export const USERNAME_ERR = 'The username must be 3 to 30 letters, digits, dots, underscores or dashes.';
 export const ROLES = Object.freeze(['admin', 'member']);
 export const EMAIL_RE = /^[^\s@]{1,64}@[^\s@]+\.[^\s@]+$/;
-export const EMAIL_ERR = 'Please enter a valid email address, or leave it empty.';
-const USERNAME_TAKEN = 'That username is already taken';
+export const EMAIL_ERR = 'Please enter a valid email address.';
 const NOT_FOUND = 'That person was not found';
 
 /** '' or null -> null (no email); otherwise a lowercase email, or ValidationError. */
@@ -23,21 +20,11 @@ export function cleanEmail(email) {
   return e;
 }
 
-/** A username made from a name: "Zoë van Dijk" -> "zoe.van.dijk" (3 to 24 characters). */
-export function baseUsername(name) {
-  let base = String(name).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
-    .split(/[^a-z0-9]+/).filter(Boolean).join('.');
-  base = base.slice(0, 24).replace(/\.+$/, '');
-  if (base.length < 3) base = (base + '.user').slice(0, 24);
-  return base;
-}
-
 /** The public view used by the API (no secrets, no createdAt). */
 export function personView(p) {
   return {
     id: p.id,
     name: p.name,
-    username: p.username,
     email: p.email ?? null,
     role: p.role,
     active: !!p.active,
@@ -59,16 +46,6 @@ export function createPeopleService(deps) {
   const { data, clock, auth } = deps;
   const audit = (d, actor, action, detail) => d.audit.log({ at: clock.now(), actorId: actor?.id ?? null, action, detail });
 
-  async function freeUsername(d, name) {
-    const base = baseUsername(name);
-    if (!(await d.people.findAuthByUsername(base))) return base;
-    for (let n = 2; n < 10000; n++) {
-      const u = `${base}${n}`;
-      if (!(await d.people.findAuthByUsername(u))) return u;
-    }
-    throw new Error('no free username');
-  }
-
   return {
     /** Everyone (active or not), sorted by name. */
     async list() {
@@ -76,41 +53,35 @@ export function createPeopleService(deps) {
     },
 
     /**
-     * Add a person with a one-time invite. Only the token hash is stored.
+     * Add a person. With an email they also get a one-time invite (only its
+     * hash is stored); without one they can be scheduled but cannot log in.
      * @param {{id: number}} actor
-     * @param {{name: string, username?: string|null, email?: string|null, role?: 'admin'|'member'}} input
+     * @param {{name: string, email?: string|null, role?: 'admin'|'member'}} input
+     * @returns {Promise<{person: object, invite: {token: string, expiresAt: string}|null}>}
      */
-    async create(actor, { name, username, email, role = 'member' }) {
+    async create(actor, { name, email, role = 'member' }) {
       const mail = cleanEmail(email) ?? null;
       if (!ROLES.includes(role)) throw new ValidationError('The role must be admin or member.');
-      let wanted = null;
-      if (username !== undefined && username !== null && username !== '') {
-        if (typeof username !== 'string' || !USERNAME_RE.test(username.trim())) throw new ValidationError(USERNAME_ERR);
-        wanted = username.trim().toLowerCase();
-      }
-      const inv = auth.newInvite();
+      const inv = mail ? auth.newInvite() : null;
       const person = await data.tx(async (d) => {
-        const uname = wanted ?? (await freeUsername(d, name));
-        if (await d.people.findAuthByUsername(uname)) throw new ConflictError(USERNAME_TAKEN);
         let created;
         try {
-          created = await d.people.create({
-            name, username: uname, email: mail, role, createdAt: clock.now().toISOString(),
-          });
+          created = await d.people.create({ name, email: mail, role, createdAt: clock.now().toISOString() });
         } catch (e) {
-          if (e?.name === 'DuplicateError') throw new ConflictError(/email/.test(e.message) ? e.message : USERNAME_TAKEN);
+          if (e?.name === 'DuplicateError') throw new ConflictError(e.message);
           throw e;
         }
-        await d.invites.replace({ personId: created.id, tokenHash: inv.tokenHash, expiresAt: inv.expiresAt, createdAt: inv.createdAt });
-        await audit(d, actor, 'person.create', `person ${created.id} (${uname}) role ${role}`);
+        if (inv) await d.invites.replace({ personId: created.id, tokenHash: inv.tokenHash, expiresAt: inv.expiresAt, createdAt: inv.createdAt });
+        await audit(d, actor, 'person.create', `person ${created.id} role ${role}`);
         return created;
       });
-      return { person: personView(person), invite: { token: inv.token, expiresAt: inv.expiresAt } };
+      return { person: personView(person), invite: inv && { token: inv.token, expiresAt: inv.expiresAt } };
     },
 
     /**
-     * Change name, role and/or active. Keeps at least one active admin, stops an
-     * admin deactivating themselves, and ends every session of a deactivated person.
+     * Change name, role, active and/or email. Keeps at least one active admin, stops an
+     * admin deactivating themselves, ends every session of a deactivated person, and
+     * only lets the email change before the person joined.
      */
     async update(actor, id, { name, role, active, email } = {}) {
       const mail = cleanEmail(email);
@@ -134,9 +105,10 @@ export function createPeopleService(deps) {
         if (newActive !== cur.active) changes.push(newActive ? 'reactivated' : 'deactivated');
         const emailChanged = mail !== undefined && mail !== cur.email;
         if (emailChanged) changes.push('email');
-        // Unlinking your only way in would log you out on the spot (and could lock out the last scheduler).
-        if (emailChanged && id === actor?.id && !cur.hasPassword) {
-          throw new ConflictError('You sign in with this email, so another scheduler has to change it.');
+        // The login belongs to the person once they joined: an admin changing it is how
+        // "profile takeover" scams work. Reset login first; then they join again.
+        if (emailChanged && cur.joined) {
+          throw new ConflictError(`${cur.name} has joined, so their email cannot be changed here. Use Reset login first.`);
         }
         let updated;
         try {
@@ -146,8 +118,7 @@ export function createPeopleService(deps) {
           throw e;
         }
         if (!newActive) await auth.endSessions(id);
-        // Accounts are linked through the email; a new email means linking again.
-        if (emailChanged) await d.identities.deleteForPerson(id);
+        if (mail === null && emailChanged) await d.invites.deleteForPerson(id); // no email, no way to use it
         if (changes.length) await audit(d, actor, 'person.update', `person ${id}: ${changes.join(', ')}`);
         return updated;
       });
@@ -160,7 +131,8 @@ export function createPeopleService(deps) {
         const p = await d.people.findById(id);
         if (!p) throw new NotFoundError(NOT_FOUND);
         if (!p.active) throw new ValidationError(`${p.name} is deactivated. Reactivate them first.`);
-        if (p.joined) throw new ValidationError(`${p.name} has already joined. Use Reset password instead.`);
+        if (p.joined) throw new ValidationError(`${p.name} has already joined. Use Reset login instead.`);
+        if (!p.email) throw new ValidationError(`Add an email for ${p.name} first. It is how they log in.`);
         const inv = auth.newInvite();
         await d.invites.replace({ personId: id, tokenHash: inv.tokenHash, expiresAt: inv.expiresAt, createdAt: inv.createdAt });
         await audit(d, actor, 'person.invite', `person ${id}`);
@@ -168,15 +140,21 @@ export function createPeopleService(deps) {
       });
     },
 
-    /** Clear the password, linked sign-in accounts and every session, and return a one-time invite. */
-    async resetPassword(actor, id) {
+    /**
+     * Reset login: clear the password, linked sign-in accounts and every session,
+     * so the person has to join again; returns a new one-time invite.
+     */
+    async resetLogin(actor, id) {
       return data.tx(async (d) => {
-        if (!(await d.people.setPassword(id, null))) throw new NotFoundError(NOT_FOUND);
-        const inv = auth.newInvite();
+        const p = await d.people.findById(id);
+        if (!p) throw new NotFoundError(NOT_FOUND);
+        if (!p.email) throw new ValidationError(`Add an email for ${p.name} first. It is how they log in.`);
+        await d.people.setPassword(id, null);
         await d.sessions.deleteForPerson(id);
         await d.identities.deleteForPerson(id);
+        const inv = auth.newInvite();
         await d.invites.replace({ personId: id, tokenHash: inv.tokenHash, expiresAt: inv.expiresAt, createdAt: inv.createdAt });
-        await audit(d, actor, 'person.reset_password', `person ${id}`);
+        await audit(d, actor, 'person.reset_login', `person ${id}`);
         return { person: personView(await d.people.findById(id)), invite: { token: inv.token, expiresAt: inv.expiresAt } };
       });
     },

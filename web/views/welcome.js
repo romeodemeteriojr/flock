@@ -10,10 +10,10 @@ export function render(state, { info = null, error = '' } = {}) {
         <span class="auth-mark">${iconSlot('sparkle', 'icon-lg')}</span>
         <h1 tabindex="-1">Welcome to Flock</h1>
         ${info ? html`
-          <p class="lead" id="welcome-person">Hi ${info.name}. Your username is <strong>${info.username}</strong>. Remember it for next time.</p>
+          <p class="lead" id="welcome-person">Hi ${info.name}. You will log in with <strong>${info.email}</strong>.</p>
           <form class="form" data-form="welcome" novalidate>
             ${error ? html`<p class="form-error" role="alert">${error}</p>` : ''}
-            <input type="hidden" name="username" autocomplete="username" value="${info.username}">
+            <input type="hidden" name="email" autocomplete="username" value="${info.email}">
             <div class="field">
               <label for="welcome-password">Choose your password</label>
               <input id="welcome-password" name="password" type="password" autocomplete="new-password"

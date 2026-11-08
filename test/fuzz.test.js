@@ -45,7 +45,7 @@ function generator(seed) {
     '2025-01-12', '2024-12-29', '2026-01-04', '1970-01-01', ' 2025-01-12', '2025-01-12\u0000',
   ];
   const KEYS = [
-    'name', 'username', 'password', 'role', 'active', 'date', 'time', 'title', 'slots', 'positionId', 'count',
+    'name', 'email', 'password', 'role', 'active', 'date', 'time', 'title', 'slots', 'positionId', 'count',
     'fromServiceId', 'weeks', 'personId', 'force', 'startDate', 'endDate', 'reason', 'positionIds', 'sort', 'teamId',
     'oldPassword', 'newPassword', 'id', '__proto__', 'constructor', 'x'.repeat(200), '',
   ];
@@ -120,9 +120,9 @@ function generator(seed) {
 // Well-formed bodies by route pattern, the starting point for mutated()
 // (routes without one start from {}). The routes themselves come from the router.
 const VALID = {
-  '/api/login': { username: 'member', password: PASSWORD },
+  '/api/login': { email: 'member@example.com', password: PASSWORD },
   '/api/password': { oldPassword: PASSWORD, newPassword: 'a-new-password-9' },
-  '/api/people': { name: 'New Person', username: 'new.person', role: 'member' },
+  '/api/people': { name: 'New Person', email: 'new.person@example.com', role: 'member' },
   '/api/people/:id': { name: 'Renamed', role: 'member', active: true },
   '/api/teams': { name: 'Greeters' },
   '/api/teams/:id': { name: 'Band 2', sort: 1 },
@@ -158,9 +158,9 @@ async function boot() {
     container: { clock: fixedClock(NOW), random: seededRandom('fuzz-app') },
   });
   const { services } = app.container;
-  const schedId = await addPerson(app, { name: 'Sam Scheduler', username: 'sched', role: 'admin' });
-  const memberId = await addPerson(app, { name: 'Mia Member', username: 'member' });
-  await addPerson(app, { name: 'Otto Other', username: 'other' });
+  const schedId = await addPerson(app, { name: 'Sam Scheduler', email: 'sched@example.com', role: 'admin' });
+  const memberId = await addPerson(app, { name: 'Mia Member', email: 'member@example.com' });
+  await addPerson(app, { name: 'Otto Other', email: 'other@example.com' });
   const actor = { id: schedId };
   const team = await services.teams.createTeam(actor, { name: 'Band' });
   const pos = await services.teams.createPosition(actor, team.id, { name: 'Vocals' });
@@ -172,13 +172,13 @@ async function boot() {
 
   // A working session for a role, whatever earlier fuzz requests did to the
   // account (reset its password, demoted it, logged it out, locked it).
-  async function session(username) {
-    const p = people[username];
+  async function session(who) {
+    const p = people[who];
     const { data, hasher } = app.container;
     await data.people.setPassword(p.id, await hasher.hash(PASSWORD), false);
     await data.people.update(p.id, { name: p.name, role: p.role, active: true });
     await data.people.setLoginFailures(p.id, { failedLogins: 0, lockedUntil: null });
-    const { token } = await services.auth.login(username, PASSWORD);
+    const { token } = await services.auth.login(`${who}@example.com`, PASSWORD);
     return `${COOKIE_NAME}=${token}`;
   }
   return { app, session };

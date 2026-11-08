@@ -14,7 +14,7 @@ async function boot() {
   const team = await data.teams.create({ name: 'Band' });
   const drums = await data.positions.create(team.id, { name: 'Drums' });
   await data.qualifications.setForPerson(s.memberId, [drums.id]);
-  const otherId = await addPerson(db, { name: 'Olive Other', username: 'olive' });
+  const otherId = await addPerson(db, { name: 'Olive Other', email: 'olive@example.com' });
   await data.qualifications.setForPerson(otherId, [drums.id]);
   const svc = await data.services.create({ date: '2025-01-12', title: 'Sunday service' });
   const [open, pending] = (await data.slots.createMany(svc.id, [drums.id, drums.id])).map((x) => x.id);

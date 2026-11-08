@@ -2,11 +2,13 @@
 
 ## Unreleased
 
-### Single sign-on (Google first), and log in with an email (Decision 0006)
+### Email logins and single sign-on, Google first (Decision 0006)
 
-- People have an optional email, set by schedulers on People. Log in with a username or the email.
-- Provider-agnostic sign-in (`/api/auth/:provider`), Google as the first provider when `FLOCK_GOOGLE_CLIENT_ID` and `FLOCK_GOOGLE_CLIENT_SECRET` are set; only emails already added by a scheduler get in, and refusals never reveal whether an email is in Flock. Accounts are linked by the provider's stable id (`sub`), passwords are optional, scopes are `openid email`. Redirect URI: `<FLOCK_PUBLIC_URL>/api/auth/google/callback`.
-- New column `people.email` and table `identities` (migration `0003_sign_in.sql`).
+- **Breaking: usernames are gone; the email is the login.** Needs a fresh database (the first schema changed in place). `create-admin <email> 'Full Name'`; `POST /api/login` takes `{ email, password }`.
+- People without an email can be added and scheduled but cannot log in (no invite).
+- An email is locked once its person has joined (against "profile takeover"); **Reset login** (was Reset password, `POST /api/people/:id/reset-login`) clears the password, linked sign-ins and sessions, unlocks the email and makes a new invite.
+- Provider-agnostic sign-in (`/api/auth/:provider`), Google as the first provider when `FLOCK_GOOGLE_CLIENT_ID` and `FLOCK_GOOGLE_CLIENT_SECRET` are set; only emails a scheduler added can link, and refusals never reveal whether an email is in Flock. Accounts are linked by the provider's stable id (`sub`), passwords are optional, scopes are `openid email`. Redirect URI: `<FLOCK_PUBLIC_URL>/api/auth/google/callback`.
+- Schema: `people.email` replaces `people.username`; new table `identities`.
 
 ### Fill open positions and how often volunteers serve
 
