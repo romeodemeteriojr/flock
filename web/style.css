@@ -654,6 +654,7 @@ th, td { text-align: left; padding: var(--s-2) var(--s-3); border-bottom: 1px so
   box-shadow: var(--shadow-2);
 }
 .auth-foot { text-align: center; margin-top: var(--s-5); }
+.doc { max-width: 40rem; margin: var(--s-8) auto; padding: 0 var(--s-4); }
 .auth-providers { display: flex; flex-direction: column; gap: var(--s-3); margin-top: var(--s-4); }
 
 /* ---------- my schedule: hero card and serving cards ---------- */

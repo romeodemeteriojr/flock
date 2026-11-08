@@ -35,7 +35,10 @@ This guide is for the person who schedules volunteers. You do not need to be a p
    ```
 
 5. Optional, Google sign-in: in your Google OAuth client add the redirect URI
-   `https://<app>.fly.dev/api/auth/google/callback`, then:
+   `https://<app>.fly.dev/api/auth/google/callback`. Under Branding set the home page
+   `https://<app>.fly.dev`, the privacy policy `https://<app>.fly.dev/privacy.html` and the
+   authorized domain `<app>.fly.dev` (Google will not publish the app without them;
+   leave the logo empty). Then:
 
    ```
    fly secrets set FLOCK_GOOGLE_CLIENT_ID=... FLOCK_GOOGLE_CLIENT_SECRET=...

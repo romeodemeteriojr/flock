@@ -33,6 +33,7 @@ export function render(state, opts = {}) {
         </div>` : ''}
       </div>
       <p class="hint auth-foot">${iconSlot('lock', 'icon-sm')} Forgot your password? Ask the scheduler to reset your login.</p>
+      <p class="hint auth-foot"><a href="/privacy.html">Privacy</a></p>
     </section>
   `);
 }
