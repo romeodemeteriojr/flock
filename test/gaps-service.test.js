@@ -142,7 +142,7 @@ test('gaps: blocked only for pending/accepted people whose blockout covers the d
   assert.deepEqual(r.items.map((i) => [i.type, i.slotId]), [['blocked', a], ['inactive', c]]);
 });
 
-test('gaps: sorted by date, then team; default range is today to 28 days ahead', async () => {
+test('gaps: sorted per service (date, then time), then team; default range is today to 28 days ahead', async () => {
   const { svc, drums, sound, service } = await setup();
   const { slots: [t1, b1] } = await service('2025-01-12', [sound.id, drums.id]);
   const { slots: [b0] } = await service('2025-01-05', [drums.id]);
@@ -151,7 +151,7 @@ test('gaps: sorted by date, then team; default range is today to 28 days ahead',
   await service('2025-02-03', [drums.id]); // today + 29: outside
   const { slots: [evening] } = await service('2025-01-12', [drums.id], '18:00', 'Evening');
   const r = await svc.gaps();
-  assert.deepEqual(r.items.map((i) => i.slotId), [b0, b1, evening, t1, last]);
+  assert.deepEqual(r.items.map((i) => i.slotId), [b0, b1, t1, evening, last]);
 });
 
 test('gaps: from/to validation and range limits', async () => {

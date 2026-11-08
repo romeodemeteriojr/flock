@@ -447,33 +447,26 @@ async function gapsSetup(extra = {}, win) {
   return { api, root, s };
 }
 
-test('gaps: summary counts and groups in a fixed order with plain labels', async () => {
+test('gaps: summary counts by kind, then one group per service (roster day) in date order, each item with its kind', async () => {
   const { root } = await gapsSetup();
   const h = root.innerHTML;
   assert.match(h, /data-count="open">2<\/strong> Nobody yet/);
   assert.match(h, /data-count="inactive">0<\/strong> No longer active/);
-  // Group headers: icon + label + count badge, in the correct order
-  const labels = ['Nobody yet', 'Said no', "Hasn&#39;t answered", 'Now away'];
-  const types = ['open', 'declined', 'unanswered', 'blocked'];
-  // Each group must appear in the fixed GAP_ORDER; positions must be strictly ascending.
-  const positions = types.map((t) => [h.indexOf(`data-gap-group="${t}"`), h.indexOf(`data-gap-count="${t}"`)]);
-  assert.ok(positions.every(([i]) => i > 0), 'all group markers present');
-  // Orders: first-group < first-of-next-group < ...
-  const firstPositions = positions.map(([i]) => i);
-  for (let i = 1; i < firstPositions.length; i++) {
-    assert.ok(firstPositions[i] > firstPositions[i - 1], `group order: ${types[i - 1]} before ${types[i]}`);
-  }
-  // Each count badge has a correct aria-label like "1 declined" (role="img").
-  const badgeRegex = /data-gap-count="(\w+)" aria-label="(\d+) (\w+)"/g;
-  const badges = [...h.matchAll(badgeRegex)];
-  assert.equal(badges.length, 4, 'exactly 4 count badges');
-  for (const [_, type, n, label] of badges) {
-    assert.equal(n, String(GAPS.summary[type]), `badge count for ${type}`);
-    assert.equal(label, type, `badge type for ${type}`);
-    assert.ok(n !== '0', `${type} badge is visible (count > 0)`);
-  }
-  assert.ok(!h.includes('data-gap-group="inactive"'));
-  assert.deepEqual(gaps.groupGaps(GAPS.items).map((g) => g.label), ['Nobody yet', 'Said no', "Hasn't answered", 'Now away']);
+  // One group per service (its date and time), in date order, with a count badge (role="img").
+  assert.deepEqual([...h.matchAll(/data-gap-service="([^"]+)"/g)].map((x) => x[1]), ['2026-11-08T09:00', '2026-11-15T09:00']);
+  const badges = [...h.matchAll(/role="img" data-gap-count="([^"]+)" aria-label="([^"]+)">(\d+)</g)].map((x) => x.slice(1));
+  assert.deepEqual(badges, [['2026-11-08T09:00', '4 gaps', '4'], ['2026-11-15T09:00', '1 gap', '1']]);
+  assert.match(h, /<span class="gap-label num">Sun 8 Nov at 9:00 am<\/span>/);
+  // Inside a group, each item still says what kind of gap it is, in words, with the person when there is one.
+  const first = h.slice(h.indexOf('data-gap-service="2026-11-08T09:00"'), h.indexOf('data-gap-service="2026-11-15T09:00"'));
+  assert.deepEqual([...first.matchAll(/data-gap-type="(\w+)"/g)].map((x) => x[1]), ['declined', 'open', 'blocked', 'unanswered']);
+  assert.match(first, /<strong>Drums<\/strong> \(Band\)/);
+  assert.match(first, /Said no<\/span> <span class="hint">Cy Fox<\/span>/);
+  assert.match(first, /Hasn&#39;t answered<\/span> <span class="hint">Bo Diaz/);
+  assert.match(first, /Nobody yet<\/span><\/span>/, 'an open position has no name');
+  assert.deepEqual(gaps.groupGaps(GAPS.items).map((g) => [g.key, g.items.map((i) => i.slotId)]), [['2026-11-08T09:00', [3, 4, 6, 2]], ['2026-11-15T09:00', [5]]]);
+  // Any order in, date order out; kinds the page does not know are left out.
+  assert.deepEqual(gaps.groupGaps([GAPS.items[4], { ...GAPS.items[0], type: 'mystery' }, GAPS.items[1]]).map((g) => [g.key, g.items.length]), [['2026-11-08T09:00', 1], ['2026-11-15T09:00', 1]]);
   const empty = await gapsSetup({ 'GET /api/admin/gaps': { summary: {}, items: [] } });
   assert.match(empty.root.innerHTML, /No gaps/);
 });

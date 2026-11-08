@@ -823,6 +823,7 @@ th, td { text-align: left; padding: var(--s-2) var(--s-3); border-bottom: 1px so
   color: var(--danger); background: var(--danger-bg);
 }
 .gap-list > li { border: 0; padding: 0; }
+.gap-kind { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); }
 .reminders-card { margin-top: var(--s-8); }
 .reminder-list { margin-top: var(--s-3); }
 .reminder { display: block; }

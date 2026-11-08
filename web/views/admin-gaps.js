@@ -1,6 +1,7 @@
-// Gaps page (scheduler only): what still needs someone, grouped by kind with
-// plain labels; tapping an item opens the slot panel. Also the reminders
-// panel: drafted messages to copy. Flock never sends anything itself.
+// Gaps page (scheduler only): what still needs someone, grouped per service
+// (each roster day), each with a plain label for its kind; tapping an item
+// opens the slot panel. Also the reminders panel: drafted messages to copy.
+// Flock never sends anything itself.
 import { html } from '../lib/html.js';
 import { formatDate, formatTime, todayString } from '../lib/dates.js';
 import { createSlotPanel, copyText } from '../lib/slotpanel.js';
@@ -21,21 +22,21 @@ export const GAP_LABELS = Object.freeze({
   blocked: 'Now away',
   inactive: 'No longer active',
 });
-const GAP_HINTS = {
-  open: 'Nobody is in these positions.',
-  declined: 'The person said they can not come. Find someone else.',
-  unanswered: 'The person has not said yes or no yet. Remind them, or find someone else.',
-  blocked: 'The person added days they can not serve after they were scheduled.',
-  inactive: 'The person is no longer active. Find someone else.',
-};
 export const GAP_ORDER = Object.freeze(Object.keys(GAP_LABELS));
 
 // ---------- pure helpers (tested directly) ----------
 
+// One group per service, by date and time (a service is unique by its date and
+// time), keeping the items' order inside each group.
 export function groupGaps(items) {
-  const groups = GAP_ORDER.map((type) => ({ type, label: GAP_LABELS[type], items: [] }));
-  for (const it of items ?? []) groups.find((g) => g.type === it.type)?.items.push(it);
-  return groups.filter((g) => g.items.length);
+  const groups = new Map();
+  for (const it of items ?? []) {
+    if (!Object.hasOwn(GAP_LABELS, it.type)) continue; // only the kinds this page knows
+    const key = `${it.date}T${it.time}`;
+    if (!groups.has(key)) groups.set(key, { key, date: it.date, time: it.time, serviceTitle: it.serviceTitle, items: [] });
+    groups.get(key).items.push(it);
+  }
+  return [...groups.values()].sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
 }
 
 // A gap item as the slot panel wants it.
@@ -81,11 +82,13 @@ const GAP_ICONS = Object.freeze({
   inactive: 'user-off',
 });
 
+const gapWords = (n) => (n === 1 ? '1 gap' : `${n} gaps`);
+
 function gapItem(it) {
   return html`<li>
     <button type="button" class="slot-btn gap-btn" data-action="slot-open" data-id="${it.slotId}">
-      <span class="slot-who"><strong>${it.positionName}</strong> (${it.teamName}), <span class="num">${formatDate(it.date)} at ${formatTime(it.time)}</span></span>
-      <span class="hint">${it.serviceTitle}${it.personName && it.type !== 'open' ? html`. ${it.personName}` : ''}</span>
+      <span class="slot-who"><strong>${it.positionName}</strong> (${it.teamName})</span>
+      <span class="gap-kind"><span class="chip chip-${GAP_TONE[it.type]}" data-gap-type="${it.type}">${iconSlot(GAP_ICONS[it.type], 'chip-icon')}${GAP_LABELS[it.type]}</span>${it.personName && it.type !== 'open' ? html` <span class="hint">${it.personName}</span>` : ''}</span>
       ${iconSlot('chevron', 'gap-chevron')}
     </button>
   </li>`;
@@ -127,11 +130,12 @@ export function renderScreen(m, panelHtml = '') {
     ${panelHtml}
     <h2 class="section-title">Next 4 weeks</h2>
     ${summary(m.summary)}
-    ${groups.length ? groups.map((g) => html`<section class="gap-group" data-gap-group="${g.type}">
-      <h3 class="gap-title"><span class="gap-icon">${iconSlot(GAP_ICONS[g.type])}</span> <span class="gap-label">${g.label}</span> <span class="gap-count" role="img" data-gap-count="${g.type}" aria-label="${g.items.length} ${g.type}">${g.items.length}</span></h3>
-      <p class="hint">${GAP_HINTS[g.type]}</p>
+    ${groups.length ? html`<p class="hint">Tap a position to find someone.</p>
+    ${groups.map((g) => html`<section class="gap-group" data-gap-service="${g.key}">
+      <h3 class="gap-title"><span class="gap-icon">${iconSlot('calendar')}</span> <span class="gap-label num">${formatDate(g.date)} at ${formatTime(g.time)}</span> <span class="gap-count" role="img" data-gap-count="${g.key}" aria-label="${gapWords(g.items.length)}">${g.items.length}</span></h3>
+      <p class="hint">${g.serviceTitle}</p>
       <ul class="list gap-list">${g.items.map(gapItem)}</ul>
-    </section>`) : emptyState('No gaps. Every position has someone.', 'art-done')}
+    </section>`)}` : emptyState('No gaps. Every position has someone.', 'art-done')}
     ${reminders(m)}
   `);
 }

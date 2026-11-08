@@ -107,6 +107,8 @@ export function createGapsService(deps) {
      * Slots that still need attention in an inclusive date range (default:
      * today to 4 weeks ahead, at most 366 days). Each slot appears once, as
      * the first type that applies: open, declined, inactive, blocked, unanswered.
+     * Sorted per service (date, then time), then team and position, so the
+     * page can group them by service.
      */
     async gaps({ from, to } = {}) {
       const now = today();
@@ -142,9 +144,9 @@ export function createGapsService(deps) {
           found.push({ item, s });
         }
         found.sort((a, b) => (a.s.serviceDate < b.s.serviceDate ? -1 : a.s.serviceDate > b.s.serviceDate ? 1 : 0)
+          || (a.s.serviceTime < b.s.serviceTime ? -1 : a.s.serviceTime > b.s.serviceTime ? 1 : 0)
           || a.s.teamSort - b.s.teamSort
           || byName(a.s.teamName, b.s.teamName)
-          || (a.s.serviceTime < b.s.serviceTime ? -1 : a.s.serviceTime > b.s.serviceTime ? 1 : 0)
           || a.s.positionSort - b.s.positionSort
           || a.s.id - b.s.id);
         return { summary, items: found.map((f) => f.item) };
