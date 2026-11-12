@@ -1,0 +1,61 @@
+name: Release
+
+# After a pull request is merged into main, its release label decides the next
+# version (scripts/release.js): package.json and CHANGELOG.md are updated on
+# main, the vX.Y.Z tag is pushed and a GitHub release is made from the
+# CHANGELOG section. "no release" does nothing. Deploying stays manual: run the
+# Deploy workflow with the new tag.
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24.x'
+      - name: Work out the version
+        id: plan
+        env:
+          LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+        run: node scripts/release.js plan --labels "$LABELS" >> "$GITHUB_OUTPUT"
+      - name: Bump, tag and release
+        if: steps.plan.outputs.version != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.plan.outputs.version }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          node scripts/release.js apply "$VERSION"
+          node scripts/check-version.js --tag "v$VERSION"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          if ! git diff --quiet; then
+            git commit -am "Release v$VERSION (#$PR)"
+            git push origin HEAD:main
+          fi
+          git tag -a "v$VERSION" -m "Release v$VERSION"
+          git push origin "v$VERSION"
+          node scripts/release.js notes "$VERSION" > notes.md
+          gh release create "v$VERSION" --title "v$VERSION" --notes-file notes.md --verify-tag
+          {
+            echo "## Released v$VERSION"
+            echo
+            echo "Deploy it: Actions, Deploy, Run workflow, tag \`v$VERSION\`."
+          } >> "$GITHUB_STEP_SUMMARY"

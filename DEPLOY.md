@@ -192,16 +192,29 @@ GitHub Actions runs the checks for you and, when you press a button, deploys.
 
 ### How to release
 
-1. Raise the version in `package.json` and add a matching `## X.Y.Z` heading to `CHANGELOG.md`.
-2. Merge that change to `main` and wait for the checks to go green.
-3. Tag it: `git tag vX.Y.Z` and push the tag: `git push origin vX.Y.Z`.
-4. Open the Actions tab, choose **Deploy**, press **Run workflow** and type the tag (for example `v0.2.0`).
+Versions follow semantic versioning and come from the pull request's **release label**:
+
+| Label | Meaning | Example |
+| --- | --- | --- |
+| `breaking` | incompatible change (needs a fresh database, removes an API) | 1.4.2 → 2.0.0 |
+| `feat` | something new | 0.4.0 → 0.5.0 |
+| `fix` | a bug fix | 0.5.0 → 0.5.1 |
+| `no release` | docs, CI, tidying | no new version |
+
+While Flock is 0.x, `breaking` bumps the middle number (0.5.3 → 0.6.0), as semantic versioning allows before 1.0.0.
+
+1. In the pull request, write what changed under `## Unreleased` at the top of `CHANGELOG.md`. Leave `package.json` alone.
+2. Add exactly one release label. The **Release label** check says which version merging will release, and fails if the label or the `## Unreleased` section is missing.
+3. Merge to `main` when the checks are green. The **Release** workflow then sets the version in `package.json`, renames `## Unreleased` to that version, pushes the `vX.Y.Z` tag and makes a GitHub release from the CHANGELOG section. Nothing is deployed.
+4. To deploy, open the Actions tab, choose **Deploy**, press **Run workflow** and type the tag (for example `v0.5.0`), or run `gh workflow run deploy.yml -f tag=v0.5.0`.
+
+Do it by hand only if the Release workflow cannot run: set the version in `package.json`, rename the CHANGELOG heading, merge, then `git tag vX.Y.Z` and `git push origin vX.Y.Z`.
 
 The free GitHub plan has no approval gate, so pressing the manual Run workflow button IS the gate. Nothing deploys by itself.
 
 ### What CI checks on every push
 
-On every push to `main` and every pull request, on Node 22 and 24: the whole test suite (including the architecture and security tests), a coverage summary, `scripts/check-config.js` and `scripts/check-version.js`.
+On every push to `main` and every pull request, on Node 22 and 24: the whole test suite (including the architecture and security tests), a coverage summary, `scripts/check-config.js` and `scripts/check-version.js`. Pull requests also run the **Release label** check (`scripts/release.js`).
 
 ### If a deploy fails, or you need to roll back
 

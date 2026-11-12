@@ -1,0 +1,32 @@
+name: Release label
+
+# Every pull request needs exactly one release label: breaking, feat, fix or
+# "no release". This check says which version merging it will release, and
+# that CHANGELOG.md has an "## Unreleased" section for it (scripts/release.js).
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, labeled, unlabeled]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-label-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  label:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24.x'
+      - name: Check the release label
+        env:
+          LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+        run: node scripts/release.js check --labels "$LABELS"

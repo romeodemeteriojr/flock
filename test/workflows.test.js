@@ -4,10 +4,11 @@ import { readFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { join, dirname } from 'node:path';
 import { checkVersion } from '../scripts/check-version.js';
+import { bumpFor, nextVersion, latestTagVersion, releaseChangelog, changelogSection, plan } from '../scripts/release.js';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = (p) => readFileSync(join(root, p), 'utf8');
-const FILES = ['.github/workflows/ci.yml', '.github/workflows/deploy.yml'];
+const FILES = ['.github/workflows/ci.yml', '.github/workflows/deploy.yml', '.github/workflows/release.yml', '.github/workflows/release-label.yml'];
 const ci = () => read(FILES[0]);
 const deploy = () => read(FILES[1]);
 const code = (t) => t.split('\n').map((l) => l.replace(/^(\s*)#.*$/, '$1'));
@@ -89,7 +90,7 @@ test('no dangerous triggers anywhere', () => {
 test('no ${{ }} expression inside run blocks', () => {
   for (const f of FILES) {
     const runs = runLines(read(f));
-    assert.ok(runs.length > 3, f);
+    assert.ok(runs.length > 0, f);
     for (const r of runs) assert.doesNotMatch(r.text, /\$\{\{/, `${f}:${r.line}`);
   }
 });
@@ -149,4 +150,78 @@ test('DEPLOY.md has the new section and no token-like string', () => {
     assert.ok(section.includes(w), w);
   }
   assert.doesNotMatch(t, /\bFlyV1\s+\S+|\bfo1_[A-Za-z0-9_-]{10,}|\bgh[pousr]_[A-Za-z0-9]{20,}|\b[A-Za-z0-9+/_-]{40,}={0,2}(?=\s|$)/);
+});
+
+// ---------- semantic versioning from pull request labels ----------
+
+test('release labels: exactly one of breaking, feat, fix or "no release"', () => {
+  assert.deepEqual(bumpFor(['feat', 'documentation']), { bump: 'minor' });
+  assert.deepEqual(bumpFor(['Fix']), { bump: 'patch' });
+  assert.deepEqual(bumpFor(['breaking']), { bump: 'major' });
+  assert.deepEqual(bumpFor(['no release', 'dependencies']), { bump: null });
+  assert.match(bumpFor([]).problem, /Add one release label/);
+  assert.match(bumpFor(['enhancement']).problem, /Add one release label/);
+  assert.match(bumpFor(['feat', 'fix']).problem, /only one release label/);
+});
+
+test('nextVersion: semver, with breaking changes bumping the minor before 1.0.0', () => {
+  assert.equal(nextVersion('0.4.0', 'minor'), '0.5.0');
+  assert.equal(nextVersion('0.5.0', 'patch'), '0.5.1');
+  assert.equal(nextVersion('0.5.3', 'major'), '0.6.0');
+  assert.equal(nextVersion('1.2.3', 'major'), '2.0.0');
+  assert.equal(nextVersion('1.2.3', 'minor'), '1.3.0');
+  assert.throws(() => nextVersion('1.2', 'patch'), /not a version/);
+  assert.throws(() => nextVersion('1.2.3', 'huge'), /Unknown bump/);
+  assert.equal(latestTagVersion(['v0.3.0', 'v0.10.0', 'v0.4.0', 'junk', 'v1.0.0-rc1', '']), '0.10.0');
+  assert.equal(latestTagVersion([]), '0.0.0');
+});
+
+test('releaseChangelog renames Unreleased; changelogSection gives the release notes', () => {
+  const log = '# Changelog\n\n## Unreleased\n\n- New thing\n\n## 0.4.0\n\n- Old thing\n';
+  const done = releaseChangelog(log, '0.5.0');
+  assert.equal(done, '# Changelog\n\n## 0.5.0\n\n- New thing\n\n## 0.4.0\n\n- Old thing\n');
+  assert.equal(releaseChangelog(done, '0.5.0'), done, 'already named: unchanged');
+  assert.throws(() => releaseChangelog('# Changelog\n\n## 0.4.0\n', '0.5.0'), /needs a "## Unreleased" section/);
+  assert.throws(() => releaseChangelog('## Unreleased\n\n## 0.5.0\n', '0.5.0'), /both/);
+  assert.equal(changelogSection(done, '0.5.0'), '- New thing');
+  assert.equal(changelogSection(done, '0.4.0'), '- Old thing');
+  assert.equal(changelogSection(done, '9.9.9'), '');
+});
+
+test('plan: what a pull request releases, and what stops it', () => {
+  const changelog = '## Unreleased\n\n- x\n\n## 0.4.0\n';
+  assert.deepEqual(plan({ labels: ['feat'], released: '0.4.0', pkgVersion: '0.4.0', changelog }), { bump: 'minor', version: '0.5.0', problems: [] });
+  assert.deepEqual(plan({ labels: ['no release'], released: '0.4.0', pkgVersion: '0.4.0', changelog: '' }), { bump: null, version: null, problems: [] });
+  // Bumped by hand to the right number (like 0.5.0) is fine; a wrong number is not.
+  assert.deepEqual(plan({ labels: ['feat'], released: '0.4.0', pkgVersion: '0.5.0', changelog: '## 0.5.0\n' }).problems, []);
+  assert.match(plan({ labels: ['fix'], released: '0.4.0', pkgVersion: '0.5.0', changelog }).problems[0], /package.json says 0.5.0, but this would release 0.4.1/);
+  assert.match(plan({ labels: ['fix'], released: '0.4.0', pkgVersion: '0.4.0', changelog: '## 0.4.0\n' }).problems[0], /Unreleased/);
+  assert.match(plan({ labels: [], released: '0.4.0', pkgVersion: '0.4.0', changelog }).problems[0], /Add one release label/);
+});
+
+test('release.yml: only after a merge into main, writes contents, plans from the labels, tags and releases', () => {
+  const t = read('.github/workflows/release.yml');
+  const onBlock = t.match(/^on:\n((?: {2}.*\n|\n)+)/m)[1];
+  assert.deepEqual(onBlock.match(/^ {2}(\w+):/gm).map((s) => s.trim()), ['pull_request:']);
+  assert.match(onBlock, /types: \[closed\]/);
+  assert.match(onBlock, /branches: \[main\]/);
+  assert.match(t, /^permissions:\s*\n {2}contents: write\s*$/m);
+  assert.match(t, /if: github\.event\.pull_request\.merged == true/);
+  assert.match(t, /^concurrency:\s*\n {2}group: release\s*\n {2}cancel-in-progress: false/m);
+  assert.match(t, /LABELS: \$\{\{ join\(github\.event\.pull_request\.labels\.\*\.name, ','\) \}\}/);
+  assert.match(t, /release\.js plan --labels "\$LABELS"/);
+  assert.match(t, /release\.js apply "\$VERSION"/);
+  assert.match(t, /check-version\.js --tag "v\$VERSION"/);
+  assert.match(t, /git push origin "v\$VERSION"/);
+  assert.match(t, /gh release create "v\$VERSION"/);
+  assert.doesNotMatch(t, /flyctl|FLY_API_TOKEN|workflow_dispatch/, 'releasing never deploys');
+});
+
+test('release-label.yml: runs on label changes, read-only', () => {
+  const t = read('.github/workflows/release-label.yml');
+  assert.match(t, /types: \[opened, reopened, synchronize, labeled, unlabeled\]/);
+  assert.match(t, /^permissions:\s*\n {2}contents: read\s*$/m);
+  assert.match(t, /fetch-depth: 0/);
+  assert.match(t, /release\.js check --labels "\$LABELS"/);
+  assert.match(read('.github/dependabot.yml'), /- no release/);
 });

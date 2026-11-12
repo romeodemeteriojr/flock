@@ -266,7 +266,7 @@ test('help, version and unknown commands', () => {
     const h = flock(t.dir, ['help']);
     assert.equal(h.code, 0);
     for (const w of ['create-admin', 'demo', 'backup', 'export', 'serve', 'version']) assert.ok(h.out.includes(w), w);
-    assert.equal(flock(t.dir, ['version']).out.trim(), 'flock 0.5.0');
+    assert.equal(flock(t.dir, ['version']).out.trim(), `flock ${JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version}`);
     const u = flock(t.dir, ['frobnicate']);
     assert.notEqual(u.code, 0);
     assert.match(u.err, /Unknown command: frobnicate/);

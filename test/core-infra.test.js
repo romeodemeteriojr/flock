@@ -13,7 +13,7 @@ import { systemClock, fixedClock } from '../src/infra/clock.js';
 import { secureRandom, seededRandom } from '../src/infra/random.js';
 import { scryptHasher, fastHasher } from '../src/infra/hasher.js';
 import { createLogger, silentLogger } from '../src/infra/logger.js';
-import { loadConfig, validateConfig, ConfigError } from '../src/config.js';
+import { loadConfig, validateConfig, ConfigError, VERSION } from '../src/config.js';
 import { createRouter, mapError } from '../src/http.js';
 
 // ---------- errors ----------
@@ -636,7 +636,7 @@ test('serve logs startup and shuts down cleanly on SIGTERM', { skip: process.pla
     assert.ok(msgs.includes('flock stopping'));
     assert.ok(msgs.includes('flock stopped'));
     const started = events.find((e) => e.msg === 'flock started');
-    assert.equal(started.version, '0.5.0');
+    assert.equal(started.version, VERSION);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

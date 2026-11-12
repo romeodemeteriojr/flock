@@ -5,3 +5,8 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    # Action updates change no Flock code: no new version (scripts/release.js).
+    labels:
+      - dependencies
+      - github_actions
+      - no release
