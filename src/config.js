@@ -1,4 +1,5 @@
 import { PRESETS } from './infra/oidc.js';
+import { vapidKeysProblem } from './infra/webpush.js';
 export function loadConfig(env = process.env) {
   const port = Number.parseInt(env.FLOCK_PORT, 10);
   return validateConfig({
@@ -13,8 +14,16 @@ export function loadConfig(env = process.env) {
       clientId: env[`${p.env}_CLIENT_ID`]?.trim() || undefined,
       clientSecret: env[`${p.env}_CLIENT_SECRET`]?.trim() || undefined,
     }])),
+    // Push notifications (decision 0008): off until both keys are set.
+    push: {
+      publicKey: env.FLOCK_VAPID_PUBLIC_KEY?.trim() || undefined,
+      privateKey: env.FLOCK_VAPID_PRIVATE_KEY?.trim() || undefined,
+    },
   });
 }
+
+/** True when the settings turn push notifications on. */
+export const pushEnabled = (config) => Boolean(config?.push?.publicKey && config.push.privateKey);
 
 export class ConfigError extends Error {
   constructor(problems) {
@@ -53,6 +62,16 @@ export function validateConfig(config) {
     const env = PRESETS[id]?.env;
     if (!env) problems.push(`sso.${id} is not a known sign-in provider`);
     else if (!s?.clientId !== !s?.clientSecret) problems.push(`${PRESETS[id].label} sign-in needs both ${env}_CLIENT_ID and ${env}_CLIENT_SECRET, or neither`);
+  }
+  const push = config.push ?? {};
+  if (!push.publicKey !== !push.privateKey) {
+    problems.push('Push notifications need both FLOCK_VAPID_PUBLIC_KEY and FLOCK_VAPID_PRIVATE_KEY, or neither');
+  } else if (push.publicKey) {
+    const keys = vapidKeysProblem(push.publicKey, push.privateKey);
+    if (keys) problems.push(keys);
+    if (!/^https:\/\//.test(config.publicUrl ?? '')) {
+      problems.push('Push notifications need FLOCK_PUBLIC_URL to be the https:// address of Flock');
+    }
   }
   if (problems.length) throw new ConfigError(problems);
   return config;

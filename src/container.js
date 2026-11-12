@@ -10,7 +10,7 @@
 // holding exactly the dependencies they declare in SERVICE_SPECS.
 import { mkdirSync } from 'node:fs';
 import path from 'node:path';
-import { loadConfig, validateConfig } from './config.js';
+import { loadConfig, validateConfig, pushEnabled } from './config.js';
 import { openDb } from './db.js';
 import { createData } from './data/index.js';
 import { systemClock } from './infra/clock.js';
@@ -18,6 +18,7 @@ import { secureRandom } from './infra/random.js';
 import { scryptHasher } from './infra/hasher.js';
 import { createLogger } from './infra/logger.js';
 import { ssoProviders } from './infra/oidc.js';
+import { createWebPush, disabledPush } from './infra/webpush.js';
 import { createAuthService } from './services/auth-service.js';
 import { createPeopleService } from './services/people-service.js';
 import { createTeamsService } from './services/teams-service.js';
@@ -27,6 +28,7 @@ import { createAssignmentsService } from './services/assignments-service.js';
 import { createGapsService } from './services/gaps-service.js';
 import { createAvailabilityService } from './services/availability-service.js';
 import { createAutofillService } from './services/autofill-service.js';
+import { createNotificationsService } from './services/notifications-service.js';
 
 /** Infrastructure every service may ask for. */
 export const CORE_DEPS = Object.freeze(['data', 'clock', 'random', 'hasher', 'logger', 'config']);
@@ -40,12 +42,13 @@ export const SERVICE_SPECS = Object.freeze({
   auth: { factory: createAuthService, needs: [...CORE, 'sso'] },
   people: { factory: createPeopleService, needs: [...CORE, 'auth'] },
   teams: { factory: createTeamsService, needs: [...CORE] },
-  calendar: { factory: createCalendarService, needs: [...CORE, 'teams'] },
+  calendar: { factory: createCalendarService, needs: [...CORE, 'teams', 'notifications'] },
   blockouts: { factory: createBlockoutsService, needs: [...CORE] },
-  assignments: { factory: createAssignmentsService, needs: [...CORE, 'people', 'teams', 'calendar', 'blockouts'] },
-  gaps: { factory: createGapsService, needs: [...CORE, 'teams', 'calendar', 'blockouts', 'assignments'] },
+  assignments: { factory: createAssignmentsService, needs: [...CORE, 'people', 'teams', 'calendar', 'blockouts', 'notifications'] },
+  gaps: { factory: createGapsService, needs: [...CORE, 'teams', 'calendar', 'blockouts', 'assignments', 'notifications'] },
   availability: { factory: createAvailabilityService, needs: [...CORE] },
-  autofill: { factory: createAutofillService, needs: [...CORE, 'assignments'] },
+  autofill: { factory: createAutofillService, needs: [...CORE, 'assignments', 'notifications'] },
+  notifications: { factory: createNotificationsService, needs: [...CORE, 'push'] },
 });
 
 export class ContainerError extends Error {
@@ -62,6 +65,7 @@ const SHAPES = {
   hasher: ['hash', 'verify'],
   logger: ['debug', 'info', 'warn', 'error'],
   data: ['tx'],
+  push: ['send'],
 };
 
 function checkShape(name, value) {
@@ -74,6 +78,12 @@ function checkShape(name, value) {
 
 function stderrLogger() {
   return createLogger({ level: 'info', write: (line) => process.stderr.write(`${line}\n`) });
+}
+
+// Push notifications (decision 0008): a real sender once the keys are set.
+function defaultPush(config, clock) {
+  if (!pushEnabled(config)) return disabledPush();
+  return createWebPush({ ...config.push, subject: config.publicUrl, clock });
 }
 
 function defaultDb(config, clock) {
@@ -142,7 +152,7 @@ export function buildServices(core, specs, ready = {}) {
 
 /**
  * @param {object} [overrides]  Any part may be replaced:
- *   config, env (passed to loadConfig), clock, random, hasher, logger, db, data, sso,
+ *   config, env (passed to loadConfig), clock, random, hasher, logger, db, data, sso, push,
  *   services (ready-made instances by name), factories (service factories by name,
  *   a function or {factory, needs}).
  */
@@ -168,7 +178,8 @@ export function createContainer(overrides = {}) {
   const data = has('data') ? need('data') : createData(db);
 
   const sso = has('sso') ? overrides.sso : ssoProviders(config.sso);
-  const core = { data, clock, random, hasher, logger, config, sso };
+  const push = has('push') ? need('push') : defaultPush(config, clock);
+  const core = { data, clock, random, hasher, logger, config, sso, push };
   const services = Object.freeze(buildServices(core, specsWith(overrides.factories), overrides.services ?? {}));
 
   return {
@@ -179,6 +190,7 @@ export function createContainer(overrides = {}) {
     logger,
     data,
     sso,
+    push,
     services,
     db,
     /** Close the database, but only if the container opened it. */

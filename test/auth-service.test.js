@@ -114,6 +114,37 @@ test('auth service: authenticate, session expiry and logout', async () => {
   assert.equal(await s.auth.authenticate(t3), null, 'deactivated person is logged out');
 });
 
+test('auth service: a session in use renews to 14 days from now, at most once a day', async () => {
+  const s = await setup();
+  const DAY = 86400000;
+  const { token } = await s.auth.login('lee@example.com', 'lee-secret-1');
+  const expires = async () => (await s.data.sessions.findByTokenHash(tokenHash(token))).expiresAt;
+  const at = (ms) => new Date(Date.parse(T0) + ms).toISOString();
+  assert.deepEqual(await s.auth.session(token), { person: await s.auth.authenticate(token), renewed: false });
+  s.clock.advance(DAY - 1);
+  assert.equal((await s.auth.session(token)).renewed, false, 'not within the first day');
+  assert.equal(await expires(), at(14 * DAY));
+  s.clock.advance(1);
+  assert.equal((await s.auth.session(token)).renewed, true);
+  assert.equal(await expires(), at(15 * DAY));
+  assert.equal((await s.auth.session(token)).renewed, false, 'once a day');
+  // Opening Flock every 13 days keeps the login for months.
+  for (let i = 0; i < 10; i++) {
+    s.clock.advance(13 * DAY);
+    assert.equal((await s.auth.session(token)).person.id, s.lee);
+  }
+  // authenticate alone never renews; 14 idle days still log out.
+  s.clock.advance(14 * DAY);
+  assert.equal(await s.auth.session(token), null);
+  assert.equal(await s.data.sessions.findByTokenHash(tokenHash(token)), null);
+  // Deactivated people are not renewed.
+  const t2 = (await s.auth.login('pat@example.com', 'pat-secret-1')).token;
+  await s.data.people.update(s.pat, { active: false });
+  s.clock.advance(2 * DAY);
+  assert.equal(await s.auth.session(t2), null);
+  assert.equal(await s.auth.session('short'), null);
+});
+
 test('auth service: changePassword rules and session handling', async () => {
   const s = await setup();
   const cur = (await s.auth.login('pat@example.com', 'pat-secret-1')).token;

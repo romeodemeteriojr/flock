@@ -27,7 +27,7 @@ async function webFiles(dir = WEB) {
 }
 const rel = (f) => '/' + path.relative(WEB, f).split(path.sep).join('/');
 
-const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.woff2': 'font/woff2', '.svg': 'image/svg+xml', '.png': 'image/png' };
+const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.woff2': 'font/woff2', '.svg': 'image/svg+xml', '.png': 'image/png', '.webmanifest': 'application/manifest+json' };
 
 const member = { id: 2, name: 'Mary', role: 'member' };
 const admin = { id: 1, name: 'Ann', role: 'admin' };
@@ -138,7 +138,7 @@ test('attr escapes for attributes and is not escaped twice', () => {
 test('route table has the pages with roles', () => {
   const byPath = Object.fromEntries(routes.map((r) => [r.path, r.role]));
   assert.deepEqual(byPath, {
-    '/login': 'public', '/welcome': 'open', '/password': 'any', '/': 'member', '/blockouts': 'member',
+    '/login': 'public', '/welcome': 'open', '/password': 'any', '/notifications': 'any', '/': 'member', '/blockouts': 'member',
     '/people': 'admin', '/teams': 'admin', '/services': 'admin', '/schedule': 'admin', '/gaps': 'admin',
   });
   for (const r of routes) {
@@ -400,7 +400,8 @@ test('every web module imports in Node without touching document or window', asy
     Object.defineProperty(globalThis, k, { configurable: true, get() { touched.push(k); return undefined; } });
   }
   try {
-    for (const f of files.filter((x) => rel(x) !== '/app.js')) {
+    // sw.js is a service worker script, not a page module (test/push-ui.test.js runs it).
+    for (const f of files.filter((x) => rel(x) !== '/app.js' && rel(x) !== '/sw.js')) {
       await import(pathToFileURL(f).href + '?probe');
       assert.deepEqual(touched, [], `${rel(f)} touched ${touched.join(', ')} at import`);
     }

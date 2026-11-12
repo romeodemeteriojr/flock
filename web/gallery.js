@@ -15,6 +15,7 @@ import * as nav from './views/nav.js';
 import * as login from './views/login.js';
 import * as welcome from './views/welcome.js';
 import * as password from './views/password.js';
+import * as notifications from './views/notifications.js';
 import * as notFound from './views/notfound.js';
 import * as mySchedule from './views/my-schedule.js';
 import * as myBlockouts from './views/my-blockouts.js';
@@ -237,8 +238,16 @@ function pages(d) {
   ${section('p-login', 'Log in', html`${frame('Empty', login.render({}))}${frame('Wrong password', login.render({}, { error: 'Wrong email or password', email: 'priya.demo@example.com' }))}`)}
   ${section('p-welcome', 'Join with an invite', html`${frame('Checking', welcome.render({}))}${frame('Choose a password', welcome.render({}, { info: { name: 'Priya Demo', email: 'priya.demo@example.com' } }))}${frame('Link gone', welcome.render({}, { error: 'This link has expired or was already used. Ask your scheduler for a new one.' }))}`)}
   ${section('p-password', 'Change my password', html`${frame('Change password', password.render({ user: me }))}${frame('With a problem', password.render({ user: me }, { error: "The two new passwords don't match. Please type them again." }))}`)}
+  ${section('p-notifications', 'Notifications (the bell)', html`
+    ${frame('Off', notifications.render({ user: me, push: { enabled: true, support: 'ok', status: 'off' } }))}
+    ${frame('On, test sent', notifications.render({ user: me, push: { enabled: true, support: 'ok', status: 'on' } }, { message: 'Sent. It should arrive in a few seconds.' }))}
+    ${frame('Blocked in the browser', notifications.render({ user: me, push: { enabled: true, support: 'ok', status: 'blocked' } }))}
+    ${frame('iPhone in Safari', notifications.render({ user: me, push: { enabled: true, support: 'ios-install', status: 'off' } }))}
+    ${frame('Old iPhone', notifications.render({ user: me, push: { enabled: true, support: 'ios-update', status: 'off' } }))}
+    ${frame('Not set up', notifications.render({ user: me, push: { enabled: false } }))}`)}
   ${section('p-home', 'My schedule (volunteer home)', html`
     ${frame('Loading', mySchedule.render({}, { today: d.today, loading: true }))}
+    ${frame('Invited to turn on notifications', mySchedule.render({ push: { support: 'ok' } }, { today: d.today, loading: false, showPush: true, data: { nextServing: d.ITEMS[0], items: [d.ITEMS[0]], rosters: d.ROSTERS } }))}
     ${frame('Serving soon, one to answer', sched({ data: { nextServing: d.ITEMS[0], items: d.ITEMS, rosters: d.ROSTERS } }))}
     ${frame('Full roster of the day, opened', sched({ openRosters: new Set([101]), data: { nextServing: d.ITEMS[0], items: d.ITEMS, rosters: d.ROSTERS } }))}
     ${frame('After saying yes', sched({ message: 'Thank you! You are confirmed.', data: { nextServing: d.ITEMS[1], items: [d.ITEMS[1]], rosters: d.ROSTERS } }))}
@@ -281,6 +290,12 @@ function pages(d) {
     ${frame('No services', screen('Schedule', schedule.renderScreen(schedModel({ services: [] }))))}`)}
   ${section('p-gaps', 'Gaps', html`
     ${frame('Gaps and reminders', screen('Gaps', gaps.renderScreen(gapsModel())))}
+    ${frame('Reminders with notifications on', screen('Gaps', gaps.renderScreen(gapsModel({ reminders: { weekOf: d.sunday, push: true, sent: new Set(), loading: false, error: '', notice: '',
+      list: d.REMINDERS.map((x, i) => ({ ...x, hasPush: i % 2 === 0 })) } }))))}
+    ${frame('Reminders sent', screen('Gaps', gaps.renderScreen(gapsModel({ reminders: { weekOf: d.sunday, push: true, loading: false, error: '',
+      sent: new Set(d.REMINDERS.filter((x, i) => i % 2 === 0).map((x) => x.personId)),
+      notice: gaps.sentWords(Math.ceil(d.REMINDERS.length / 2), Math.floor(d.REMINDERS.length / 2)),
+      list: d.REMINDERS.map((x, i) => ({ ...x, hasPush: i % 2 === 0 })) } }))))}
     ${frame('No gaps', screen('Gaps', gaps.renderScreen(gapsModel({ summary: {}, items: [], reminders: { weekOf: d.sunday, list: [], loading: false, error: '', notice: '' } }))))}`)}
   ${section('p-404', 'Page not found', frame('Not found', notFound.render({ user: me })))}
   ${section('live', 'Live demo: schedule and bottom sheet', html`<div class="gallery-live" data-live-schedule></div>`,

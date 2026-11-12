@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.5.0
+
+One new table (`push_devices`, migration `0003_push.sql`, added by itself): it deploys over 0.4.0. Notifications stay off until the church sets the two keys.
+
+### Notifications on volunteers' phones (Decision 0008)
+
+- Standard Web Push, sent by Flock itself: no outside account, no npm packages, no phone app. Payloads are encrypted (RFC 8291) and signed (VAPID, RFC 8292) with `node:crypto`; messages use WebKit's Declarative Web Push format.
+- Turned on by the church with `node bin/flock.js push-keys` and the secrets `FLOCK_VAPID_PUBLIC_KEY` / `FLOCK_VAPID_PRIVATE_KEY` (needs an `https://` `FLOCK_PUBLIC_URL`; both keys or neither, checked to be a pair). Then per person, per device: a card on My schedule and a bell in the top bar (**Turn on**, **Send me a test**, **Turn off**, help when blocked). iPhone in Safari: the Add to Home Screen steps (iOS 16.4+).
+- Flock is now an installable web app: `manifest.webmanifest`, 192/512 icons and a small service worker (`/sw.js`) that only shows notifications and opens Flock on tap. No offline caching.
+- Sent when a volunteer is asked (one per person for **Ask these people**, listing every unanswered ask), taken off or replaced, their position is removed, their service moves (date or time) or is cancelled; and to every scheduler when someone says no (tap opens Gaps). Not for accepts, not for your own clicks. Best effort: after the change is saved, never slowing the click; devices the push service says are gone are forgotten.
+- Gaps: **Send reminders** sends the week's reminders to everyone with notifications on ("Sent to 9; 3 to copy"); the rest, and anyone not reached, keep **Copy**. People: a **Notifications on** chip.
+- Devices are forgotten when that device logs out or turns them off, and all of a person's on Reset login and deactivate.
+- API: `GET /api/push`, `POST /api/me/push/on|off|test`, `POST /api/admin/reminders/send`; `GET /api/admin/reminders` adds `push` and `hasPush`; `GET /api/people` adds `notifications`; `POST /api/logout` takes an optional `pushEndpoint`.
+
+### Logins renew while used
+
+- A login now lasts until 14 days after it was last used (renewed at most once a day), so people who open Flock from notifications stay logged in. Logout, Reset login, deactivating and changing a password still end it.
+
 ## 0.4.0
 
 No database changes: it deploys over 0.3.0 as it is.

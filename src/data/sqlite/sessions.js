@@ -18,6 +18,10 @@ export function sessionsRepo({ db, run }) {
       return r ? { personId: r.person_id, expiresAt: r.expires_at } : null;
     }),
 
+    extend: (tokenHash, expiresAt) => run(() => Number(
+      db.prepare('UPDATE sessions SET expires_at = ? WHERE token_hash = ?').run(expiresAt, tokenHash).changes,
+    ) > 0),
+
     deleteByTokenHash: (tokenHash) => run(() => num(
       db.prepare('DELETE FROM sessions WHERE token_hash = ?').run(tokenHash).changes,
     )),

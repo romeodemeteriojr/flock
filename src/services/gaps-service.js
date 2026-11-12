@@ -4,7 +4,7 @@
 // sees HTTP objects and never runs SQL; it talks to the data layer through
 // `deps.data` and throws AppErrors (src/errors.js). Built once by
 // src/container.js.
-import { ValidationError, NotFoundError } from '../errors.js';
+import { ValidationError, NotFoundError, ConflictError } from '../errors.js';
 import { isValidDate, addDays, daysBetween, todayStr } from '../dates.js';
 
 /** How far ahead the gaps list looks by default, in days (4 weeks). */
@@ -69,10 +69,11 @@ function lastServedReason(lastServed, today) {
  * @param {import("../data/index.js").Data} deps.data  The data layer.
  * @param {{now: () => Date}} deps.clock
  * @param {{unansweredDays?: number}} [deps.config]  Validated settings (src/config.js).
+ * @param {object} deps.notifications  The notifications service (Send reminders, decision 0008).
  * @returns {object}
  */
 export function createGapsService(deps) {
-  const { data, clock } = deps;
+  const { data, clock, notifications } = deps;
   const today = () => todayStr(clock.now());
   const unansweredDays = () => {
     const n = deps.config?.unansweredDays;
@@ -219,51 +220,81 @@ export function createGapsService(deps) {
     },
 
     /**
-     * Draft reminders (never sent): one plain-text message per active person
-     * with pending or accepted slots in the 7 days starting weekOf (default
-     * today). Sorted by name.
+     * Draft reminders: one plain-text message per active person with pending or
+     * accepted slots in the 7 days starting weekOf (default today). Sorted by
+     * name. hasPush: they have notifications on, so Send reminders reaches them.
      */
-    async reminders({ weekOf } = {}) {
+    reminders: (input) => drafts(input),
+
+    /**
+     * Send the week's reminders as notifications to everyone who has them on
+     * (not the scheduler sending them). Waits for the push services.
+     * @returns {Promise<{weekOf: string, sent: number[], copy: number[]}>}  copy: everyone not reached
+     */
+    async sendReminders(actor, { weekOf } = {}) {
+      if (!notifications.settings().enabled) {
+        throw new ConflictError('Notifications are not set up on this Flock yet', { code: 'push_off' });
+      }
       const start = dateOr(weekOf, today(), 'Week of');
-      const end = addDays(start, REMINDER_DAYS - 1);
-      return data.tx(async (d) => {
-        const people = new Map((await d.people.list()).map((p) => [p.id, p]));
-        const byPerson = new Map();
-        for (const s of await d.slots.listForServices(start, end)) {
-          if (s.personId === null || !HOLDING.includes(s.status)) continue;
-          const person = people.get(s.personId);
-          if (!person || !person.active) continue;
-          if (!byPerson.has(person.id)) byPerson.set(person.id, { person, slots: [] });
-          byPerson.get(person.id).slots.push(s);
-        }
-        const out = [];
-        for (const { person, slots } of byPerson.values()) {
-          const parts = slots.map((s) => `${s.positionName} on ${shortDate(s.serviceDate)} at ${s.serviceTime}`);
-          const pending = slots.filter((s) => s.status === 'pending').length;
-          let ask;
-          if (pending === 0) ask = 'We are glad you can make it.';
-          else if (pending === slots.length) ask = 'Please open Flock and accept or decline.';
-          else ask = 'Please open Flock and accept or decline the ones you have not answered yet.';
-          const message = `Hi ${firstName(person.name)}, a reminder that you are serving as ${joinList(parts)}. ${ask} Thank you!`;
-          out.push({
-            personId: person.id,
-            name: person.name,
-            message,
-            items: slots.map((s) => ({
-              slotId: s.id,
-              serviceId: s.serviceId,
-              date: s.serviceDate,
-              time: s.serviceTime,
-              serviceTitle: s.serviceTitle,
-              positionName: s.positionName,
-              teamName: s.teamName,
-              status: s.status,
-            })),
-          });
-        }
-        out.sort((a, b) => byName(a.name, b.name) || a.personId - b.personId);
-        return out;
-      });
+      const list = await drafts({ weekOf: start });
+      const byId = new Map(list.map((r) => [r.personId, r]));
+      const targets = list.filter((r) => r.hasPush && r.personId !== actor?.id).map((r) => r.personId);
+      const endOfWeek = Date.parse(`${addDays(start, REMINDER_DAYS)}T00:00:00`);
+      const ttl = Math.max(3600, Math.floor((endOfWeek - clock.now().getTime()) / 1000));
+      const reached = await notifications.sendTo('reminder', targets,
+        (id) => notifications.message(byId.get(id).message), { ttl });
+      const sent = list.map((r) => r.personId).filter((id) => reached.get(id) === true);
+      const copy = list.map((r) => r.personId).filter((id) => !sent.includes(id));
+      await data.audit.log({ at: clock.now(), actorId: actor?.id ?? null, action: 'reminders.send',
+        detail: `week of ${start}: sent ${sent.length}, ${copy.length} to copy` });
+      return { weekOf: start, sent, copy };
     },
   };
+
+  // The reminder drafts (see reminders above).
+  async function drafts({ weekOf } = {}) {
+    const start = dateOr(weekOf, today(), 'Week of');
+    const end = addDays(start, REMINDER_DAYS - 1);
+    const pushOn = notifications.settings().enabled;
+    return data.tx(async (d) => {
+      const withDevices = pushOn ? await d.pushDevices.personIds() : new Set();
+      const people = new Map((await d.people.list()).map((p) => [p.id, p]));
+      const byPerson = new Map();
+      for (const s of await d.slots.listForServices(start, end)) {
+        if (s.personId === null || !HOLDING.includes(s.status)) continue;
+        const person = people.get(s.personId);
+        if (!person || !person.active) continue;
+        if (!byPerson.has(person.id)) byPerson.set(person.id, { person, slots: [] });
+        byPerson.get(person.id).slots.push(s);
+      }
+      const out = [];
+      for (const { person, slots } of byPerson.values()) {
+        const parts = slots.map((s) => `${s.positionName} on ${shortDate(s.serviceDate)} at ${s.serviceTime}`);
+        const pending = slots.filter((s) => s.status === 'pending').length;
+        let ask;
+        if (pending === 0) ask = 'We are glad you can make it.';
+        else if (pending === slots.length) ask = 'Please open Flock and accept or decline.';
+        else ask = 'Please open Flock and accept or decline the ones you have not answered yet.';
+        const message = `Hi ${firstName(person.name)}, a reminder that you are serving as ${joinList(parts)}. ${ask} Thank you!`;
+        out.push({
+          personId: person.id,
+          name: person.name,
+          message,
+          hasPush: withDevices.has(person.id),
+          items: slots.map((s) => ({
+            slotId: s.id,
+            serviceId: s.serviceId,
+            date: s.serviceDate,
+            time: s.serviceTime,
+            serviceTitle: s.serviceTitle,
+            positionName: s.positionName,
+            teamName: s.teamName,
+            status: s.status,
+          })),
+        });
+      }
+      out.sort((a, b) => byName(a.name, b.name) || a.personId - b.personId);
+      return out;
+    });
+  }
 }

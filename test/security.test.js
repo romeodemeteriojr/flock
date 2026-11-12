@@ -573,6 +573,10 @@ test('stored XSS: every web/views/*.js render path escapes hostile data from the
     welcome: (v) => v.render({}, { info: { name: HOSTILE.name, username: HOSTILE.position }, error: HOSTILE.reason }),
     password: (v) => v.render(state, { error: HOSTILE.title }),
     notfound: (v) => v.render(state),
+    notifications: (v) => [
+      v.render({ ...state, push: { enabled: true, support: 'ok', status: 'on' } }, { problem: HOSTILE.reason, message: HOSTILE.title }),
+      v.render({ ...state, push: { enabled: true, support: 'ios-install', status: 'off' } }),
+    ].join(''),
   };
   for (const [name, run] of Object.entries(direct)) {
     const out = run(await import(`../web/views/${name}.js`));

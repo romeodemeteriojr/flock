@@ -51,7 +51,7 @@ const serviceView = (svc, slots) => ({ id: svc.id, date: svc.date, time: svc.tim
  * @returns {object}
  */
 export function createCalendarService(deps) {
-  const { data, clock } = deps;
+  const { data, clock, notifications } = deps;
   const audit = (d, actor, action, detail) => d.audit.log({ at: clock.now(), actorId: actor?.id ?? null, action, detail });
 
   async function loadService(d, id) {
@@ -168,7 +168,8 @@ export function createCalendarService(deps) {
     /** Change date, time and/or title. */
     async updateService(actor, id, patch = {}) {
       const p = patch && typeof patch === 'object' ? patch : {};
-      return data.tx(async (d) => {
+      let change;
+      const result = await data.tx(async (d) => {
         const svc = await loadService(d, id);
         let { date, time, title } = svc;
         if (p.date !== undefined) { if (!isValidDate(p.date)) throw new ValidationError(DATE_ERR); date = p.date; }
@@ -178,8 +179,11 @@ export function createCalendarService(deps) {
         if (clash && clash.id !== svc.id) throw new ConflictError(CLASH);
         const updated = await d.services.update(svc.id, { date, time, title });
         await audit(d, actor, 'service.update', `service ${svc.id} ${date} ${time} "${title}"`);
+        change = { before: svc, after: updated, slots: await d.slots.listForService(svc.id) };
         return view(d, updated);
       });
+      notifications.moved(actor, change.before, change.after, change.slots);
+      return result;
     },
 
     /**
@@ -187,17 +191,21 @@ export function createCalendarService(deps) {
      * must be true, otherwise ConflictError code has_people (details.count).
      */
     async deleteService(actor, id, { confirm = false } = {}) {
-      return data.tx(async (d) => {
+      let gone;
+      const result = await data.tx(async (d) => {
         const svc = await loadService(d, id);
         const count = await d.services.assignedCount(svc.id);
         if (count > 0 && !confirm) {
           throw new ConflictError(`${count} people are scheduled on this date`, { code: 'has_people', details: { count } });
         }
+        gone = { svc, slots: await d.slots.listForService(svc.id) };
         await d.services.remove(svc.id);
         await audit(d, actor, 'service.delete',
           `service ${svc.id} ${svc.date} ${svc.time} "${svc.title}" (${count} people scheduled)`);
         return { ok: true };
       });
+      notifications.cancelled(actor, gone.svc, gone.slots);
+      return result;
     },
 
     /** Add `count` (1-20, default 1) open slots for a position. Returns the new slots. */
@@ -220,17 +228,21 @@ export function createCalendarService(deps) {
      * ConflictError code has_person.
      */
     async removeSlot(actor, slotId, { confirm = false } = {}) {
-      return data.tx(async (d) => {
+      let removed;
+      const result = await data.tx(async (d) => {
         const slot = isInt(slotId) ? await d.slots.findById(slotId) : null;
         if (!slot) throw new NotFoundError('Slot not found');
         if (slot.personId !== null && !confirm) {
           throw new ConflictError('Someone is scheduled in this slot', { code: 'has_person' });
         }
+        removed = slot;
         await d.slots.remove(slot.id);
         await audit(d, actor, 'slot.delete',
           `slot ${slot.id} service ${slot.serviceId} position ${slot.positionId} person ${slot.personId ?? 'none'}`);
         return { ok: true };
       });
+      notifications.removed(actor, removed);
+      return result;
     },
   };
 }

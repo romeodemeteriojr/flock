@@ -80,7 +80,7 @@ test('listing has no secrets, sorted by name, with positionIds', async () => {
     assert.deepEqual(r.json.map((p) => p.name), ['Ada Admin', 'Max Member']);
     assert.deepEqual(r.json[1].positionIds, [1]);
     assert.deepEqual(Object.keys(r.json[0]).sort(),
-      ['active', 'email', 'id', 'joined', 'name', 'positionIds', 'role']);
+      ['active', 'email', 'id', 'joined', 'name', 'notifications', 'positionIds', 'role']);
     assert.doesNotMatch(r.text, /scrypt|password_hash/);
   } finally { await app.close(); }
 });

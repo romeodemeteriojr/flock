@@ -118,8 +118,18 @@ methods, or a cycle between services stops start-up with a clear
 `ContainerError`; bad settings stop it with a `ConfigError` listing every
 problem.
 
+Two more core parts are built from the settings: `sso` (the set-up sign-in
+providers, `src/infra/oidc.js`) and `push` (`src/infra/webpush.js`, Decision
+0008): a Web Push sender when `FLOCK_VAPID_PUBLIC_KEY` and
+`FLOCK_VAPID_PRIVATE_KEY` are set, otherwise a sender that does nothing
+(`push.enabled` is false). Only the `notifications` service uses it. Other
+services (assignments, calendar, autofill, gaps) call `notifications` after
+their transaction has committed; sending never throws and is not awaited,
+except Gaps **Send reminders**. `notifications.idle()` waits for sends in
+flight (tests, and `serve` on shutdown).
+
 `createContainer(overrides)` can replace any part: `config`, `env`, `clock`,
-`random`, `hasher`, `logger`, `db`, `data`, ready-made `services`, or service
+`random`, `hasher`, `logger`, `db`, `data`, `sso`, `push`, ready-made `services`, or service
 `factories`. Tests use `makeContainer()` from `test/helpers/container.js`
 (fixed clock, seeded random, fast hasher, silent logger, fresh in-memory
 database). `createApp({ container })` builds the HTTP app from a container;
@@ -156,8 +166,9 @@ start of the service method; rules that need data are checked in the service.
 ## The data layer and a future PostgreSQL adapter
 
 `src/data/index.js` describes the interface: repositories (`people`,
-`sessions`, `teams`, `positions`, `qualifications`, `services`, `slots`,
-`blockouts`, `audit`, `maintenance`) plus `tx(fn)`. Every method returns a
+`sessions`, `invites`, `identities`, `teams`, `positions`, `qualifications`,
+`services`, `slots`, `blockouts`, `availability`, `audit`, `maintenance`,
+`pushDevices`) plus `tx(fn)`. Every method returns a
 Promise and plain camelCase objects. `test/data/contract.js` is a contract test
 suite that any adapter must pass.
 
@@ -177,6 +188,10 @@ would not change.
   port with an in-memory database and checks status codes and JSON shapes.
 - **Architecture tests**: `test/architecture.test.js` and the static check in
   `test/container.test.js`.
+- **Push notifications**: `test/webpush.test.js` checks the encryption and
+  signing against the RFC 8291 and RFC 8292 examples; route and event tests
+  replace `push` with a recording fake (`test/helpers/push.js`). Nothing
+  reaches a real push service.
 
 Tests only use made-up people and in-memory databases (or temporary folders),
 and never read the real home folder, real data or credential files.
@@ -189,6 +204,8 @@ duration and (when logged in) user id. **Never logged**: passwords, password
 hashes, session tokens, cookies, authorization headers, request bodies (no
 code passes them to the logger). As a safety net, not as permission, fields
 whose names look secret (`password`, `passwd`, `token`, `secret`, `cookie`,
-`authorization`, `hash`, `api_key`) are replaced by `[REDACTED]` at any depth.
+`authorization`, `hash`, `api_key`, and a push device's `endpoint`, `p256dh`,
+`auth` or a `privateKey`) are replaced by `[REDACTED]` at any depth. Push
+sends log only the kind, the push service host and its status.
 `test/security.test.js` checks with a recording logger that no password, hash
 or token reaches a log line.

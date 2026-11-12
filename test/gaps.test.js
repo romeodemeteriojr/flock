@@ -105,7 +105,7 @@ test('GET /api/admin/reminders: drafts only, shape and validation errors', async
     assert.equal(m.message, 'Hi Max, a reminder that you are serving as Drums on Sun 12 Jan at 09:00. Please open Flock and accept or decline. Thank you!');
     assert.deepEqual(m.items.map((i) => [i.slotId, i.status]), [[pending, 'pending']]);
     // default week starts today (2025-01-05 .. 2025-01-11): the 12th is outside
-    assert.deepEqual((await get('/api/admin/reminders', adminCookie)).json, { reminders: [] });
+    assert.deepEqual((await get('/api/admin/reminders', adminCookie)).json, { reminders: [], push: false });
     const bad = await get('/api/admin/reminders?weekOf=next', adminCookie);
     assert.equal(bad.status, 400);
     assert.match(bad.json.error, /Week of/);

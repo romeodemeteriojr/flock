@@ -119,6 +119,20 @@ export function createAuthService(deps) {
     return person && person.active && person.email ? { invite, person } : null;
   }
 
+  // The live session behind a token: {th, expiresAt, person}, or null. Expired sessions are deleted.
+  async function findSession(token) {
+    if (typeof token !== 'string' || !TOKEN_RE.test(token)) return null;
+    const th = tokenHash(token);
+    const s = await data.sessions.findByTokenHash(th);
+    if (!s) return null;
+    if (!(Date.parse(s.expiresAt) > nowDate().getTime())) {
+      await data.sessions.deleteByTokenHash(th);
+      return null;
+    }
+    const person = await data.people.findById(s.personId);
+    return person && person.active && person.joined ? { th, expiresAt: s.expiresAt, person: publicPerson(person) } : null;
+  }
+
   async function createSession(personId) {
     const token = random.token(32);
     const now = nowDate();
@@ -241,16 +255,23 @@ export function createAuthService(deps) {
      * @returns {Promise<object|null>}  The public person.
      */
     async authenticate(token) {
-      if (typeof token !== 'string' || !TOKEN_RE.test(token)) return null;
-      const th = tokenHash(token);
-      const s = await data.sessions.findByTokenHash(th);
-      if (!s) return null;
-      if (!(Date.parse(s.expiresAt) > nowDate().getTime())) {
-        await data.sessions.deleteByTokenHash(th);
-        return null;
-      }
-      const person = await data.people.findById(s.personId);
-      return person && person.active && person.joined ? publicPerson(person) : null;
+      return (await findSession(token))?.person ?? null;
+    },
+
+    /**
+     * Like authenticate, for a request: a session in use is renewed to last
+     * sessionDays from now, at most once a day (decision 0008), so someone who
+     * opens Flock every week from a notification stays logged in.
+     * @returns {Promise<{person: object, renewed: boolean}|null>}  renewed: send the cookie again.
+     */
+    async session(token) {
+      const found = await findSession(token);
+      if (!found) return null;
+      const now = nowDate().getTime();
+      const full = sessionDays() * 86400000;
+      if (Date.parse(found.expiresAt) - now > full - 86400000) return { person: found.person, renewed: false };
+      const renewed = await data.sessions.extend(found.th, new Date(now + full).toISOString());
+      return { person: found.person, renewed };
     },
 
     /** The set-up sign-in providers, for the login page: [{id, label}]. */

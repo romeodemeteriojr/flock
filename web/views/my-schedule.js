@@ -7,6 +7,8 @@ import { iconSlot } from '../lib/icons.js';
 import { toasts } from '../lib/toast.js';
 import { statusChip } from '../lib/slotpanel.js';
 import { skeleton, emptyState, pageHead, disclosure, refocus } from '../lib/ui.js';
+import { showCard, dismissCard } from '../lib/push.js';
+import { turnOn } from './notifications.js';
 
 export const title = 'My schedule';
 
@@ -86,7 +88,25 @@ function card(item, view) {
   </li>`;
 }
 
-// view: { loading, error, data, message, confirmId, busy, today, openRosters }
+// The invitation to turn on notifications (decision 0008), until they are on or dismissed.
+function pushInvite(state, view) {
+  if (!view.showPush) return '';
+  const ios = state?.push?.support === 'ios-install';
+  return html`<section class="notice notice-info push-invite" aria-label="Notifications">
+    ${iconSlot('bell', 'notice-icon')}
+    <div class="notice-body">
+      <p><strong>Get a notification when you're asked to serve</strong></p>
+      <div class="btn-row">
+        ${ios
+          ? html`<a class="btn btn-primary" href="#/notifications">Show me how</a>`
+          : html`<button type="button" class="btn btn-primary" data-action="push-on" ${view.busy ? 'disabled' : ''}>Turn on</button>`}
+        <button type="button" class="btn btn-quiet" data-action="push-later">Not now</button>
+      </div>
+    </div>
+  </section>`;
+}
+
+// view: { loading, error, data, message, confirmId, busy, today, openRosters, showPush }
 export function render(state, view = { loading: true }) {
   const today = view.today ?? todayString();
   let body;
@@ -110,6 +130,7 @@ export function render(state, view = { loading: true }) {
   return String(html`
     ${pageHead(title)}
     ${toasts([[view.message, 'ok', 'data-note'], [view.problem, 'error']])}
+    ${pushInvite(state, view)}
     ${body}
   `);
 }
@@ -151,6 +172,17 @@ export function mount(main, ctx) {
     if (!el) return;
     const action = el.dataset.action;
     const id = Number(el.dataset.id);
+    if (action === 'push-later') { dismissCard(ctx.win); view.showPush = false; paint(); return; }
+    if (action === 'push-on') {
+      view.busy = true; view.message = null; view.problem = null; paint();
+      return turnOn(ctx).then((msg) => { view.message = msg; }, (err) => {
+        if (err?.status !== 401) view.problem = err?.message || 'Something went wrong. Please try again.';
+      }).finally(() => {
+        view.busy = false;
+        view.showPush = showCard(ctx.state.push, ctx.win);
+        paint();
+      });
+    }
     if (action === 'retry') { view.loading = true; paint(); return load(); }
     if (action === 'roster') { if (!view.openRosters.delete(id)) view.openRosters.add(id); paint(); refocus(root, action, id); return; }
     if (action === 'accept') return answer(id, 'accept', 'Thank you! You are confirmed.');
@@ -160,6 +192,7 @@ export function mount(main, ctx) {
     if (action === 'decline-sure') return answer(id, 'decline', "Thanks for letting us know. Your scheduler will find someone else.");
   });
 
+  ctx.pushReady?.then(() => { view.showPush = showCard(ctx.state.push, ctx.win); paint(); });
   paint();
   return load();
 }

@@ -115,7 +115,10 @@ export function register(router, ctx) {
     }
   }, { auth: 'none' });
 
-  router.add('POST', '/api/logout', async ({ req }) => {
+  router.add('POST', '/api/logout', async ({ req, body, user }) => {
+    // The page sends this device's push address so it stops getting notifications (decision 0008).
+    const endpoint = body && typeof body === 'object' ? body.pushEndpoint : undefined;
+    if (typeof endpoint === 'string') await ctx.services.notifications.turnOff(user.id, endpoint);
     await auth.logout(req.sessionToken);
     return { status: 200, headers: { 'Set-Cookie': clearCookie(req, ctx) }, json: { ok: true } };
   }, { auth: 'login' });

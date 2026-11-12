@@ -9,7 +9,9 @@ Flock on their phones to see when they are serving, say yes or no, and mark the
 days they are away.
 
 Everything stays on your own computer. Flock is one small program and one
-database file. It uses no outside services and sends nothing to anyone.
+database file. It uses no outside services and sends no emails or texts. If
+the church turns them on, it can send notifications to the phones of people
+who ask for them (see "Notifications" below).
 
 ## Starting Flock
 
@@ -86,8 +88,9 @@ log in. Their past history is kept, and you can reactivate them later.
 ## How volunteers log in on their phones
 
 Volunteers open the Flock address in the browser on their phone, type their
-email and password, and they are in. They stay logged in for 14 days on
-that phone. They do not need to install an app.
+email and password, and they are in. They stay logged in on that phone until
+14 days after they last opened Flock. They do not need to install an app,
+though they can add Flock to their Home Screen like one.
 
 When a sign-in provider such as Google is set up (below), they can also tap
 **Sign in with Google**. That works without an invite, but only for the email
@@ -110,6 +113,37 @@ running computer's network address, for example `http://192.168.1.20:8080`.
 Before volunteers use it for real, read "Putting it online later" below.
 Over plain `http://`, passwords and invite tokens travel across the network
 without protection. Use HTTPS for real people.
+
+## Notifications (optional)
+
+Flock can send a notification to a volunteer's phone or computer when they
+are **asked to serve**, **taken off** a position, or when a service they are
+on **moves** or is **cancelled**. Schedulers also hear when **someone says
+no**. Schedulers can send the week's reminders from **Gaps** with **Send
+reminders**. Nothing is sent for a yes, nothing for your own clicks, and
+there are no automatic "you serve tomorrow" reminders yet.
+
+They are off until the church turns them on:
+
+1. Make the two keys once: `node bin/flock.js push-keys`. Keep a copy of
+   both in the church's password manager.
+2. Start Flock with `FLOCK_VAPID_PUBLIC_KEY` and `FLOCK_VAPID_PRIVATE_KEY`
+   set (on Fly: `fly secrets set ...`, see DEPLOY.md). Notifications also
+   need `FLOCK_PUBLIC_URL` to be Flock's `https://` address.
+
+Then each person turns them on for each device, from the card at the top of
+**My schedule** or the bell at the top. The bell page has **Send me a test**.
+
+- **Android and computers:** tap **Turn on** and allow notifications.
+- **iPhone** (iOS 16.4 or newer): notifications only work once Flock is on
+  the Home Screen. In Safari, tap **Share**, then **Add to Home Screen**,
+  open Flock from the Home Screen, log in, then tap the bell and **Turn on**.
+  Flock shows these steps. If **Sign in with Google** does not work inside
+  the Home Screen app, log in there with your email and password (a
+  scheduler can give a Google-only person a password with **Reset login**).
+
+**People** shows a bell on everyone who has notifications on. Logging out
+on a device, turning them off, Reset login and deactivating stop them.
 
 ## What each page does
 
@@ -159,8 +193,9 @@ date to open it.
   grouped per service (each roster day), each marked with why: empty,
   declined, not answered, held by someone who is away, or by someone who is
   no longer active. It also writes **reminder messages** for a chosen
-  week. Copy them into your usual messages app. Flock never sends messages
-  itself.
+  week. Copy them into your usual messages app, or, when notifications are
+  on, choose **Send reminders** to send them to everyone with the bell
+  ("Sent to 9; 3 to copy"). Anyone not reached keeps the **Copy** button.
 
 ## Trying it with fake data
 
@@ -265,11 +300,13 @@ If you do:
 
 ## Limitations
 
-- Flock does not send emails, texts or notifications. It drafts reminder
-  messages for you to copy and send.
+- Flock does not send emails or texts. Notifications are only for people
+  who turn them on, on devices that support them. It drafts reminder
+  messages for you to copy and send to everyone else.
 - It has no songs, set lists, files or media. It is only for scheduling
   people.
-- Volunteers use a web browser. There is no phone app.
+- Volunteers use a web browser. There is no phone app in the app stores;
+  Flock can be added to the Home Screen instead.
 - It is built for one church of about 70 people, running on one computer.
 
 ## For developers

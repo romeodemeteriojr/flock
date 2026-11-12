@@ -12,7 +12,7 @@ import { makeContainer } from './helpers/container.js';
 import { startTestApp } from './helpers/app.js';
 import { listJs, analyse } from './helpers/source.js';
 
-const SERVICE_NAMES = ['auth', 'people', 'teams', 'calendar', 'blockouts', 'assignments', 'gaps', 'availability', 'autofill'];
+const SERVICE_NAMES = ['auth', 'people', 'teams', 'calendar', 'blockouts', 'assignments', 'gaps', 'availability', 'autofill', 'notifications'];
 const memConfig = () => ({ ...loadConfig({}), dbPath: ':memory:' });
 
 test('container: defaults are the real system parts', () => {
@@ -89,7 +89,7 @@ test('container: services are built exactly once, in dependency order, with only
     factories[name] = (deps) => {
       calls.push({ name, deps: Object.keys(deps).sort() });
       for (const need of SERVICE_SPECS[name].needs) {
-        if (!CORE_DEPS.includes(need) && need !== 'sso') assert.ok(calls.some((x) => x.name === need), `${need} built before ${name}`);
+        if (!CORE_DEPS.includes(need) && need !== 'sso' && need !== 'push') assert.ok(calls.some((x) => x.name === need), `${need} built before ${name}`);
       }
       assert.ok(Object.isFrozen(deps));
       return { name, deps };

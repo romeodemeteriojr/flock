@@ -46,19 +46,28 @@ This guide is for the person who schedules volunteers. You do not need to be a p
 
    Type the values only into your terminal, never into files or chats.
 
-6. Optional safety check of the settings:
+6. Optional, notifications (Decision 0008). Make the keys on your own computer and set them as secrets:
+
+   ```
+   node bin/flock.js push-keys
+   fly secrets set FLOCK_VAPID_PUBLIC_KEY=... FLOCK_VAPID_PRIVATE_KEY=...
+   ```
+
+   Keep a copy of both keys in the church's password manager. Notifications also need `FLOCK_PUBLIC_URL` (step 2) to be the `https://` address. If you ever change the keys, each phone switches over by itself the next time it opens Flock; phones that are not opened get nothing until then. Removing both secrets turns notifications off again.
+
+7. Optional safety check of the settings:
 
    ```
    node scripts/check-config.js --production
    ```
 
-7. Deploy:
+8. Deploy:
 
    ```
    fly deploy
    ```
 
-8. Create the first scheduler account:
+9. Create the first scheduler account:
 
    ```
    fly ssh console -C "node bin/flock.js create-admin <email> 'Full Name'"
@@ -66,7 +75,7 @@ This guide is for the person who schedules volunteers. You do not need to be a p
 
    A **one-time invite link is printed**, valid for 7 days. Give it only to that person privately. Opening it lets them choose a password and logs them in. Check that it starts with your deployed HTTPS address, not localhost.
 
-9. Visit `https://<app>.fly.dev` (your app name instead of `<app>`).
+10. Visit `https://<app>.fly.dev` (your app name instead of `<app>`).
 
 ## 3. Your own web address (optional)
 
@@ -157,12 +166,15 @@ At most about **$2.34 a month** for one small machine plus a 1 GB volume, and mu
 - Back up before every upgrade.
 - Run **exactly one machine**. Never run `fly scale count 2`: each machine would have its own, different database.
 - Keep backup files private.
+- Keep the push notification keys (`FLOCK_VAPID_*`) only in Fly secrets and the password manager, never in `fly.toml`.
 
 ## 10. Troubleshooting
 
 - **"app name already taken"**: choose a different, more unique name in `fly.toml`.
 - **Deploy says no volume found**: run the `fly volumes create` step with the same region as `fly.toml`.
 - **Site will not load**: run `fly status` and `fly logs`. The health check is `/api/health`.
+- **Flock will not start after setting the notification keys**: `fly logs` names the problem. Set both keys from the same `push-keys` run, and make sure `FLOCK_PUBLIC_URL` is the `https://` address.
+- **Notifications do not arrive**: on the bell page, try **Send me a test**. On an iPhone, Flock must be opened from the Home Screen (iOS 16.4 or newer). Check the phone's settings allow notifications for Flock (or for the browser). `fly logs` shows `push sent` / `push not sent` with the push service and its answer, never who or what.
 - **Lost or expired first-scheduler invite**: run `create-admin` with a different email. If another scheduler can already log in, ask them to make a new invite instead.
 - **An invite points at localhost**: set `FLOCK_PUBLIC_URL` to the public HTTPS address before creating CLI accounts. On People, browse using that address and choose **Copy new invite**.
 - **Data looks different after a while**: run `fly machine list` and make sure there is only one machine.

@@ -73,6 +73,7 @@ export { DuplicateError, InUseError } from './errors.js';
  * @property {(s: {tokenHash: string, personId: number, expiresAt: string, createdAt: string}) => Promise<{id: number, personId: number, expiresAt: string, createdAt: string}>} create
  *   Throws DuplicateError for a token hash that already exists; Error for an unknown person.
  * @property {(tokenHash: string) => Promise<{personId: number, expiresAt: string}|null>} findByTokenHash
+ * @property {(tokenHash: string, expiresAt: string) => Promise<boolean>} extend  Move the expiry; false for an unknown token.
  * @property {(tokenHash: string) => Promise<number>} deleteByTokenHash  Returns how many were deleted.
  * @property {(personId: number, exceptTokenHash?: string) => Promise<number>} deleteForPerson
  *   Delete all sessions of a person, optionally keeping one. Returns how many were deleted.
@@ -294,6 +295,30 @@ export { DuplicateError, InUseError } from './errors.js';
  */
 
 /**
+ * @typedef {object} PushDevice  One browser on one device that turned on push (decision 0008).
+ * @property {number} id
+ * @property {number} personId
+ * @property {string} endpoint  The push service address (unique).
+ * @property {string} p256dh  The device's public key, base64url.
+ * @property {string} auth  The device's secret, base64url.
+ * @property {string} createdAt  ISO time
+ */
+
+/**
+ * @typedef {object} PushDevicesRepo
+ * @property {(d: {personId: number, endpoint: string, p256dh: string, auth: string, createdAt: string}) => Promise<PushDevice>} save
+ *   Insert, or replace the device with the same endpoint (it moves to this person). Error for an unknown person.
+ * @property {(endpoint: string) => Promise<PushDevice|null>} findByEndpoint
+ * @property {(personId: number) => Promise<PushDevice[]>} listForPerson  Oldest first (createdAt, id).
+ * @property {() => Promise<Set<number>>} personIds  Everyone with at least one device.
+ * @property {(personId: number, keep: number) => Promise<number>} trimForPerson
+ *   Keep only the person's newest `keep` devices; returns how many were removed.
+ * @property {(endpoint: string) => Promise<boolean>} remove  Whoever it belongs to.
+ * @property {(personId: number, endpoint: string) => Promise<boolean>} removeOwn  Only if it is this person's.
+ * @property {(personId: number) => Promise<number>} deleteForPerson  Number removed.
+ */
+
+/**
  * @typedef {object} Data
  * @property {PeopleRepo} people
  * @property {SessionsRepo} sessions
@@ -308,6 +333,7 @@ export { DuplicateError, InUseError } from './errors.js';
  * @property {AvailabilityRepo} availability
  * @property {AuditRepo} audit
  * @property {MaintenanceRepo} maintenance
+ * @property {PushDevicesRepo} pushDevices
  * @property {<T>(fn: (d: Data) => T | Promise<T>) => Promise<T>} tx
  *   Runs fn in one transaction (BEGIN IMMEDIATE ... COMMIT, ROLLBACK if fn throws) and
  *   resolves to fn's result. `d` has the same repositories bound to the transaction.

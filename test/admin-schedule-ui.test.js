@@ -555,6 +555,53 @@ test('reminders: never-sends note, pick a week, copy one and copy all', async ()
   assert.equal(gaps.allRemindersText(REMINDERS.reminders), copied[1]);
 });
 
+test('reminders: Send reminders reaches those with notifications on; the rest keep Copy', async () => {
+  const copied = [];
+  const win = { navigator: { clipboard: { writeText: async (t) => { copied.push(t); } } } };
+  const list = { push: true, reminders: [
+    { ...REMINDERS.reminders[0], hasPush: true },
+    { ...REMINDERS.reminders[1], hasPush: false },
+  ] };
+  const { api, root } = await gapsSetup({
+    'GET /api/admin/reminders?weekOf=2026-11-08': list,
+    'POST /api/admin/reminders/send': { weekOf: '2026-11-08', sent: [list.reminders[0].personId], copy: [list.reminders[1].personId] },
+  }, win);
+  root.submit('reminders', { weekOf: '2026-11-08' });
+  await flush();
+  assert.match(root.innerHTML, /People with notifications on can get theirs from Flock/);
+  assert.match(root.innerHTML, /Send reminders \(1\)/);
+  assert.match(root.innerHTML, /Notifications on/);
+  await root.click('send-reminders');
+  await flush();
+  assert.equal(api.calls.at(-1), 'POST /api/admin/reminders/send {"weekOf":"2026-11-08"}');
+  assert.match(root.innerHTML, /Sent to 1; 1 to copy\./);
+  assert.doesNotMatch(root.innerHTML, /data-action="send-reminders"/, 'nobody left to send to');
+  assert.doesNotMatch(root.innerHTML, new RegExp(`data-action="copy-one" data-id="${list.reminders[0].personId}"`));
+  await root.click('copy-all');
+  await flush();
+  assert.deepEqual(copied, [`Bo Diaz\n${list.reminders[1].message}`], 'Copy all copies only the ones not sent');
+  assert.equal(gaps.sentWords(0, 3), 'Nothing could be sent as a notification. Copy the messages instead.');
+  assert.equal(gaps.sentWords(4, 0), 'Sent to 4.');
+});
+
+test('reminders: without push there is no Send button and a failed send is explained', async () => {
+  const off = await gapsSetup({ 'GET /api/admin/reminders?weekOf=2026-11-08': { push: false, reminders: REMINDERS.reminders.map((x) => ({ ...x, hasPush: false })) } }, {});
+  off.root.submit('reminders', { weekOf: '2026-11-08' });
+  await flush();
+  assert.doesNotMatch(off.root.innerHTML, /send-reminders/);
+  const fail = Object.assign(new Error('Notifications are not set up on this Flock yet'), { status: 409 });
+  const on = await gapsSetup({
+    'GET /api/admin/reminders?weekOf=2026-11-08': { push: true, reminders: REMINDERS.reminders.map((x) => ({ ...x, hasPush: true })) },
+    'POST /api/admin/reminders/send': fail,
+  }, {});
+  on.root.submit('reminders', { weekOf: '2026-11-08' });
+  await flush();
+  await on.root.click('send-reminders');
+  await flush();
+  assert.match(on.root.innerHTML, /not set up on this Flock yet/);
+  assert.match(on.root.innerHTML, /data-action="copy-one"/, 'Copy is still there');
+});
+
 test('reminders: empty week and no clipboard are explained', async () => {
   const { root } = await gapsSetup({ 'GET /api/admin/reminders?weekOf=2026-11-08': { reminders: [] } }, {});
   root.submit('reminders', { weekOf: '2026-11-08' });

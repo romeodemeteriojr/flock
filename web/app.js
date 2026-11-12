@@ -6,6 +6,7 @@ import * as nav from './views/nav.js';
 import { TOAST_REGION, createToaster } from './lib/toast.js';
 import { watchIcons } from './lib/icons.js';
 import { skeleton } from './lib/ui.js';
+import * as push from './lib/push.js';
 
 const GENERIC = 'Something went wrong. Please reload the page and try again.';
 
@@ -45,9 +46,33 @@ export function createApp({ root, win = globalThis.window, api = createApi() }) 
     else win.location.hash = hash;
   }
 
-  function setUser(user) { state.user = user; }
+  function setUser(user) {
+    state.user = user;
+    if (!user) { state.push = null; pushFor = null; }
+  }
 
-  const ctx = { api, state, win, navigate, showError, showMessage, setUser, rerender: () => render() };
+  function paintTop() {
+    top.innerHTML = nav.render(state, win.location.hash);
+    nav.mount(top, ctx);
+  }
+
+  const ctx = { api, state, win, navigate, showError, showMessage, setUser, paintTop, rerender: () => render() };
+
+  // Push notifications (decision 0008): loaded once per login, in the
+  // background; pages that show them wait on ctx.pushReady. Never breaks the app.
+  let pushFor = null;
+  function loadPush() {
+    const p = { enabled: false, publicKey: null, support: push.support(win), status: 'off' };
+    state.push = p;
+    ctx.pushReady = (async () => {
+      try {
+        Object.assign(p, await api.get('/api/push'));
+        if (p.enabled) p.status = await push.sync(win, api, p);
+      } catch { /* push is an extra: the page works without it */ }
+      if (state.push === p) paintTop();
+      return p;
+    })();
+  }
 
   api.onUnauthorized = () => {
     if (!state.user) return;
@@ -72,8 +97,8 @@ export function createApp({ root, win = globalThis.window, api = createApi() }) 
         if (!pending.shown) toaster.show(pending.text, pending.kind);
         pending = null;
       } else toaster.clear();
-      top.innerHTML = nav.render(state, hash);
-      nav.mount(top, ctx);
+      if (state.user && pushFor !== state.user.id) { pushFor = state.user.id; loadPush(); }
+      paintTop();
       main.innerHTML = view.render(state);
       doc.title = view.title ? `${view.title} – Flock` : 'Flock';
       const heading = main.querySelector('h1');

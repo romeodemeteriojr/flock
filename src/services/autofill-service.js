@@ -152,7 +152,7 @@ export function planAutofill({ today, start, weeks, slots, history, people, avai
  * @returns {object}
  */
 export function createAutofillService(deps) {
-  const { data, clock, assignments } = deps;
+  const { data, clock, assignments, notifications } = deps;
   const today = () => todayStr(clock.now());
 
   return {
@@ -175,7 +175,7 @@ export function createAutofillService(deps) {
       const start = mondayOf(day);
       const end = addDays(start, 7 * weeks - 1);
       if (end < now) throw new ValidationError('Those weeks are already over');
-      return data.tx(async (d) => {
+      const result = await data.tx(async (d) => {
         const plan = planAutofill({
           today: now,
           start,
@@ -187,7 +187,7 @@ export function createAutofillService(deps) {
           blockouts: await d.blockouts.listRange(start, end),
         });
         if (apply && plan.assigned.length) {
-          for (const a of plan.assigned) await assignments.assign(actor, a.slotId, { personId: a.personId });
+          for (const a of plan.assigned) await assignments.assign(actor, a.slotId, { personId: a.personId }, { notify: false });
           await d.audit.log({
             at: clock.now(),
             actorId: actor?.id ?? null,
@@ -197,6 +197,9 @@ export function createAutofillService(deps) {
         }
         return { applied: apply, weekOf: start, weeks, ...plan };
       });
+      // "Ask these people": one notification per person for the whole batch (decision 0008).
+      if (apply && result.assigned.length) notifications.asked(actor, result.assigned.map((a) => a.personId));
+      return result;
     },
   };
 }

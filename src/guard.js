@@ -85,12 +85,15 @@ export function createGuard() {
     if (route.auth === 'none') return null;
 
     const token = parseCookies(req.headers.cookie)[COOKIE_NAME];
-    const user = await ctx.services.auth.authenticate(token);
+    const found = await ctx.services.auth.session(token);
+    const user = found?.person;
     if (!user) {
       send(res, 401, { error: 'Please log in' });
       return null;
     }
     req.sessionToken = token;
+    // A renewed session gets its cookie again; a handler's own Set-Cookie (logout) replaces it.
+    if (found.renewed) res.setHeader('Set-Cookie', sessionCookie(req, ctx, token));
     if (route.auth === 'admin' && user.role !== 'admin') {
       send(res, 403, { error: 'Only the scheduler can do that' });
       return null;

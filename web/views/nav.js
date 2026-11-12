@@ -8,6 +8,7 @@ import { html } from '../lib/html.js';
 import { navRoutes, pathOf, isAdmin } from '../routes.js';
 import { iconSlot } from '../lib/icons.js';
 import { avatar } from '../lib/avatar.js';
+import { forLogout } from '../lib/push.js';
 
 const ICONS = {
   '/': 'home', '/blockouts': 'calendar', '/people': 'users', '/teams': 'sparkle',
@@ -19,6 +20,12 @@ export const ADMIN_TABS = Object.freeze(['/schedule', '/gaps', '/people']);
 
 function link(r, current) {
   return html`<li class="nav-item"><a href="#${r.path}" ${r.path === current ? html`aria-current="page"` : ''}>${iconSlot(ICONS[r.path] ?? 'chevron', 'nav-icon')}<span class="nav-label">${r.label}</span>${SHORT[r.path] ? html`<span class="nav-label-short">${SHORT[r.path]}</span>` : ''}</a></li>`;
+}
+
+// The bell (decision 0008): opens the Notifications page; says whether they are on here.
+function bell(push) {
+  const label = push.status === 'on' ? 'Notifications (on for this device)' : 'Notifications';
+  return html`<a class="icon-btn${push.status === 'on' ? ' is-on' : ''}" href="#/notifications" aria-label="${label}" title="${label}">${iconSlot('bell')}</a>`;
 }
 
 export function render(state, hash = '') {
@@ -47,6 +54,7 @@ export function render(state, hash = '') {
       <div class="nav-user">
         ${avatar(user.name, 'sm')}
         <p class="nav-who">Logged in as <strong>${user.name}</strong></p>
+        ${state.push?.enabled ? bell(state.push) : ''}
         ${user.hasPassword === false ? '' : html`<a class="icon-btn" href="#/password" aria-label="Change my password" title="Change my password">${iconSlot('key')}</a>`}
         <button type="button" class="btn btn-ghost nav-logout" data-action="logout">${iconSlot('logout')}<span class="nav-logout-label">Log out</span></button>
       </div>
@@ -82,7 +90,9 @@ export function mount(root, ctx) {
   btn.addEventListener('click', async () => {
     btn.disabled = true;
     try {
-      await ctx.api.post('/api/logout');
+      // This device stops getting notifications for whoever logs in next.
+      const pushEndpoint = await forLogout(ctx.win);
+      await ctx.api.post('/api/logout', pushEndpoint ? { pushEndpoint } : {});
     } catch (err) {
       // Already logged out is fine; anything else is shown.
       if (err.status !== 401) { btn.disabled = false; ctx.showError(err.message); return; }

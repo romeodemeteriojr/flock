@@ -14,6 +14,8 @@ const autofillBody = v.object({
   apply: v.boolean().default(false),
 }, { strict: true });
 
+const sendBody = v.object({ weekOf: v.date().optional() }, { strict: true });
+
 export function register(router, ctx) {
   const gaps = () => ctx.services.gaps;
 
@@ -32,7 +34,14 @@ export function register(router, ctx) {
     ok(await ctx.services.autofill.run(user, parse(autofillBody, body)))
   ), { auth: 'admin' });
 
+  router.add('POST', '/api/admin/reminders/send', async ({ body, user }) => (
+    ok(await gaps().sendReminders(user, parse(sendBody, body)))
+  ), { auth: 'admin' });
+
   router.add('GET', '/api/admin/reminders', async ({ query }) => (
-    ok({ reminders: await gaps().reminders({ weekOf: opt(query.weekOf) }) })
+    ok({
+      reminders: await gaps().reminders({ weekOf: opt(query.weekOf) }),
+      push: ctx.services.notifications.settings().enabled,
+    })
   ), { auth: 'admin' });
 }

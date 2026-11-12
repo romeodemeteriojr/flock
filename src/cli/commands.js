@@ -12,6 +12,7 @@ import { parseArgs, UsageError } from './args.js';
 import { csvLine } from './csv.js';
 import { seedDemo } from './demo.js';
 import { inviteLink } from '../services/auth-service.js';
+import { generateVapidKeys } from '../infra/webpush.js';
 
 export const HELP = `Usage: flock <command> [options]
 
@@ -23,6 +24,7 @@ Commands:
   backup <file>              Copy the database to a new file (never overwrites)
   export <file.csv> [--from YYYY-MM-DD --to YYYY-MM-DD]
                              Write the schedule as a CSV file (never overwrites)
+  push-keys                  Make the two keys that turn on push notifications
   help                       Show this help
   version                    Show the version
 
@@ -97,8 +99,10 @@ export const commands = {
       logger.info('flock stopping', { signal });
       const force = setTimeout(() => app.server.closeAllConnections?.(), 5000);
       force.unref();
-      app.server.close(() => {
+      app.server.close(async () => {
         clearTimeout(force);
+        // Let notifications already on their way finish (at most 5 seconds).
+        await Promise.race([container.services.notifications.idle(), new Promise((r) => setTimeout(r, 5000).unref())]);
         try { container.close(); } catch (err) { logger.error('could not close the database', { err }); }
         logger.info('flock stopped');
         process.exit(0);
@@ -151,6 +155,23 @@ export const commands = {
       console.log(`Backup written to ${file}`);
       return 0;
     });
+  },
+
+  async 'push-keys'(argv) {
+    const { positionals } = parseArgs(argv, []);
+    exactly(positionals, 0, 'push-keys');
+    const { publicKey, privateKey } = generateVapidKeys();
+    console.log(`Push notification keys (decision 0008). Set both as secrets, then restart Flock:
+
+FLOCK_VAPID_PUBLIC_KEY=${publicKey}
+FLOCK_VAPID_PRIVATE_KEY=${privateKey}
+
+On Fly:  fly secrets set FLOCK_VAPID_PUBLIC_KEY=${publicKey} FLOCK_VAPID_PRIVATE_KEY=<the private key above>
+
+Keep a copy of both in the church's password manager. The private key is a
+secret: never put it in fly.toml, the Dockerfile or a message. If you ever
+replace the keys, each phone switches over the next time it opens Flock.`);
+    return 0;
   },
 
   async export(argv, env) {

@@ -2,6 +2,7 @@
 // an in-memory data layer. Only made-up people.
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { recordingNotifications } from './helpers/notifications.js';
 import { makeData } from './helpers/data.js';
 import { fixedClock } from '../src/infra/clock.js';
 import { createCalendarService } from '../src/services/calendar-service.js';
@@ -12,7 +13,7 @@ const NOW = '2026-01-05T12:00:00';
 async function setup({ wrap } = {}) {
   const { db, data } = makeData();
   const clock = fixedClock(new Date(NOW));
-  const svc = createCalendarService({ data: wrap ? wrap(data) : data, clock });
+  const svc = createCalendarService({ data: wrap ? wrap(data) : data, clock, notifications: recordingNotifications() });
   const band = await data.teams.create({ name: 'Band', sort: 1 });
   const tech = await data.teams.create({ name: 'Tech', sort: 2 });
   const drums = await data.positions.create(band.id, { name: 'Drums', sort: 2 });
@@ -115,7 +116,7 @@ test('calendar: repeat copies structure weekly, skips existing, caps at 26 weeks
 test('calendar: repeat rolls back every copy on failure', async () => {
   const { data, svc: plain, admin, pos, count } = await setup();
   const src = await plain.createService(admin, { date: '2026-03-01', slots: [{ positionId: pos.drums }] });
-  const svc = createCalendarService({ data: failingAudit(data), clock: fixedClock(new Date(NOW)) });
+  const svc = createCalendarService({ data: failingAudit(data), clock: fixedClock(new Date(NOW)), notifications: recordingNotifications() });
   await assert.rejects(svc.repeat(admin, { fromServiceId: src.id, weeks: 4 }), /audit is down/);
   assert.equal(count('services'), 1);
   assert.equal(count('slots'), 1);
@@ -145,7 +146,7 @@ test('calendar: listServices defaults from the clock, inclusive ends, range limi
 test('calendar: listServices "today" is the local date of the clock', async () => {
   const { data, admin } = await setup();
   const clock = fixedClock(new Date(2026, 11, 31, 23, 59));
-  const svc = createCalendarService({ data, clock });
+  const svc = createCalendarService({ data, clock, notifications: recordingNotifications() });
   await svc.createService(admin, { date: '2026-12-30' });
   await svc.createService(admin, { date: '2026-12-31' });
   assert.deepEqual((await svc.listServices()).map((s) => s.date), ['2026-12-31']);
@@ -200,7 +201,7 @@ test('calendar: deleteService needs confirm when people are scheduled (has_peopl
 test('calendar: deleteService rolls back on failure', async () => {
   const { data, svc: plain, admin, pos, count } = await setup();
   const a = await plain.createService(admin, { date: '2026-03-01', slots: [{ positionId: pos.drums }] });
-  const svc = createCalendarService({ data: failingAudit(data), clock: fixedClock(new Date(NOW)) });
+  const svc = createCalendarService({ data: failingAudit(data), clock: fixedClock(new Date(NOW)), notifications: recordingNotifications() });
   await assert.rejects(svc.deleteService(admin, a.id), /audit is down/);
   assert.equal(count('services'), 1);
   assert.equal(count('slots'), 1);
@@ -227,7 +228,7 @@ test('calendar: addSlots adds 1-20 open slots and audits', async () => {
 test('calendar: addSlots rolls back on failure', async () => {
   const { data, svc: plain, admin, pos, count } = await setup();
   const a = await plain.createService(admin, { date: '2026-03-01' });
-  const svc = createCalendarService({ data: failingAudit(data), clock: fixedClock(new Date(NOW)) });
+  const svc = createCalendarService({ data: failingAudit(data), clock: fixedClock(new Date(NOW)), notifications: recordingNotifications() });
   await assert.rejects(svc.addSlots(admin, a.id, { positionId: pos.drums, count: 5 }), /audit is down/);
   assert.equal(count('slots'), 0);
 });
@@ -253,7 +254,7 @@ test('calendar: removeSlot needs confirm when someone is in it (has_person)', as
 test('calendar: removeSlot rolls back on failure', async () => {
   const { data, svc: plain, admin, pos, count } = await setup();
   const a = await plain.createService(admin, { date: '2026-03-01', slots: [{ positionId: pos.drums }] });
-  const svc = createCalendarService({ data: failingAudit(data), clock: fixedClock(new Date(NOW)) });
+  const svc = createCalendarService({ data: failingAudit(data), clock: fixedClock(new Date(NOW)), notifications: recordingNotifications() });
   await assert.rejects(svc.removeSlot(admin, a.slots[0].id), /audit is down/);
   assert.equal(count('slots'), 1);
 });

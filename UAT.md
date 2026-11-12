@@ -407,10 +407,10 @@ Back on the laptop, logged in as the scheduler.
    logged in. In the second tab click **Log out**. In the first tab click
    **Teams**. You should be sent to the Log in page with **Please log in
    again.**
-3. A login lasts 14 days, which you cannot wait for. The computer tests check
-   that case. If you want to see it yourself, change the laptop's date forward
-   by 15 days, click anything in Flock, and expect **Please log in again.** Then
-   put the date back.
+3. A login lasts until 14 days after you last used it, which you cannot wait
+   for. The computer tests check that case. If you want to see it yourself,
+   change the laptop's date forward by 15 days, click anything in Flock, and
+   expect **Please log in again.** Then put the date back.
 
 - [ ] Pass   [ ] Fail   Notes: ______________________________
 
@@ -549,6 +549,53 @@ says why it did not.
 
 ---
 
+### 21. Notifications on real phones (Decision 0008)
+
+This needs the real, online Flock (HTTPS) with the notification keys set
+(DEPLOY.md step 6), not the laptop demo. Use made-up test people. You need an
+iPhone (iOS 16.4 or newer) and an Android phone or a computer with Chrome.
+
+1. **iPhone in Safari.** Log in. On My schedule you should see **Get a
+   notification when you're asked to serve** with **Show me how**. Tap it:
+   the steps (Share, Add to Home Screen, open, log in, Turn on) are shown.
+2. **Google sign-in in the Home Screen app.** If you log in with Google:
+   sign in in Safari first, then **Add to Home Screen** and open it. Are you
+   still logged in? Then log out inside the Home Screen app and tap **Sign
+   in with Google**: does it work, or does Google refuse? Write down what
+   happens. Either way, logging in with email and password must work there.
+3. **Turn on (iPhone).** In the Home Screen app tap the bell, then **Turn
+   on**, then **Allow**. You should see **Notifications are on for this
+   device.** Tap **Send me a test**: within a few seconds a notification
+   **Flock: Notifications work on this device.** appears, also with the
+   phone locked. Tapping it opens Flock.
+4. **Turn on (Android or computer).** Same from the card's **Turn on** button
+   or the bell. **Send me a test** arrives.
+5. **Asked.** As the scheduler, put the test person in a position. On their
+   phone: **Asked to serve: Sound, Sun 15 Nov 9:00. Tap to answer.** Tap it:
+   My schedule opens. Put them in a second position: the notification now
+   lists both and replaces the first one.
+6. **Changes.** Move that service to another time: **Morning service moved to
+   … You're still on Sound.** Take them off: **You're no longer on …**.
+   Delete a service they are on: **… is cancelled. You were on …**.
+7. **Someone says no.** As the volunteer, tap **I can't**. Every scheduler
+   with notifications on gets **Sam can't do Sound, …**; tapping opens Gaps.
+   Saying yes sends nothing.
+8. **Send reminders.** On Gaps, show the reminders for the week. People with
+   notifications on show **Notifications on**; tap **Send reminders**. You
+   should see **Sent to …; … to copy.** and the rest keep **Copy**.
+9. **People.** The test people with notifications on show **Notifications
+   on**.
+10. **Turning off.** On the bell page tap **Turn off**: nothing more arrives on
+    that device. Turn on again, then **Log out**: nothing more arrives there
+    either. Reset login on another test person: their phone stops getting
+    notifications.
+11. **Blocked.** On a phone, say **Don't Allow** when asked. The bell page
+    explains how to allow notifications in Settings.
+
+- [ ] Pass   [ ] Fail   Notes: ______________________________
+
+---
+
 ## Results
 
 | # | Scenario | Pass | Fail |
@@ -573,6 +620,7 @@ says why it did not.
 | 18 | Screen reader basics | [ ] | [ ] |
 | 19 | Phone width | [ ] | [ ] |
 | 20 | Things to try to break it | [ ] | [ ] |
+| 21 | Notifications on real phones | [ ] | [ ] |
 
 ---
 

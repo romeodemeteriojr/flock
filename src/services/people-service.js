@@ -47,9 +47,10 @@ export function createPeopleService(deps) {
   const audit = (d, actor, action, detail) => d.audit.log({ at: clock.now(), actorId: actor?.id ?? null, action, detail });
 
   return {
-    /** Everyone (active or not), sorted by name. */
+    /** Everyone (active or not), sorted by name. notifications: they turned push on somewhere (decision 0008). */
     async list() {
-      return (await data.people.list()).map(personView);
+      const withDevices = await data.pushDevices.personIds();
+      return (await data.people.list()).map((p) => ({ ...personView(p), notifications: withDevices.has(p.id) }));
     },
 
     /**
@@ -117,7 +118,10 @@ export function createPeopleService(deps) {
           if (e?.name === 'DuplicateError') throw new ConflictError(e.message);
           throw e;
         }
-        if (!newActive) await auth.endSessions(id);
+        if (!newActive) {
+          await auth.endSessions(id);
+          await d.pushDevices.deleteForPerson(id); // decision 0008: no notifications after leaving
+        }
         if (mail === null && emailChanged) await d.invites.deleteForPerson(id); // no email, no way to use it
         if (changes.length) await audit(d, actor, 'person.update', `person ${id}: ${changes.join(', ')}`);
         return updated;
@@ -152,6 +156,7 @@ export function createPeopleService(deps) {
         await d.people.setPassword(id, null);
         await d.sessions.deleteForPerson(id);
         await d.identities.deleteForPerson(id);
+        await d.pushDevices.deleteForPerson(id); // a lost phone stops getting notifications too
         const inv = auth.newInvite();
         await d.invites.replace({ personId: id, tokenHash: inv.tokenHash, expiresAt: inv.expiresAt, createdAt: inv.createdAt });
         await audit(d, actor, 'person.reset_login', `person ${id}`);

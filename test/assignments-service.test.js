@@ -2,6 +2,7 @@
 // an in-memory data layer and a fake blockouts service. Only made-up people.
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { recordingNotifications } from './helpers/notifications.js';
 import { makeData } from './helpers/data.js';
 import { fixedClock } from '../src/infra/clock.js';
 import { silentLogger } from '../src/infra/logger.js';
@@ -19,7 +20,7 @@ async function setup({ blocked = [] } = {}) {
   const blockouts = {
     async isBlocked(personId, date) { blockCalls.push([personId, date]); return blockedSet.has(`${personId}:${date}`); },
   };
-  const svc = createAssignmentsService({ data, clock, blockouts, logger: silentLogger() });
+  const svc = createAssignmentsService({ data, clock, blockouts, logger: silentLogger(), notifications: recordingNotifications() });
   const person = async (name, handle, { active = true } = {}) => {
     const p = await data.people.create({ name, email: `${handle}@example.com`, passwordHash: 'x', createdAt: NOW });
     if (!active) await data.people.update(p.id, { active: false });
@@ -165,7 +166,7 @@ test('assign: rolls back when something fails inside the transaction', async () 
     ...data,
     tx: (fn) => data.tx((d) => fn({ ...d, audit: { log: async () => { throw new Error('disk full'); } } })),
   };
-  const svc = createAssignmentsService({ data: failing, clock, blockouts });
+  const svc = createAssignmentsService({ data: failing, clock, blockouts, notifications: recordingNotifications() });
   const { slots: [id] } = await service('2025-01-12');
   await assert.rejects(svc.assign(admin, id, { personId: pat.id }), /disk full/);
   const s = await slot(id);

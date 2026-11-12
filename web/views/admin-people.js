@@ -149,6 +149,7 @@ function personRow(p, m) {
         ${p.id === m.me ? html`<span class="chip chip-info">That's you</span>` : ''}
         ${!p.email && p.active ? html`<span class="chip chip-plain">No email, cannot log in</span>` : ''}
         ${p.email && !p.joined && p.active ? html`<span class="chip chip-plain">Not joined yet</span>` : ''}
+        ${p.notifications && p.active ? html`<span class="chip chip-plain" title="Gets notifications from Flock">${iconSlot('bell', 'chip-icon')}Notifications on</span>` : ''}
         ${p.active ? '' : html`<span class="chip chip-bad">Deactivated</span>`}</span>
       </span>
     </span>`;

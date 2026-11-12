@@ -1,6 +1,7 @@
 // Unit tests for the gaps service: fixed clock, in-memory data layer, made-up people.
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { recordingNotifications } from './helpers/notifications.js';
 import { makeData } from './helpers/data.js';
 import { fixedClock } from '../src/infra/clock.js';
 import { createGapsService, shortDate } from '../src/services/gaps-service.js';
@@ -14,7 +15,7 @@ const at = (day) => new Date(`${day}T12:00:00`).toISOString();
 async function setup({ config = { unansweredDays: 3 } } = {}) {
   const { data } = makeData();
   const clock = fixedClock(new Date(NOW));
-  const svc = createGapsService({ data, clock, config });
+  const svc = createGapsService({ data, clock, config, notifications: recordingNotifications() });
   const person = async (name, username, { positions = [] } = {}) => {
     const p = await data.people.create({ name, username, passwordHash: 'x', createdAt: NOW });
     if (positions.length) await data.qualifications.setForPerson(p.id, positions);

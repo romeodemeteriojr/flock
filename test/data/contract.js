@@ -247,6 +247,9 @@ export function runContract(name, makeData) {
         assert.equal(await data.sessions.findByTokenHash('nope'), null);
         await assert.rejects(data.sessions.create({ tokenHash: 'th1', personId: p.id, expiresAt: T, createdAt: T }), DuplicateError);
         await assert.rejects(data.sessions.create({ tokenHash: 'th2', personId: 9999, expiresAt: T, createdAt: T }), (e) => !(e instanceof DuplicateError));
+        assert.equal(await data.sessions.extend('th1', '2025-03-01T00:00:00.000Z'), true);
+        assert.deepEqual(await data.sessions.findByTokenHash('th1'), { personId: p.id, expiresAt: '2025-03-01T00:00:00.000Z' });
+        assert.equal(await data.sessions.extend('nope', T), false);
         assert.equal(await data.sessions.deleteByTokenHash('th1'), 1);
         assert.equal(await data.sessions.findByTokenHash('th1'), null);
         assert.equal(await data.sessions.deleteByTokenHash('th1'), 0);
@@ -771,6 +774,61 @@ export function runContract(name, makeData) {
         }
         assert.equal(await data.availability.get(w.ann.id), null);
         assert.equal((await data.availability.mapAll()).size, 0);
+      });
+    });
+
+    // ---------- push devices ----------
+    describe('pushDevices', () => {
+      const dev = (personId, n, createdAt = T) => ({
+        personId, endpoint: `https://fcm.googleapis.com/fcm/send/${n}`, p256dh: `key-${n}`, auth: `auth-${n}`, createdAt,
+      });
+
+      test('save, findByEndpoint, listForPerson (oldest first), personIds', async () => {
+        await fresh();
+        const w = await world();
+        const d1 = await data.pushDevices.save(dev(w.ann.id, 'a', '2025-01-02T00:00:00.000Z'));
+        assert.deepEqual(d1, { id: d1.id, personId: w.ann.id, endpoint: 'https://fcm.googleapis.com/fcm/send/a', p256dh: 'key-a', auth: 'auth-a', createdAt: '2025-01-02T00:00:00.000Z' });
+        clean(d1, 'pushDevices.save');
+        await data.pushDevices.save(dev(w.ann.id, 'b', T));
+        await data.pushDevices.save(dev(w.cy.id, 'c'));
+        assert.deepEqual((await data.pushDevices.listForPerson(w.ann.id)).map((d) => d.endpoint.slice(-1)), ['b', 'a']);
+        assert.deepEqual(await data.pushDevices.listForPerson(w.bob.id), []);
+        assert.deepEqual(await data.pushDevices.findByEndpoint(d1.endpoint), d1);
+        assert.equal(await data.pushDevices.findByEndpoint('https://nope.example/x'), null);
+        const ids = await data.pushDevices.personIds();
+        assert.ok(ids instanceof Set);
+        assert.deepEqual([...ids], [w.ann.id, w.cy.id]);
+      });
+
+      test('saving a known endpoint replaces it and moves it to the new person', async () => {
+        await fresh();
+        const w = await world();
+        const first = await data.pushDevices.save(dev(w.ann.id, 'a'));
+        const T2 = '2025-03-01T00:00:00.000Z';
+        const moved = await data.pushDevices.save({ ...dev(w.bob.id, 'a', T2), p256dh: 'new-key', auth: 'new-auth' });
+        assert.deepEqual(moved, { id: first.id, personId: w.bob.id, endpoint: first.endpoint, p256dh: 'new-key', auth: 'new-auth', createdAt: T2 });
+        assert.deepEqual(await data.pushDevices.listForPerson(w.ann.id), []);
+        const plain = (e) => e instanceof Error && !(e instanceof DuplicateError);
+        await assert.rejects(data.pushDevices.save(dev(9999, 'z')), plain);
+        assert.equal(await data.pushDevices.findByEndpoint(dev(0, 'z').endpoint), null);
+      });
+
+      test('trimForPerson keeps the newest; remove, removeOwn, deleteForPerson', async () => {
+        await fresh();
+        const w = await world();
+        for (const [n, day] of [['a', '03'], ['b', '01'], ['c', '02']]) await data.pushDevices.save(dev(w.ann.id, n, `2025-01-${day}T00:00:00.000Z`));
+        await data.pushDevices.save(dev(w.bob.id, 'd'));
+        assert.equal(await data.pushDevices.trimForPerson(w.ann.id, 2), 1);
+        assert.deepEqual((await data.pushDevices.listForPerson(w.ann.id)).map((d) => d.endpoint.slice(-1)), ['c', 'a']);
+        assert.equal(await data.pushDevices.trimForPerson(w.ann.id, 2), 0);
+        assert.equal(await data.pushDevices.removeOwn(w.bob.id, dev(0, 'a').endpoint), false, 'not bob\'s');
+        assert.equal(await data.pushDevices.removeOwn(w.ann.id, dev(0, 'a').endpoint), true);
+        assert.equal(await data.pushDevices.remove(dev(0, 'd').endpoint), true);
+        assert.equal(await data.pushDevices.remove(dev(0, 'd').endpoint), false);
+        await data.pushDevices.save(dev(w.ann.id, 'e'));
+        assert.equal(await data.pushDevices.deleteForPerson(w.ann.id), 2);
+        assert.equal(await data.pushDevices.deleteForPerson(w.ann.id), 0);
+        assert.equal((await data.pushDevices.personIds()).size, 0);
       });
     });
 

@@ -258,9 +258,9 @@ test('e2e: npm start serves the app on a temp database and stops cleanly on SIGT
   }
 });
 
-test('package.json: version 0.4.0, no dependencies, and the test, coverage and start scripts', () => {
+test('package.json: version 0.5.0, no dependencies, and the test, coverage and start scripts', () => {
   const pkg = JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
-  assert.equal(pkg.version, '0.4.0');
+  assert.equal(pkg.version, '0.5.0');
   assert.equal(pkg.dependencies, undefined);
   assert.equal(pkg.devDependencies, undefined);
   // node:sqlite without a flag needs 22.13; DatabaseSync#isTransaction (used by tx) needs 22.16.
@@ -271,5 +271,5 @@ test('package.json: version 0.4.0, no dependencies, and the test, coverage and s
     start: 'node bin/flock.js serve',
   });
   const version = spawnSync(process.execPath, [BIN, 'version'], { env: { PATH: process.env.PATH }, encoding: 'utf8' });
-  assert.equal(version.stdout.trim(), 'flock 0.4.0');
+  assert.equal(version.stdout.trim(), 'flock 0.5.0');
 });

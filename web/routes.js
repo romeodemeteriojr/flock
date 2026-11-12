@@ -5,6 +5,7 @@
 import * as login from './views/login.js';
 import * as welcome from './views/welcome.js';
 import * as password from './views/password.js';
+import * as notifications from './views/notifications.js';
 import * as notFound from './views/notfound.js';
 import * as mySchedule from './views/my-schedule.js';
 import * as myBlockouts from './views/my-blockouts.js';
@@ -22,6 +23,7 @@ export const routes = [
   { path: '/login', view: login, role: 'public' },
   { path: '/welcome', view: welcome, role: 'open' },
   { path: '/password', view: password, role: 'any' },
+  { path: '/notifications', view: notifications, role: 'any' },
   { path: '/', view: mySchedule, role: 'member', label: 'My schedule' },
   { path: '/blockouts', view: myBlockouts, role: 'member', label: "Days I can't serve" },
   { path: '/people', view: adminPeople, role: 'admin', label: 'People' },

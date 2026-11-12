@@ -15,8 +15,9 @@ import * as assignments from './assignments.js';
 import * as blockouts from './blockouts.js';
 import * as admin from './admin.js';
 import * as availability from './availability.js';
+import * as push from './push.js';
 
-export const ROUTE_MODULES = Object.freeze([auth, people, teams, services, assignments, blockouts, availability, admin]);
+export const ROUTE_MODULES = Object.freeze([auth, people, teams, services, assignments, blockouts, availability, push, admin]);
 
 export function register(router, deps) {
   if (!deps || !deps.services) throw new Error('Routes need deps.services (build them with createContainer)');

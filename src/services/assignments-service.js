@@ -74,10 +74,11 @@ const mySlotView = (s) => ({
  * @param {{now: () => Date}} deps.clock
  * @param {{isBlocked: (personId: number, date: string) => Promise<boolean>}} deps.blockouts  The blockouts service.
  * @param {object} [deps.logger]  Structured logger (never log secrets).
+ * @param {object} deps.notifications  The notifications service (push, decision 0008).
  * @returns {object}
  */
 export function createAssignmentsService(deps) {
-  const { data, clock, blockouts } = deps;
+  const { data, clock, blockouts, notifications } = deps;
   const today = () => todayStr(clock.now());
   const audit = (d, actorId, action, detail) => d.audit.log({ at: clock.now(), actorId: actorId ?? null, action, detail });
   const where = (s) => `slot ${s.id} (${s.serviceDate} ${s.serviceTime} "${s.serviceTitle}", ${s.teamName} / ${s.positionName})`;
@@ -98,14 +99,18 @@ export function createAssignmentsService(deps) {
      * past (never overridable), inactive (never overridable), and, unless `force`
      * is true, accepted (someone else already accepted this slot), not_qualified,
      * blocked, double_booked.
+     * The person is notified, and anyone they replaced, unless `notify` is false
+     * (autofill sends one notification per person for the whole batch).
      * @param {{id: number}} actor
      * @param {number} slotId
      * @param {{personId: number, force?: boolean}} input
+     * @param {{notify?: boolean}} [opts]
      */
-    async assign(actor, slotId, { personId, force = false } = {}) {
+    async assign(actor, slotId, { personId, force = false } = {}, { notify = true } = {}) {
       if (!isInt(personId)) throw new ValidationError('Person id must be a whole number');
       if (typeof force !== 'boolean') throw new ValidationError('Force must be true or false');
-      return data.tx(async (d) => {
+      let before = null;
+      const result = await data.tx(async (d) => {
         const slot = await loadSlot(d, slotId);
         notPast(slot);
         const person = await d.people.findById(personId);
@@ -129,24 +134,34 @@ export function createAssignmentsService(deps) {
           .filter((s) => s.id !== slot.id && s.personId === person.id && HOLDING.includes(s.status));
         check(others.length > 0, 'double_booked',
           `${person.name} is already scheduled on this service`);
+        before = slot;
         const updated = await d.slots.assign(slot.id, { personId: person.id, status: 'pending', assignedAt: clock.now().toISOString() });
         const previous = slot.personName ? `, replacing ${slot.personName} (${slot.status})` : '';
         const forced = overridden.length ? ` [forced: ${overridden.join(', ')}]` : '';
         await audit(d, actor?.id, 'slot.assign', `${where(slot)}: ${person.name}${previous}${forced}`);
         return assignmentView(updated);
       });
+      if (notify) {
+        if (before.personId !== personId) notifications.removed(actor, before);
+        notifications.asked(actor, [personId]);
+      }
+      return result;
     },
 
     /** Take the person out of a slot: back to open. */
     async unassign(actor, slotId) {
-      return data.tx(async (d) => {
+      let before = null;
+      const result = await data.tx(async (d) => {
         const slot = await loadSlot(d, slotId);
         notPast(slot);
         if (slot.personId === null && slot.status === 'open') return assignmentView(slot);
+        before = slot;
         const updated = await d.slots.clear(slot.id);
         await audit(d, actor?.id, 'slot.unassign', `${where(slot)}: ${slot.personName ?? 'nobody'} (${slot.status})`);
         return assignmentView(updated);
       });
+      if (before) notifications.removed(actor, before);
+      return result;
     },
 
     /**
@@ -197,7 +212,8 @@ export function createAssignmentsService(deps) {
     async respond(personId, slotId, action) {
       if (action !== 'accept' && action !== 'decline') throw new ValidationError('Answer must be accept or decline');
       const status = action === 'accept' ? 'accepted' : 'declined';
-      return data.tx(async (d) => {
+      let saidNo = null;
+      const result = await data.tx(async (d) => {
         const slot = isInt(slotId) ? await d.slots.findById(slotId) : null;
         if (!slot || slot.personId === null || slot.personId !== personId) throw new NotFoundError('Slot not found');
         notPast(slot, 'That service is in the past');
@@ -205,8 +221,11 @@ export function createAssignmentsService(deps) {
         if (!['pending', 'accepted', 'declined'].includes(slot.status)) throw new NotFoundError('Slot not found');
         const updated = await d.slots.respond(slot.id, { status, respondedAt: clock.now().toISOString() });
         await audit(d, personId, `slot.${action}`, `${where(slot)}: ${slot.personName} ${slot.status} -> ${status}`);
+        if (status === 'declined') saidNo = slot;
         return mySlotView(updated);
       });
+      if (saidNo) notifications.declined(saidNo);
+      return result;
     },
   };
 }

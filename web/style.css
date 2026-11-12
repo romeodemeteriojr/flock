@@ -1059,3 +1059,11 @@ th, td { text-align: left; padding: var(--s-2) var(--s-3); border-bottom: 1px so
 .gallery-frame:has(.sheet-layer) { min-height: 40rem; }
 .gallery-frame .sheet-layer { position: absolute; }
 .gallery-live { min-height: 10rem; }
+
+/* Notifications (decision 0008): the bell page and the My schedule invitation. */
+.push-card > p:first-child { margin-top: 0; }
+.steps { margin: var(--s-3) 0; padding-left: 1.4rem; }
+.steps li { margin: var(--s-2) 0; }
+.push-invite { display: flex; gap: var(--s-3); align-items: flex-start; }
+.push-invite .notice-body p { margin: 0 0 var(--s-2); }
+.push-invite .btn-row { margin: 0; }

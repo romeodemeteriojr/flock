@@ -4,7 +4,7 @@
 import { systemClock } from './clock.js';
 
 export const LEVELS = { debug: 10, info: 20, warn: 30, error: 40 };
-const SECRET_KEY = /password|passwd|token|secret|cookie|authori[sz]ation|hash|api[-_]?key/i;
+const SECRET_KEY = /password|passwd|token|secret|cookie|authori[sz]ation|hash|api[-_]?key|endpoint|p256dh|^auth$|private[-_]?key/i;
 const CORE = new Set(['time', 'level', 'msg']);
 const MAX_DEPTH = 8;
 

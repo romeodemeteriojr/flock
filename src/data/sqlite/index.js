@@ -13,6 +13,7 @@ import { blockoutsRepo } from './blockouts.js';
 import { availabilityRepo } from './availability.js';
 import { auditRepo } from './audit.js';
 import { maintenanceRepo } from './maintenance.js';
+import { pushDevicesRepo } from './push-devices.js';
 
 // Runs a synchronous statement function and hands back a promise of its result.
 const direct = (fn) => new Promise((resolve) => resolve(fn()));
@@ -51,6 +52,7 @@ export function createSqliteData(db) {
       availability: availabilityRepo(ctx),
       audit: auditRepo(ctx),
       maintenance: maintenanceRepo(ctx),
+      pushDevices: pushDevicesRepo(ctx),
     };
     data.tx = (fn) => txFn(data, fn);
     return Object.freeze(data);

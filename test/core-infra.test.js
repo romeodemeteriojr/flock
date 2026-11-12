@@ -323,9 +323,11 @@ test('logger: deep redaction of secrets', () => {
     headers: { cookie: 'flock_session=cookie-value', Authorization: 'Bearer auth-value', 'set-cookie': ['a=cookie2'] },
     person: { name: 'Ann', password_hash: 'scrypt$hash-value', apiSecret: 'sec-value' },
     list: [{ token: 'tok-in-list' }],
+    device: { endpoint: 'https://fcm.googleapis.com/fcm/send/ep-value', p256dh: 'p256-value', auth: 'auth-secret-value', host: 'fcm.googleapis.com' },
+    push: { privateKey: 'vapid-private-value' },
   });
   const text = lines.join('\n');
-  for (const s of ['hunter2-secret', 'n3w-secret', 'tok-abc', 'cookie-value', 'auth-value', 'cookie2', 'hash-value', 'sec-value', 'tok-in-list']) {
+  for (const s of ['hunter2-secret', 'n3w-secret', 'tok-abc', 'cookie-value', 'auth-value', 'cookie2', 'hash-value', 'sec-value', 'tok-in-list', 'ep-value', 'p256-value', 'auth-secret-value', 'vapid-private-value']) {
     assert.ok(!text.includes(s), s);
   }
   const e = entries()[0];
@@ -336,6 +338,7 @@ test('logger: deep redaction of secrets', () => {
   assert.equal(e.person.name, 'Ann');
   assert.equal(e.person.password_hash, '[REDACTED]');
   assert.equal(e.list[0].token, '[REDACTED]');
+  assert.equal(e.device.host, 'fcm.googleapis.com', 'the push host is fine to log');
   // circular values and errors do not break logging
   const circ = { a: 1 };
   circ.self = circ;
@@ -633,7 +636,7 @@ test('serve logs startup and shuts down cleanly on SIGTERM', { skip: process.pla
     assert.ok(msgs.includes('flock stopping'));
     assert.ok(msgs.includes('flock stopped'));
     const started = events.find((e) => e.msg === 'flock started');
-    assert.equal(started.version, '0.4.0');
+    assert.equal(started.version, '0.5.0');
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

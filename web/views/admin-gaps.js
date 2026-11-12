@@ -14,6 +14,13 @@ import { skeleton, emptyState, pageHead } from '../lib/ui.js';
 
 export const title = 'Gaps';
 export const NEVER_SENDS = 'Flock never sends messages. Copy these into your usual messages app.';
+export const PUSH_SENDS = 'People with notifications on can get theirs from Flock. Copy the rest into your usual messages app.';
+
+/** "Sent to 9; 3 to copy." after Send reminders. */
+export function sentWords(sent, copy) {
+  if (!sent) return 'Nothing could be sent as a notification. Copy the messages instead.';
+  return copy ? `Sent to ${sent}; ${copy} to copy.` : `Sent to ${sent}.`;
+}
 
 export const GAP_LABELS = Object.freeze({
   open: 'Nobody yet',
@@ -94,23 +101,32 @@ function gapItem(it) {
   </li>`;
 }
 
+/** The reminders still to copy: everyone not reached by Send reminders. */
+export const toCopy = (r) => (r.list ?? []).filter((x) => !r.sent?.has(x.personId));
+
 function reminders(m) {
   const r = m.reminders;
   let body = '';
   if (r.loading) body = skeleton('Loading…', 'list', 2);
   else if (r.list) {
+    const canSend = r.push && r.list.some((x) => x.hasPush && !r.sent?.has(x.personId));
+    const reachable = r.list.filter((x) => x.hasPush).length;
     body = r.list.length
-      ? html`<div class="btn-row"><button type="button" class="btn btn-primary" data-action="copy-all" data-copy-key="all">${iconSlot('copy')} Copy all</button></div>
+      ? html`<div class="btn-row">
+          ${canSend ? html`<button type="button" class="btn btn-primary" data-action="send-reminders" ${r.sending ? 'disabled' : ''}>${iconSlot('bell')} ${r.sending ? 'Sending…' : `Send reminders (${reachable})`}</button>` : ''}
+          <button type="button" class="btn${canSend ? '' : ' btn-primary'}" data-action="copy-all" data-copy-key="all">${iconSlot('copy')} Copy all</button></div>
         <ul class="list reminder-list" data-reminders>${r.list.map((x) => html`<li class="reminder" data-reminder="${x.personId}">
-          <p class="reminder-who">${avatar(x.name, 'sm')}<strong>${x.name}</strong></p>
+          <p class="reminder-who">${avatar(x.name, 'sm')}<strong>${x.name}</strong>
+            ${r.sent?.has(x.personId) ? html`<span class="chip chip-ok">${iconSlot('check', 'chip-icon')}Sent</span>`
+              : r.push && x.hasPush ? html`<span class="chip chip-plain" title="Gets notifications from Flock">${iconSlot('bell', 'chip-icon')}Notifications on</span>` : ''}</p>
           <p class="reminder-text">${x.message}</p>
-          <div class="btn-row"><button type="button" class="btn btn-sm" data-action="copy-one" data-id="${x.personId}" data-copy-key="${x.personId}">${iconSlot('copy')} Copy</button></div>
+          ${r.sent?.has(x.personId) ? '' : html`<div class="btn-row"><button type="button" class="btn btn-sm" data-action="copy-one" data-id="${x.personId}" data-copy-key="${x.personId}">${iconSlot('copy')} Copy</button></div>`}
         </li>`)}</ul>`
       : emptyState('Nobody is scheduled that week.', 'art-calendar');
   }
   return html`<section class="card reminders-card" data-reminders-panel>
     <h2 class="card-title">${iconSlot('bell', 'icon-sm')} Reminders</h2>
-    <p class="notice notice-info">${iconSlot('mail', 'notice-icon')}<strong>${NEVER_SENDS}</strong></p>
+    <p class="notice notice-info">${iconSlot('mail', 'notice-icon')}<strong>${r.push ? PUSH_SENDS : NEVER_SENDS}</strong></p>
     ${toasts([[r.notice, 'ok'], [r.error, 'error']])}
     <form class="form form-inline" data-form="reminders" novalidate>
       <div class="field"><label for="week-of">Week starting</label>
@@ -145,7 +161,7 @@ export function renderScreen(m, panelHtml = '') {
 export function createScreen({ api, root, today = todayString(), win = globalThis }) {
   const m = {
     loading: true, error: '', notice: '', summary: {}, items: [],
-    reminders: { weekOf: today, list: null, loading: false, error: '', notice: '' },
+    reminders: { weekOf: today, list: null, loading: false, error: '', notice: '', push: false, sent: new Set(), sending: false },
   };
   const hold = { timer: null, key: null };
   let reminderSeq = 0;
@@ -184,12 +200,33 @@ export function createScreen({ api, root, today = todayString(), win = globalThi
       const res = await api.get(`/api/admin/reminders?weekOf=${weekOf}`);
       if (seq !== reminderSeq) return;
       r.list = Array.isArray(res?.reminders) ? res.reminders : [];
+      r.push = res?.push === true;
+      r.sent = new Set();
     } catch (err) {
       if (seq !== reminderSeq) return;
       r.list = null;
       if (err?.status !== 401) r.error = String(err?.message || 'Could not load the messages.');
     }
     r.loading = false;
+    paint();
+  }
+
+  // Send the shown week's reminders as notifications; whoever is not reached keeps Copy.
+  async function sendReminders() {
+    const r = m.reminders;
+    if (r.sending) return;
+    r.sending = true;
+    r.notice = '';
+    r.error = '';
+    paint();
+    try {
+      const res = await api.post('/api/admin/reminders/send', { weekOf: r.weekOf });
+      for (const id of res?.sent ?? []) r.sent.add(id);
+      r.notice = sentWords(r.sent.size, toCopy(r).length);
+    } catch (err) {
+      if (err?.status !== 401) r.error = String(err?.message || 'Could not send the reminders. Copy them instead.');
+    }
+    r.sending = false;
     paint();
   }
 
@@ -214,7 +251,8 @@ export function createScreen({ api, root, today = todayString(), win = globalThi
       sheet.opened(id);
       return panel.open(gapSlot(it));
     }
-    if (action === 'copy-all') return copy(allRemindersText(m.reminders.list), el, 'Copy all', 'all');
+    if (action === 'copy-all') return copy(allRemindersText(toCopy(m.reminders)), el, 'Copy all', 'all');
+    if (action === 'send-reminders') return sendReminders();
     if (action === 'copy-one') {
       const x = (m.reminders.list ?? []).find((y) => y.personId === id);
       return x ? copy(x.message, el, 'Copy', String(id)) : undefined;
