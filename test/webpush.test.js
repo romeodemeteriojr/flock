@@ -127,6 +127,25 @@ test('webpush: generated keys are a matching base64url pair; mismatches are foun
   assert.match(vapidKeysProblem(a.publicKey, '+/+/'), /private key/);
 });
 
+test('webpush: private keys are always 32 bytes, and an old 31-byte key still works', async () => {
+  // Node drops a private key's leading zero byte (about 1 key in 256).
+  for (let i = 0; i < 3000; i++) assert.equal(b64(generateVapidKeys().privateKey).length, 32);
+  // A key whose first byte is zero, stored the old, short way.
+  let ecdh;
+  do { ecdh = crypto.createECDH('prime256v1'); ecdh.generateKeys(); } while (ecdh.getPrivateKey().length === 32);
+  const publicKey = ecdh.getPublicKey().toString('base64url');
+  const short = ecdh.getPrivateKey().toString('base64url');
+  const full = Buffer.concat([Buffer.alloc(32 - ecdh.getPrivateKey().length), ecdh.getPrivateKey()]).toString('base64url');
+  for (const privateKey of [short, full]) {
+    assert.equal(vapidKeysProblem(publicKey, privateKey), null);
+    const jwt = vapidJwt({ audience: 'https://fcm.googleapis.com', subject: 'https://f.example.org', publicKey, privateKey, now: NOW });
+    assert.equal(verifyJwt(jwt, publicKey), true);
+    const push = createWebPush({ publicKey, privateKey, subject: 'https://f.example.org', clock, fetch: fakeFetch(201).fetch });
+    assert.equal((await push.send(device(), { a: 1 })).ok, true);
+  }
+  assert.match(vapidKeysProblem(publicKey, Buffer.alloc(30, 1).toString('base64url')), /private key/);
+});
+
 test('webpush: only real push services are accepted as endpoints', () => {
   for (const ok of [
     'https://web.push.apple.com/QGuQyavXutnMH',

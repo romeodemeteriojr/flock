@@ -30,6 +30,9 @@ function fromB64(s) {
   return Buffer.from(s, 'base64url');
 }
 const b64 = (buf) => Buffer.from(buf).toString('base64url');
+// Node hands back a P-256 private key without its leading zero bytes (about 1
+// in 256 keys is 31 bytes long). Keys are always stored and used as 32 bytes.
+const pad32 = (buf) => (buf.length >= 32 ? buf : Buffer.concat([Buffer.alloc(32 - buf.length), buf]));
 
 /** True for an https URL on a known push service, default port, no credentials. */
 export function isPushEndpoint(endpoint) {
@@ -66,7 +69,7 @@ export function subscriptionProblem(sub) {
 export function generateVapidKeys() {
   const ecdh = crypto.createECDH('prime256v1');
   ecdh.generateKeys();
-  return { publicKey: b64(ecdh.getPublicKey()), privateKey: b64(ecdh.getPrivateKey()) };
+  return { publicKey: b64(ecdh.getPublicKey()), privateKey: b64(pad32(ecdh.getPrivateKey())) };
 }
 
 function publicFromPrivate(raw) {
@@ -81,7 +84,8 @@ export function vapidKeysProblem(publicKey, privateKey) {
   if (!publicKeyObject(pub)) return 'The push public key is not valid (FLOCK_VAPID_PUBLIC_KEY)';
   const priv = fromB64(privateKey);
   let derived = null;
-  if (priv?.length === 32) {
+  // 31 bytes: a key made before 0.5.1 that lost its leading zero; still the same key.
+  if (priv && priv.length >= 31 && priv.length <= 32) {
     try { derived = publicFromPrivate(priv); } catch { /* reported below */ }
   }
   if (!derived) return 'The push private key is not valid (FLOCK_VAPID_PRIVATE_KEY)';
@@ -92,7 +96,7 @@ export function vapidKeysProblem(publicKey, privateKey) {
 function privateKeyObject(publicKey, privateKey) {
   const pub = fromB64(publicKey);
   return crypto.createPrivateKey({ format: 'jwk', key: {
-    kty: 'EC', crv: 'P-256', d: privateKey, x: b64(pub.subarray(1, 33)), y: b64(pub.subarray(33)) } });
+    kty: 'EC', crv: 'P-256', d: b64(pad32(fromB64(privateKey))), x: b64(pub.subarray(1, 33)), y: b64(pub.subarray(33)) } });
 }
 
 /**
