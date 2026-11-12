@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.5.1
 
 - Notifications: `flock push-keys` sometimes (about 1 in 256) printed a private key one byte short, which Flock then refused, so it would not start. Keys are now always full length, and a short key made by 0.5.0 is accepted as it is. The test run before deploying 0.5.0 failed on this.
 
