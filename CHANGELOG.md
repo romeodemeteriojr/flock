@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.6.0
 
 No database changes: it deploys over 0.5.1 as it is. Nothing works differently; everything looks different.
 
