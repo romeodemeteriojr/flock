@@ -27,6 +27,7 @@ self.addEventListener('push', (event) => {
   const options = {
     body: typeof n.body === 'string' ? n.body : '',
     icon: '/icon-192.png',
+    badge: '/badge-96.png', // one colour, for the Android status bar
     lang: n.lang || 'en-GB',
     dir: n.dir || 'ltr',
     data: { navigate: sameOriginUrl(n.navigate) },

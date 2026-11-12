@@ -65,7 +65,7 @@ export function render(state, view = { loading: true }) {
     list = emptyState("You have no days off saved. Add one above if there is a time you can't serve.", 'art-done');
   } else {
     list = html`<ul class="cards">${view.list.map((b) => html`<li class="card off-card" data-blockout="${b.id}">
-      <span class="off-icon">${iconSlot('calendar')}</span>
+      <span class="off-icon">${iconSlot('calendar-off')}</span>
       <div class="off-text">
         <h3 class="num">${formatRange(b.startDate, b.endDate)}</h3>
         ${b.reason ? html`<p class="hint">${b.reason}</p>` : ''}

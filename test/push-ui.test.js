@@ -209,6 +209,7 @@ test('service worker: shows the declarative message and opens Flock on tap', asy
   assert.equal(w.shown[0].options.renotify, true);
   assert.equal(w.shown[0].options.data.navigate, 'https://flock.example.org/#/gaps');
   assert.equal(w.shown[0].options.icon, '/icon-192.png');
+  assert.equal(w.shown[0].options.badge, '/badge-96.png');
 
   // Never opens another site; broken messages still show something.
   await w.fire('push', { data: { json: () => ({ notification: { body: 'x', navigate: 'https://evil.example.org/' } }) } });
@@ -368,7 +369,16 @@ test('the app can be installed: manifest, icons, service worker and the link to 
       const [w, h] = icon.sizes.split('x').map(Number);
       assert.deepEqual([png.readUInt32BE(16), png.readUInt32BE(20)], [w, h], icon.src);
     }
-    assert.deepEqual(manifest.icons.filter((i) => i.type === 'image/png').map((i) => i.sizes), ['192x192', '512x512']);
+    // Two kinds of home-screen icon: the finished tile, and a full-bleed one the phone crops to its own shape.
+    const pngs = manifest.icons.filter((i) => i.type === 'image/png');
+    assert.deepEqual(pngs.filter((i) => i.purpose === 'any').map((i) => i.sizes), ['192x192', '512x512']);
+    assert.deepEqual(pngs.filter((i) => i.purpose === 'maskable').map((i) => i.sizes), ['192x192', '512x512']);
+    assert.equal(pngs.length, 4);
+    // The small one-colour picture Android shows in the status bar.
+    const badge = await fetch(t.url + '/badge-96.png');
+    assert.equal(badge.status, 200);
+    const badgePng = Buffer.from(await badge.arrayBuffer());
+    assert.deepEqual([badgePng.readUInt32BE(16), badgePng.readUInt32BE(20)], [96, 96]);
     const sw = await t.request('GET', '/sw.js');
     assert.equal(sw.status, 200);
     assert.match(sw.headers['content-type'], /^text\/javascript/);

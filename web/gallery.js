@@ -128,22 +128,18 @@ export function demoApi(d) {
   };
 }
 
+// The icons added in the new-look pass, each showing the thing itself.
 const NEW_ICONS = [
-  ['key', 'a password or credential'],
-  ['shield', 'protection, privacy, safety'],
-  ['user-off', 'a person who is unavailable'],
-  ['user-check', 'a person confirmed or approved'],
-  ['list-check', 'items checked off a list'],
-  ['send', 'send, submit, dispatch'],
-  ['refresh', 'reload or recalculate'],
-  ['filter', 'narrow a list down'],
-  ['dot', 'a small status point'],
+  ['calendar-off', 'days you cannot serve'],
+  ['team', 'a team of people'],
+  ['church', 'a service'],
+  ['puzzle', 'a gap: a position still to fill'],
 ];
 
 // ---------- gallery pieces ----------
 
-const TOKENS = ['bg', 'surface', 'surface-2', 'text', 'muted', 'accent', 'accent-2', 'accent-soft',
-  'hero-from', 'hero-to', 'success', 'success-bg', 'warning', 'warning-bg', 'danger', 'danger-bg', 'toast-bg', 'today-bg'];
+const TOKENS = ['brand', 'bg', 'surface', 'surface-2', 'surface-3', 'line', 'text', 'muted', 'accent', 'accent-2', 'accent-soft',
+  'hero-from', 'hero-to', 'hero-badge', 'success', 'success-bg', 'warning', 'warning-bg', 'danger', 'danger-bg', 'toast-bg', 'today-bg'];
 
 const section = (id, title, body, note = '') => html`<section class="gallery-section" id="g-${id}" aria-labelledby="g-${id}-h">
   <h2 class="gallery-h" id="g-${id}-h">${title}</h2>${note ? html`<p class="hint gallery-note">${note}</p>` : ''}
@@ -186,7 +182,7 @@ function components(d) {
   ${section('avatars', 'Avatars', html`<div class="card"><p class="gallery-row">${names.map((n) => html`<span class="gallery-avatar">${avatar(n)}<span class="hint">${n}</span></span>`)}</p>
     <p class="gallery-row">${avatar('Priya Demo', 'sm')} ${avatar('Priya Demo')} ${avatar('Priya Demo', 'lg')}</p></div>`)}
   ${section('icons', 'Icons', html`<ul class="gallery-icons">${ICON_NAMES.map((n) => html`<li class="gallery-icon" title="${attr(n)}">${iconSlot(n, 'icon-lg')}<code>${n}</code></li>`)}</ul>`)}
-  ${section('new-icons', 'New icons', html`<p class="hint gallery-note">The nine icons added in this pass, each with what it means.</p>
+  ${section('new-icons', 'New icons', html`<p class="hint gallery-note">The four icons added with the new look, each with what it means. Every other icon was redrawn on the same grid.</p>
     <ul class="gallery-icons">${NEW_ICONS.map(([n, meaning]) => html`<li class="gallery-icon" title="${attr(n)}">${iconSlot(n, 'icon-lg')}<code>${n}</code><span class="hint icon-meaning">${esc(meaning)}</span></li>`)}</ul>`)}
   ${section('icon-buttons', 'Icon buttons', html`<p class="hint gallery-note">Real buttons built with <code>iconButton()</code>: 48×48, a visible keyboard focus ring, and a danger variant. Tab to them.</p>
     <div class="card"><p class="gallery-row">

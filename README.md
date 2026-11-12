@@ -215,16 +215,31 @@ delete `data/demo.db`.
 
 ## Look and feel
 
-Flock uses a compact, neutral light/dark design inspired by the oMLX dashboard,
-with Inter bundled locally (license: `licenses/Inter-OFL.txt`). Text and
-mouse/trackpad controls are 10% smaller; touch targets stay at least 48px.
-No fonts or other assets are fetched from outside services.
+Flock has one brand colour (indigo) on soft, slightly tinted greys, in a light
+and a dark version. The mark is a white bird on an indigo tile; the same tile
+is the app icon on a phone's home screen. Inter is bundled locally (license:
+`licenses/Inter-OFL.txt`), cut down to Latin letters so it loads quickly on a
+phone: English, accented European letters, Vietnamese, and Pacific names with
+macrons or an ʻokina. Names in other alphabets (Greek or Cyrillic, say) are
+shown in the phone's own font. No fonts or other assets are fetched from
+outside services.
+
+Every icon is drawn on the same grid, and each page has its own picture in the
+menu: a calendar for the Schedule, a missing puzzle piece for Gaps, a crossed-out
+calendar for Days off. Status is never shown by colour alone: every coloured tag
+also has a symbol and a word. Touch targets are at least 48px.
 
 Flock follows your phone or computer's light or dark setting by itself (dark
 mode), and turns off animations if you have asked your device for less
-motion. On phones the main pages sit in a tab bar at the bottom; on wider
-screens they are tabs along the top. Printing the Schedule page gives a plain
-black-and-white grid.
+motion. On phones the main pages sit in a tab bar at the bottom, with the page
+you are on marked by a soft pill, a filled-in icon and bold text; on wider
+screens they are a row of buttons along the top. Printing the Schedule page
+gives a plain black-and-white grid.
+
+To change the brand colour, edit the colour list at the top of `web/style.css`
+(`--brand`, `--accent` and the few colours next to them, once for light and once
+for dark). `npm test` checks that every text and background pair is still easy
+to read.
 
 To see every screen and part of the design without logging in, open
 `/gallery.html` (for example `http://localhost:8080/gallery.html`). It uses

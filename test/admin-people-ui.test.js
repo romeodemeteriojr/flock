@@ -242,11 +242,11 @@ test('invite copy button shows a check SVG, then the copy SVG after 1.5s', async
   const s = people.createScreen({ api, root, win });
   await s.ready;
   root.click('reset-ask', 2); root.click('reset-yes', 2); await flush();
-  const CHECK = 'M4.5 12.5l5 5 10-11';
+  const CHECK = 'M4.75 12.75l4.75 4.75 9.75-10.75';
   const btn = { innerHTML: '', dataset: { action: 'copy' } };
   btn.closest = () => btn;
   root.fire('click', btn); await flush();
-  assert.match(btn.innerHTML, /^<span class="icon" aria-hidden="true"><svg[^>]*>.*M4\.5 12\.5l5 5 10-11.*<\/svg><\/span> Copy message$/);
+  assert.match(btn.innerHTML, /^<span class="icon" aria-hidden="true"><svg[^>]*>.*M4\.75 12\.75l4\.75 4\.75 9\.75-10\.75.*<\/svg><\/span> Copy message$/);
   assert.equal(timers[0].ms, 1500);
   timers[0].fn();
   assert.ok(!btn.innerHTML.includes(CHECK));

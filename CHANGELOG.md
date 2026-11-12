@@ -1,5 +1,26 @@
 # Changelog
 
+## Unreleased
+
+No database changes: it deploys over 0.5.1 as it is. Nothing works differently; everything looks different.
+
+### A new look
+
+- **A new mark and app icon.** A white bird on an indigo tile, in the top bar, on the login page, as the browser tab icon and on the phone's home screen. Android gets its own full-bleed ("maskable") icons, so the phone can cut the icon to its own shape without a white box around it, and a small one-colour picture for the status bar when a notification arrives. People who already added Flock to their home screen may need to remove it and add it again to see the new icon.
+- **One brand colour.** Indigo, on soft, slightly tinted greys, in light and dark. Cards are white with a hairline and a soft shadow, page titles are bigger and bolder, corners are rounder. The colour list at the top of `web/style.css` is the one place to change it.
+- **Every icon redrawn** on one grid with one line weight. Four new ones, so each page has its own picture in the menu: a crossed-out calendar for Days off, a group for Teams, a church for Services, a missing puzzle piece for Gaps (the Schedule is a calendar). The four empty-state pictures are redrawn to match.
+- **The tab bar** marks the page you are on with a soft pill, a filled-in icon and bold text. **More** opens a rounded card with bigger rows.
+- **Tags, buttons and fields.** Status tags are soft pills with a symbol and a word. The main button is filled and the others are outlined; "I can't" and "Remove person" are soft red, and solid red only where you confirm. Fields are rounder; the choice lists (for example "I can serve") have Flock's own arrow in place of the browser's. The either/or switch on the slot panel shows the chosen side as a raised white tile. Messages at the bottom of the screen are rounder with the symbol in a tinted circle.
+- **Faster first load on a phone.** The bundled font now holds Latin letters only (English, accented European letters, Vietnamese, Pacific names with macrons or an ʻokina): 85 KB, down from 352 KB. Names in other alphabets, such as Greek or Cyrillic, are shown in the phone's own font.
+- The component gallery (`/gallery.html`) shows the new colours and icons.
+
+### Fixed
+
+- The count on each Gaps service had square corners (it used a corner size that did not exist).
+- The bell in the top bar looked the same whether notifications were on or off. It is now tinted with a small dot when they are on.
+- Schedule showed "Tap any position to fill it" twice, the second time with a stray space before the full stop.
+- On a wide screen a scheduler's menu was cut off part-way and had to be scrolled sideways.
+
 ## 0.5.1
 
 - Notifications: `flock push-keys` sometimes (about 1 in 256) printed a private key one byte short, which Flock then refused, so it would not start. Keys are now always full length, and a short key made by 0.5.0 is accepted as it is. The test run before deploying 0.5.0 failed on this.

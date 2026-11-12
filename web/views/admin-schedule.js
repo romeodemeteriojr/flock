@@ -167,7 +167,7 @@ export function renderScreen(m, panelHtml = '') {
     ${m.error ? html`<p class="form-error" role="alert">${m.error}</p>` : ''}
     ${toasts([[m.notice, 'ok']])}
     ${panelHtml}
-    <p class="hint sched-range">${iconSlot('calendar', 'icon-sm')} <span class="num">${formatDate(m.from)} to ${formatDate(m.to)}</span>. Tap a position to fill it.</p>
+    <p class="hint sched-range">${iconSlot('calendar', 'icon-sm')} <span class="num">${formatDate(m.from)} to ${formatDate(m.to)}</span></p>
     ${autofillCard(m.autofill ?? { weekOf: '', weeks: 1 })}
     ${s.rows.length ? html`${grid(s, m.today)}${cards(s, m.today, m.open ?? new Set())}`
     : emptyState(`No services in the next ${WEEKS} weeks. Add them on the Services page.`, 'art-calendar')}

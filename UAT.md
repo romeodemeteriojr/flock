@@ -429,7 +429,10 @@ Back on the laptop, logged in as the scheduler.
    be easy to read: no grey text on grey, no white box in the middle of a dark
    page. Coloured tags (**Confirmed, Declined, Waiting for answer**) should still
    be readable and also carry a word, not only a colour.
-4. Switch back to light mode and check again.
+4. The Flock mark in the top bar should be the same in both: a white bird on an
+   indigo tile. Buttons and links are indigo in light mode and a lighter indigo
+   in dark mode.
+5. Switch back to light mode and check again.
 
 - [ ] Pass   [ ] Fail   Notes: ______________________________
 
@@ -490,7 +493,9 @@ a phone), or use a real phone.
    except the Schedule grid on a wide screen (on a phone it turns into cards).
 2. The menu should be a bar at the bottom of the screen (volunteers: **My
    schedule** and **Days off**; schedulers: **Schedule, Gaps, People, More**).
-   **More** opens the other pages. Tap somewhere else, or press Escape, to close it.
+   The page you are on has a soft pill behind its picture, the picture is filled
+   in and its name is bold. **More** opens the other pages in a rounded card.
+   Tap somewhere else, or press Escape, to close it.
 3. Buttons should be big enough to tap with a thumb, with space between them,
    so you do not hit the wrong one. **Delete** buttons should never sit right on
    top of a normal button.
@@ -498,6 +503,11 @@ a phone), or use a real phone.
    always be reachable.
 5. Text should be readable without zooming. Turn the phone sideways: it should
    still work.
+6. On a real phone, add Flock to the home screen (iPhone: Share, **Add to Home
+   Screen**. Android: the browser menu, **Add to Home screen** or **Install
+   app**). The icon should be the white bird on indigo with no white box or
+   border around it. If Flock was already on the home screen, remove it and add
+   it again to get the new icon.
 
 - [ ] Pass   [ ] Fail   Notes: ______________________________
 

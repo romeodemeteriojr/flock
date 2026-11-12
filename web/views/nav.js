@@ -10,9 +10,11 @@ import { iconSlot } from '../lib/icons.js';
 import { avatar } from '../lib/avatar.js';
 import { forLogout } from '../lib/push.js';
 
+// One picture per page, each showing the thing itself: a crossed-out calendar
+// for days off, a calendar for the schedule, a missing puzzle piece for gaps.
 const ICONS = {
-  '/': 'home', '/blockouts': 'calendar', '/people': 'users', '/teams': 'sparkle',
-  '/services': 'clock', '/schedule': 'grid', '/gaps': 'warning',
+  '/': 'home', '/blockouts': 'calendar-off', '/people': 'users', '/teams': 'team',
+  '/services': 'church', '/schedule': 'calendar', '/gaps': 'puzzle',
 };
 const SHORT = { '/blockouts': 'Days off' };
 // The admin's tabs on a phone, in this order; the rest go under "More".
