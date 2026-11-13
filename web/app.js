@@ -57,7 +57,16 @@ export function createApp({ root, win = globalThis.window, api = createApi() }) 
 
   function setUser(user) {
     state.user = user;
-    if (!user) { state.push = null; pushFor = null; state.accountOpen = false; paintLayer(); }
+    if (!user) { state.push = null; pushFor = null; state.accountOpen = false; paintLayer(); return; }
+    // The login reply names the person only; the account sheet also shows the
+    // email. Fill in the rest quietly (start-up already has it from /api/me).
+    if (!('email' in user)) {
+      api.get('/api/me').then((r) => {
+        if (state.user !== user || !r?.person) return;
+        Object.assign(user, r.person);
+        if (state.accountOpen) paintLayer();
+      }).catch(() => { /* the sheet just shows less */ });
+    }
   }
 
   function paintTop() {

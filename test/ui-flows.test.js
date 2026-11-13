@@ -179,6 +179,11 @@ test('account sheet: the avatar opens it, a row takes you to its page and closes
   assert.equal(page.hash(), '#/login');
   assert.ok(!page.has('[data-account-sheet]'));
   assert.ok(!page.has('[data-action="account"]'));
+
+  // After logging in (whose reply has no email) the sheet still shows the email.
+  await logIn(page, 'demo-admin@example.com', NEW_PASSWORD);
+  await page.click('account');
+  said(page, /Scheduler · demo-admin@example\.com/);
 });
 
 // ---------- UAT 2: wrong password and lockout ----------
