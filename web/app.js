@@ -4,6 +4,7 @@ import { createApi } from './api.js';
 import { resolve } from './routes.js';
 import * as nav from './views/nav.js';
 import * as account from './views/account.js';
+import * as offline from './views/offline.js';
 import { createSheet } from './lib/sheet.js';
 import { watchScroll } from './lib/topbar.js';
 import { TOAST_REGION, createToaster } from './lib/toast.js';
@@ -195,9 +196,44 @@ export function createApp({ root, win = globalThis.window, api = createApi() }) 
   // A new version of the app that is ready takes over at a page change,
   // never in the middle of one (decision 0009). The page then reloads once.
   function onHashChange() {
+    if (offlineShown) { boot(); return; }
     applyUpdate(win);
     closeAccount({ focus: false });
     render();
+  }
+
+  // ----- "Can't reach the server" (views/offline.js) -----
+  let offlineShown = false;
+  let trying = null;
+  function showOffline(busy) {
+    offlineShown = true;
+    top.innerHTML = '';
+    main.innerHTML = offline.render({ busy });
+    doc.title = `${offline.title} – Flock`;
+  }
+
+  // Who is logged in, then the page. If the server cannot be reached (no
+  // signal, or it is waking up), the offline page, until a try works.
+  function boot() {
+    if (trying) return trying;
+    trying = (async () => {
+      const again = offlineShown;
+      if (again) showOffline(true);
+      try {
+        const r = await api.get('/api/me');
+        state.user = r?.person ?? null;
+      } catch (err) {
+        if (err?.status !== 401) {
+          showOffline(false);
+          if (again) main.querySelector('h1')?.focus?.(); // say it again to a screen reader
+          return;
+        }
+        state.user = null;
+      }
+      offlineShown = false;
+      render();
+    })().finally(() => { trying = null; });
+    return trying;
   }
 
   async function start() {
@@ -206,15 +242,17 @@ export function createApp({ root, win = globalThis.window, api = createApi() }) 
     win.addEventListener('hashchange', onHashChange);
     win.addEventListener('unhandledrejection', (e) => { e.preventDefault(); handleError(e.reason); });
     win.addEventListener('error', (e) => { e.preventDefault(); handleError(e.error); });
+    // Try again by itself when the phone gets a connection back, or Flock comes back to the screen.
+    win.addEventListener('online', () => { if (offlineShown) boot(); });
+    doc?.addEventListener?.('visibilitychange', () => {
+      if (offlineShown && doc.visibilityState === 'visible') boot();
+    });
+    main.addEventListener('click', (e) => {
+      const el = e.target?.closest?.('[data-action]');
+      if (offlineShown && el?.dataset?.action === 'retry-start') boot();
+    });
     main.innerHTML = String(skeleton('Loading…', 'cards', 2));
-    try {
-      const r = await api.get('/api/me');
-      state.user = r?.person ?? null;
-    } catch (err) {
-      state.user = null;
-      if (err.status !== 401) pending = { text: err.message, kind: 'error' };
-    }
-    render();
+    await boot();
   }
 
   return { state, render, start, navigate, showError, showMessage };

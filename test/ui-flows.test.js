@@ -910,3 +910,53 @@ test('UAT 16 to 19 (what a computer can check): the style sheet and page shell c
   assert.match(shell, /<html lang="en">/);
   assert.match(shell, /<meta name="color-scheme" content="light dark">/);
 });
+
+// ---------- Can't reach the server at start-up ----------
+
+test("no connection at start-up: \"Can't reach the server\", then Try again and coming back online open Flock", async (t) => {
+  const w = await world(t);
+  const first = await joinInvite(w, 'demo-admin@example.com', w.demo.invite.token);
+
+  // The same login, opened again with no signal.
+  const page = openPage({ url: w.app.url, jar: first.jar });
+  page.netDown = true;
+  await page.start();
+  said(page, /Can't reach the server/);
+  said(page, /Check your internet, then try again\. Flock opens as soon as it can connect\./);
+  assert.equal(page.has('nav'), false, 'no menu');
+  assert.equal(page.has('[data-action="account"]'), false, 'no top bar');
+  assert.equal(page.has('form[data-form="login"]'), false, 'not sent to the login page');
+  assert.equal(page.title(), "Can't reach the server – Flock");
+  wellBuilt(page, 'offline');
+
+  // Try again while still offline: still here, and the heading is read out again.
+  await page.clickButton('Try again');
+  said(page, /Can't reach the server/);
+  assert.equal(page.focusedText(), "Can't reach the server");
+  // Typing an address does not leave it either.
+  await page.goto('#/blockouts');
+  said(page, /Can't reach the server/);
+
+  // Signal back: Try again opens Flock, logged in, on the page asked for.
+  page.netDown = false;
+  await page.clickButton('Try again');
+  loggedInAs(page, 'Demo Admin');
+  assert.equal(page.has('[data-offline]'), false);
+  assert.equal(page.hash(), '#/blockouts');
+  said(page, /Days I can't serve/);
+
+  // The phone's "online" event does it too.
+  const other = openPage({ url: w.app.url, jar: first.jar });
+  other.netDown = true;
+  await other.start();
+  said(other, /Can't reach the server/);
+  other.netDown = false;
+  await other.fireWindow('online');
+  loggedInAs(other, 'Demo Admin');
+
+  // Logged out (401) still goes to the login page, as before.
+  const stranger = openPage({ url: w.app.url });
+  await stranger.start();
+  assert.equal(stranger.has('[data-offline]'), false);
+  assert.equal(stranger.hash(), '#/login');
+});

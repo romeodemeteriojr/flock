@@ -276,6 +276,8 @@ export function openPage({ url, jar = { cookie: '' }, fetchLog = [] } = {}) {
 
   let inflight = 0;
   const fetchFn = async (path, init = {}) => {
+    // page.netDown = true: like a phone with no signal (fetch itself fails).
+    if (page.netDown) throw new TypeError('Failed to fetch');
     inflight++;
     try {
       const headers = { ...(init.headers ?? {}) };
@@ -447,6 +449,8 @@ export function openPage({ url, jar = { cookie: '' }, fetchLog = [] } = {}) {
 
   /** Change the address, like typing in the bar or pressing the back button. */
   page.goto = async (to) => { win.location.hash = to; await page.settle(); };
+  /** Fire a window event the app listens for ('online', for example). */
+  page.fireWindow = async (type, ev = {}) => { fire(type, ev); await page.settle(); };
   /** Run every pending timer (toasts fading away, for example). */
   page.runTimers = () => { const t = page.timers; page.timers = []; for (const x of t) x.fn(); };
   /** Start the app, as the browser does when the page loads. */

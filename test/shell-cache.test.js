@@ -321,7 +321,7 @@ test('the app registers the worker at start and applies a waiting update at the 
   assert.match(app, /registerWorker\(win\)/);
   assert.match(app, /watchUpdates\(win\)/);
   assert.match(app, /addEventListener\('hashchange', onHashChange\)/);
-  assert.match(app, /function onHashChange\(\) \{\s*applyUpdate\(win\);[\s\S]*?render\(\);/);
+  assert.match(app, /function onHashChange\(\) \{[\s\S]{0,120}?applyUpdate\(win\);[\s\S]*?render\(\);/);
   const push = readFileSync(path.join(WEB, 'lib', 'push.js'), 'utf8');
   assert.doesNotMatch(push, /serviceWorker\.register\(/, 'push reuses registerWorker');
 });
