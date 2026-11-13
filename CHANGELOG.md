@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased
+
+No API or database changes: it deploys over 0.7.0 as it is.
+
+### Screens
+
+- **My schedule leads with what needs you.** The big card at the top is the earliest ask still waiting for your answer, with **Yes, I can** and **I can't** right in it. With nothing to answer, it shows the next time you serve, who you serve with (their pictures and names) and **I can't make it after all**. After **Yes, I can** the card stays where it is, so the next ask never jumps under your finger. Below it, **Also needs your answer** and **Coming up** are smaller cards; **Details** on each shows who else is serving, the whole day and **I can't make it after all**.
+- **Login and Welcome** are centred, with the Flock mark large on a soft glow, and an "or" line before the other sign-in buttons where the church has set them up. Welcome shows who you are in a small card with your picture.
+- **Days off: tap the days.** A month calendar replaces the From and To date boxes. Tap the first day you are away, then the last; days already off are struck through, days you are down to serve have a dot, today is ringed. You can look up to 12 months ahead. Arrow keys move around the calendar, and each day says in words what it is.
+- **Schedule** opens with a progress card: "34 of 80 positions confirmed", a bar, and what still needs doing (waiting, said no, open). **Fill open positions** now opens in a sheet. Each service card shows a small dot per position and "5 of 9 confirmed", or a check when everyone is confirmed; tags appear only for problems.
+- **Gaps** has two tabs, **Gaps** and **Reminders**. Gaps says how many there are in the next 4 weeks, has a chip to filter by each kind of gap (in place of the five number tiles), and groups the gaps in a card per service.
+- **People** is a quieter list: one row per person with only the tags that apply, and filters for **Schedulers**, **Not joined** and **Deactivated**. Tap a person for their sheet with every action (positions, change name, make a scheduler or volunteer, new invite, reset login, deactivate); the are-you-sure steps open inside it. **Add** opens a sheet with the Scheduler and Volunteer explanation right under the box. Your own sheet no longer offers to change your role or deactivate you (the server never allowed it).
+- **The slot sheet** names the position and its date at the top and shows who is in it now, with **Remove**. The switch reads **Trained** and **Everyone**, and the first trained person on the list (who has served least) is marked **Best match**.
+- The component gallery, README and acceptance checks (`UAT.md`) show the new screens.
+
 ## 0.7.0
 
 ### App feel
