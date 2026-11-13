@@ -8,6 +8,8 @@
 - **Opens at once, even on bad signal.** The phone keeps a copy of Flock's own files (pages, scripts, styles, font, icons; never your data), so an installed Flock opens straight away, also while the server is waking up. Every device now gets the small background helper (service worker), not only those with notifications on (decision `docs/decisions/0009-app-shell-cache.md`).
 - **Updates reach installed phones by themselves.** The server puts the list of the app's files, with a fingerprint of each, at the top of `/sw.js`, so any new release changes it. The phone fetches the new version in the background and switches to it at the next tap that changes the page (one quick reload). It looks for a new version when the app comes back to the screen, at most every 30 minutes.
 - The privacy page says the phone keeps a copy of Flock's files, with nothing about you in it.
+- **Edge to edge.** On phones with a notch or rounded corners Flock now fills the whole screen; the top bar, the page and the messages keep clear of the notch and the status bar.
+- **Shortcuts.** Press and hold the Flock icon on Android (and in desktop Chrome or Edge) for **My schedule** and **Days off**.
 
 ## 0.6.0
 

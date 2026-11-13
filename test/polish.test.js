@@ -346,7 +346,7 @@ test('accessibility basics: lang, viewport, landmarks, labelled menu with aria-c
   for (const page of ['index.html', 'gallery.html']) {
     const s = readFileSync(path.join(WEB, page), 'utf8');
     assert.match(s, /<html lang="en">/, page);
-    assert.match(s, /<meta name="viewport" content="width=device-width, initial-scale=1">/, page);
+    assert.match(s, /<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">/, page);
     assert.match(s, /<meta name="color-scheme" content="light dark">/, page);
   }
   assert.match(SHELL, /<header class="top"/);

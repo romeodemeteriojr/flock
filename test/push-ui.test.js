@@ -387,6 +387,26 @@ test('the app can be installed: manifest, icons, service worker and the link to 
   } finally { await t.close(); }
 });
 
+test('home-screen shortcuts: My schedule and Days off, each with a 96px icon that is served', async () => {
+  const t = await startTestApp();
+  try {
+    const manifest = JSON.parse((await t.request('GET', '/manifest.webmanifest')).text);
+    assert.deepEqual(manifest.shortcuts.map((s) => [s.name, s.url]), [['My schedule', '/#/'], ['Days off', '/#/blockouts']]);
+    const { resolve } = await import('../web/routes.js');
+    for (const s of manifest.shortcuts) {
+      const r = resolve(s.url.slice(1), { id: 2, name: 'Mary', role: 'member' });
+      assert.ok(r.route && !r.redirect, `${s.url} is a real page`);
+      assert.equal(s.icons.length, 1);
+      const [icon] = s.icons;
+      assert.deepEqual([icon.sizes, icon.type], ['96x96', 'image/png']);
+      const res = await fetch(t.url + icon.src);
+      assert.equal(res.status, 200, icon.src);
+      const png = Buffer.from(await res.arrayBuffer());
+      assert.deepEqual([png.readUInt32BE(16), png.readUInt32BE(20)], [96, 96], icon.src);
+    }
+  } finally { await t.close(); }
+});
+
 test('People: a bell chip on everyone with notifications on (not on deactivated people)', async () => {
   const people = await import('../web/views/admin-people.js');
   const base = { email: null, role: 'member', joined: true, positionIds: [] };

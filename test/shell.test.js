@@ -68,7 +68,7 @@ test('every web file is served with the right content type', async () => {
 test('index.html has lang, viewport, title, #app, module script and stylesheet', async () => {
   const s = await readFile(path.join(WEB, 'index.html'), 'utf8');
   assert.match(s, /<html lang="en">/);
-  assert.match(s, /<meta name="viewport" content="width=device-width, initial-scale=1">/);
+  assert.match(s, /<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">/);
   assert.match(s, /<title>Flock<\/title>/);
   assert.match(s, /<div id="app">/);
   assert.match(s, /<script type="module" src="\/app\.js"><\/script>/);

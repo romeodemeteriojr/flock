@@ -183,6 +183,9 @@ body:has(.sheet-layer:not(.gallery-frame .sheet-layer)) { overflow: hidden; }
   max-width: 960px;
   margin: 0 auto;
   padding: var(--s-2) var(--s-4) calc(var(--tabbar-h) + var(--s-12));
+  /* Edge to edge (viewport-fit=cover): keep clear of a notch in landscape. */
+  padding-left: max(var(--s-4), env(safe-area-inset-left, 0px));
+  padding-right: max(var(--s-4), env(safe-area-inset-right, 0px));
 }
 
 h1, h2, h3 { line-height: 1.2; letter-spacing: -0.015em; text-wrap: balance; }
@@ -257,6 +260,7 @@ h2:focus-visible { outline: 3px solid var(--focus); }
 .top {
   position: sticky; top: 0; z-index: 30;
   isolation: isolate;
+  padding-top: env(safe-area-inset-top, 0px); /* under the status bar when edge to edge */
 }
 /* The blur sits on a layer behind, so the fixed tab bar inside is not trapped by it. */
 .top::before {
@@ -271,6 +275,8 @@ h2:focus-visible { outline: 3px solid var(--focus); }
   max-width: var(--page-max); margin: 0 auto;
   display: flex; align-items: center; gap: var(--s-3);
   min-height: 60px; padding: var(--s-1) var(--s-4);
+  padding-left: max(var(--s-4), env(safe-area-inset-left, 0px));
+  padding-right: max(var(--s-4), env(safe-area-inset-right, 0px));
 }
 .brand {
   display: inline-flex; align-items: center; gap: 10px;
@@ -390,7 +396,7 @@ h2:focus-visible { outline: 3px solid var(--focus); }
   display: flex; flex-direction: column; align-items: center; gap: var(--s-2);
   pointer-events: none;
 }
-.toast-region { bottom: auto; top: calc(60px + var(--s-3)); }
+.toast-region { bottom: auto; top: calc(60px + var(--s-3) + env(safe-area-inset-top, 0px)); }
 .toast {
   pointer-events: auto;
   display: flex; align-items: center; gap: var(--s-3);
@@ -930,7 +936,11 @@ th, td { text-align: left; padding: var(--s-2) var(--s-3); border-bottom: 1px so
 @media (min-width: 720px) {
   :root { --fs-hero: 2.1rem; }
   h1 { font-size: 2.1rem; }
-  .main { padding: var(--s-4) var(--s-6) var(--s-12); }
+  .main {
+    padding: var(--s-4) var(--s-6) var(--s-12);
+    padding-left: max(var(--s-6), env(safe-area-inset-left, 0px));
+    padding-right: max(var(--s-6), env(safe-area-inset-right, 0px));
+  }
 
   /* Top navigation instead of the tab bar: a row of pills under the top bar. */
   .nav {

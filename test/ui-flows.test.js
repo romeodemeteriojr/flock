@@ -859,7 +859,7 @@ test('UAT 16 to 19 (what a computer can check): the style sheet and page shell c
   assert.match(css, /prefers-color-scheme:\s*dark/, 'a dark colour scheme exists');
   assert.match(css, /:focus-visible/, 'a visible keyboard focus outline exists');
   assert.match(css, /@media \(max-width:\s*\d+px\)/, 'phone-width rules exist');
-  assert.match(shell, /<meta name="viewport" content="width=device-width, initial-scale=1">/);
+  assert.match(shell, /<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">/);
   assert.match(shell, /<html lang="en">/);
   assert.match(shell, /<meta name="color-scheme" content="light dark">/);
 });
