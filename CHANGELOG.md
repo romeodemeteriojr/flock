@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+No API or database changes: it deploys over 0.8.0 as it is.
+
+### Wide screens
+
+On a computer or a large tablet (1024 pixels wide and up), Flock now uses the space instead of stretching the phone layout. Phones and smaller tablets look as before.
+
+- **The menu is a column on the left**, with each page's count beside it. A scheduler's other pages are always visible under **More**, and your name sits at the bottom; clicking it opens your account as a small menu just above.
+- **Two panes.** On **People**, **Gaps** and **Schedule**, picking a person or a position opens it in a pane beside the list instead of a sheet over it. The one you picked is highlighted; until you pick, the pane says "Choose a person." or "Choose a position." Escape closes the pane.
+- **My schedule** shows **Coming up** beside the big card at the top.
+- The login and "Can't reach the server" pages, which have no menu, stay centred on the full width.
+
 ## 0.8.0
 
 No API or database changes: it deploys over 0.7.0 as it is.
