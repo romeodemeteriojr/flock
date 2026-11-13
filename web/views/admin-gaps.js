@@ -2,10 +2,10 @@
 // (each roster day), each with a plain label for its kind; tapping an item
 // opens the slot panel. Also the reminders panel: drafted messages to copy.
 // Flock never sends anything itself.
-import { html } from '../lib/html.js';
+import { html, raw } from '../lib/html.js';
 import { formatDate, formatTime, todayString } from '../lib/dates.js';
 import { createSlotPanel, copyText } from '../lib/slotpanel.js';
-import { createSheet } from '../lib/sheet.js';
+import { createSheet, host, watchHost } from '../lib/sheet.js';
 import { swipeToDismiss } from '../lib/swipe.js';
 import { flashCopied } from '../lib/copyflash.js';
 import { canShare, share } from '../lib/share.js';
@@ -98,9 +98,9 @@ const GAP_ICONS = Object.freeze({
 
 const gapWords = (n) => (n === 1 ? '1 gap' : `${n} gaps`);
 
-function gapItem(it) {
+function gapItem(it, current) {
   return html`<li>
-    <button type="button" class="slot-btn gap-btn" data-action="slot-open" data-id="${it.slotId}">
+    <button type="button" class="slot-btn gap-btn" data-action="slot-open" data-id="${it.slotId}"${it.slotId === current ? html` aria-current="true"` : ''}>
       <span class="slot-who"><strong>${it.positionName}</strong> (${it.teamName})</span>
       <span class="gap-kind"><span class="chip chip-${GAP_TONE[it.type]}" data-gap-type="${it.type}">${iconSlot(GAP_ICONS[it.type], 'chip-icon')}${GAP_LABELS[it.type]}</span>${it.personName && it.type !== 'open' ? html` <span class="hint">${it.personName}</span>` : ''}</span>
       ${iconSlot('chevron', 'gap-chevron')}
@@ -163,18 +163,26 @@ function gapsTab(m) {
     ${shown.map((g) => html`<section class="card gap-card gap-group" data-gap-service="${g.key}">
       <h3 class="gap-title"><span class="gap-label num">${formatDate(g.date)} at ${formatTime(g.time)}</span> <span class="gap-count" role="img" data-gap-count="${g.key}" aria-label="${gapWords(g.items.length)}">${g.items.length}</span></h3>
       <p class="hint gap-sub">${g.serviceTitle}</p>
-      <ul class="list gap-list">${g.items.map(gapItem)}</ul>
+      <ul class="list gap-list">${g.items.map((it) => gapItem(it, m.current))}</ul>
     </section>`)}`;
 }
 
-export function renderScreen(m, panelHtml = '') {
+/**
+ * panelHtml: the slot panel as a layer (phones and tablets). paneHtml: on wide
+ * screens (m.wide) the panel sits in a pane beside the list instead.
+ */
+export function renderScreen(m, panelHtml = '', paneHtml = '') {
   if (m.loading) return String(skeleton('Loading…', 'list', 4));
+  const reminding = (m.tab ?? 'gaps') === 'reminders';
+  const body = reminding ? reminders(m) : m.wide
+    ? html`<div class="split"><div>${gapsTab(m)}</div><aside class="card pane" aria-label="Position">${paneHtml ? raw(String(paneHtml)) : html`<p class="pane-empty">${iconSlot('puzzle', 'icon-lg')}Choose a position.</p>`}</aside></div>`
+    : gapsTab(m);
   return String(html`
     ${m.error ? html`<p class="form-error" role="alert">${m.error}</p>` : ''}
     ${toasts([[m.notice, 'ok']])}
     ${panelHtml}
     ${tabs(m)}
-    ${(m.tab ?? 'gaps') === 'reminders' ? reminders(m) : gapsTab(m)}
+    ${body}
   `);
 }
 
@@ -191,7 +199,8 @@ export function createScreen({ api, root, today = todayString(), win = globalThi
   let reminderSeq = 0;
   const paint = () => {
     sheet.before();
-    root.innerHTML = renderScreen(m, panel.render());
+    m.current = panel.state?.slot?.id ?? null;
+    root.innerHTML = m.wide ? renderScreen(m, '', panel.render({ pane: true })) : renderScreen(m, panel.render());
     sheet.update();
     const open = root.querySelector?.('[data-slot-panel]');
     if (open) swipeToDismiss(open, { win, onDismiss: () => panel.close() });
@@ -212,7 +221,14 @@ export function createScreen({ api, root, today = todayString(), win = globalThi
     },
   });
 
-  const sheet = createSheet({ root, isOpen: () => !!panel.state, close: () => panel.close() });
+  const sheet = createSheet({ root, isOpen: () => !!panel.state, close: () => panel.close(), modal: () => !m.wide });
+  // Wide screens: the panel docks beside the list; repaint when the window crosses that width.
+  m.wide = host(win) === 'pane';
+  const stopWatching = watchHost(win, () => {
+    if (root.isConnected === false) { stopWatching(); return; }
+    m.wide = host(win) === 'pane';
+    paint();
+  });
 
   async function loadReminders(weekOf) {
     const r = m.reminders;

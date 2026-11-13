@@ -290,6 +290,7 @@ function pages(d) {
     ${frame('Are you sure? (in the sheet)', screen('People', people.renderScreen(peopleModel({ selected: 3, entered: true, panel: { kind: 'active', id: 3 } }))))}
     ${frame('Add a person', screen('People', people.renderScreen(peopleModel({ adding: true, entered: true }))))}
     ${frame('Only "Not joined"', screen('People', people.renderScreen(peopleModel({ filter: 'invited' }))))}
+    ${frame('Wide screen: the person in a pane beside the list (1024px and up)', screen('People', people.renderScreen(peopleModel({ wide: true, selected: 5 }))))}
     ${frame('Invite message on a phone that can share', screen('People', people.renderScreen(peopleModel({ canShare: true, invite: { name: 'Noor Imaginary', email: 'noor.imaginary@example.com', link: '/#/welcome?token=gallery-example', localOnly: false } }))))}
     ${frame('What can they do?', screen('People', people.renderScreen(peopleModel({ selected: 3, panel: { kind: 'positions', id: 3, checked: new Set([10]) } }))))}
     ${frame('Deactivate?', screen('People', people.renderScreen(peopleModel({ selected: 5, panel: { kind: 'active', id: 5 } }))))}

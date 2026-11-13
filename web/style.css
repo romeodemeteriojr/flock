@@ -1193,7 +1193,8 @@ th, td { text-align: left; padding: var(--s-2) var(--s-3); border-bottom: 1px so
 /* ---------- account sheet ---------- */
 .account-head { display: flex; align-items: center; gap: var(--s-3); padding: var(--s-3) var(--s-5) var(--s-4); }
 .account-name { margin: 0; font-size: var(--fs-lg); font-weight: 700; letter-spacing: -0.015em; }
-.account-sub { margin: 0; color: var(--muted); font-size: var(--fs-sm); overflow-wrap: anywhere; }
+.account-sub { margin: 2px 0 0; color: var(--muted); font-size: var(--fs-sm); overflow-wrap: anywhere; }
+.account-name:focus-visible { outline-offset: 0; }
 .account-text { flex: 1; min-width: 0; }
 .sheet-menu { padding: 0 var(--s-2) var(--s-3); overflow-y: auto; }
 .account-sheet .sheet-menu { padding-bottom: max(var(--s-4), env(safe-area-inset-bottom)); }
@@ -1364,6 +1365,84 @@ th, td { text-align: left; padding: var(--s-2) var(--s-3); border-bottom: 1px so
   .nav-logout-label { display: none; }
   /* iOS date/time pickers need more room than a 1fr side-by-side column. */
   .field-pair { grid-template-columns: 1fr; }
+}
+
+/* ---------- wide screens (1024px and up): side navigation and two panes ----------
+   The same markup as on a phone, laid out again: the header becomes a column
+   on the left, and a sheet opened from a list shows in a pane beside it. */
+#layer { display: contents; } /* its sheets are fixed; it takes no room in the layout */
+@media (min-width: 1024px) {
+  #app { display: grid; grid-template-columns: 256px minmax(0, 1fr); align-items: start; }
+  /* Logged out, or the server cannot be reached: no side column. */
+  #app:has(.top:empty) { display: block; }
+  .top {
+    position: sticky; top: 0; height: 100vh; height: 100dvh;
+    display: flex; flex-direction: column; gap: var(--s-2);
+    padding: var(--s-4) var(--s-3);
+    border-right: 1px solid var(--line); background: var(--bar-bg);
+  }
+  .top.is-scrolled { background: var(--bar-bg); }
+  .top::before { display: none; }
+  .topbar { display: contents; }
+  .brand { flex: none; order: 1; padding: 0 var(--s-3); min-height: 56px; font-size: 1.3rem; }
+  .brand-mark { width: 2rem; height: 2rem; padding: 4px; border-radius: 9px; }
+  /* No title swap in the side column: the page's own heading is always in view. */
+  .top-title { display: none; }
+  .top.is-scrolled .brand-name { opacity: 1; transform: none; }
+  .nav { position: static; order: 2; flex: 1; padding: 0; overflow-y: auto; }
+  .nav::before { display: none; }
+  .nav-list, .nav-admin .nav-list { flex-direction: column; align-items: stretch; gap: 2px; max-width: none; overflow: visible; margin: 0; }
+  .nav-item { flex: none; }
+  .nav-list a, .nav-more {
+    flex-direction: row; justify-content: flex-start; gap: var(--s-3);
+    min-height: var(--control-size); padding: var(--s-2) var(--s-3);
+    border-radius: var(--radius); font-size: var(--fs-md); color: var(--muted);
+  }
+  .nav-list a[aria-current="page"]::after { top: 0; left: 0; width: 100%; height: 100%; border-radius: var(--radius); }
+  .nav-icon { width: 1.35rem; height: 1.35rem; }
+  .nav-list .nav-badge, .nav.is-open .nav-sub .nav-badge { position: static; margin-left: auto; box-shadow: none; }
+  /* The admin's other pages are always there, under a small heading. */
+  .nav-sub-title {
+    display: block; margin: var(--s-4) 0 var(--s-1); padding: 0 var(--s-3);
+    color: var(--muted); font-size: var(--fs-xs); font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;
+  }
+  .nav.is-open .nav-sub a { flex-direction: row; justify-content: flex-start; min-height: var(--control-size); padding: var(--s-2) var(--s-3); border-radius: var(--radius); font-size: var(--fs-md); }
+  .nav.is-open .nav-sub .nav-icon { width: 1.35rem; height: 1.35rem; padding: 0; background: none; color: inherit; }
+  .nav.is-open .nav-scrim { display: none; }
+  .nav-user { order: 3; margin: 0; padding-top: var(--s-2); border-top: 1px solid var(--line); gap: var(--s-1); }
+  .avatar-btn { width: auto; flex: 1; justify-content: flex-start; gap: var(--s-3); padding: var(--s-2) var(--s-3); border-radius: var(--radius); color: var(--text); font: inherit; font-weight: 600; }
+  .avatar-btn:hover { background: var(--surface-2); }
+  .avatar-name { display: inline; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .toast-region { top: var(--s-6); }
+  .main {
+    max-width: 1120px; width: 100%; padding: var(--s-6) var(--s-8) var(--s-12);
+    padding-right: max(var(--s-8), env(safe-area-inset-right, 0px));
+  }
+
+  /* Two panes: a list on the left, the thing picked on the right. */
+  .split { display: grid; grid-template-columns: minmax(340px, 420px) minmax(0, 1fr); gap: var(--s-6); align-items: start; }
+  .split-wide { grid-template-columns: minmax(0, 1fr) 400px; }
+  .pane { position: sticky; top: var(--s-6); max-height: calc(100vh - var(--s-12)); overflow-y: auto; margin: 0; }
+  .pane-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--s-2); min-height: 20rem; margin: 0; color: var(--muted); text-align: center; }
+  .pane-title { margin-top: 0; }
+  /* A sheet shown in a pane is not a layer: no scrim, no slide, no handle. */
+  .pane .sheet { position: static; width: auto; max-height: none; border-radius: 0; box-shadow: none; padding: 0; background: none; animation: none; transform: none; }
+  .pane .sheet-grab { display: none; }
+  .pane .sheet-head { padding: 0 0 var(--s-2); }
+  .pane .sheet-body { padding: 0; overflow: visible; }
+  .pane .sheet-menu { padding: 0; }
+  .pane .account-head { padding: 0 0 var(--s-4); }
+  .pane .slot-panel .sheet-foot { display: none; }
+  .people-card .person-row[aria-current="true"], .gap-card .gap-btn[aria-current="true"] { background: var(--accent-soft); color: var(--on-accent-soft); }
+  .slot-btn[aria-current="true"] { box-shadow: 0 0 0 2px var(--accent); }
+  /* The account sheet is a small menu above the account button. */
+  .account-pop .sheet-backdrop { background: transparent; }
+  .account-pop .sheet { left: var(--s-3); right: auto; top: auto; bottom: 76px; width: 380px; max-height: none; border-radius: var(--radius-xl); border: 1px solid var(--line); animation: rise var(--med) var(--ease); }
+  .account-pop .sheet-grab { display: none; }
+  /* Gallery frames keep the phone bar. */
+  .gallery-frame .top { height: auto; position: relative; display: block; border-right: 0; background: transparent; }
+  .gallery-frame .topbar { display: flex; }
+  .gallery-frame .nav { position: relative; }
 }
 
 /* ---------- reduced motion: no movement anywhere ----------

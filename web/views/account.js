@@ -20,13 +20,16 @@ function row({ icon, label, sub = '', end = '', href = '', action = '', danger =
     : html`<li><button type="button" class="menu-row${danger ? ' is-danger' : ''}" data-action="${action}">${inner}</button></li>`;
 }
 
-/** The sheet's markup, or '' when it is closed. canInstall: show "Install Flock". */
-export function render(state, { canInstall = false } = {}) {
+/**
+ * The sheet's markup, or '' when it is closed. canInstall: show "Install
+ * Flock". pop: wide screens, where it is a small menu above the account button.
+ */
+export function render(state, { canInstall = false, pop = false } = {}) {
   const user = state?.user;
   if (!user || !state.accountOpen) return '';
   const role = isAdmin(user) ? 'Scheduler' : 'Volunteer';
   const push = state.push;
-  return String(html`<div class="sheet-layer is-entering" data-account-sheet>
+  return String(html`<div class="sheet-layer is-entering${pop ? ' account-pop' : ''}" data-account-sheet>
   <div class="sheet-backdrop" data-action="account-close"></div>
   <section class="sheet account-sheet" data-account-panel role="dialog" aria-modal="true" aria-labelledby="account-name">
     <div class="sheet-grab" aria-hidden="true"></div>

@@ -14,6 +14,7 @@ import { turnOn } from './notifications.js';
 import { answerCount } from '../lib/counts.js';
 import { isIosSafari, laterChosen, chooseLater } from '../lib/install.js';
 import { avatar } from '../lib/avatar.js';
+import { host, watchHost } from '../lib/sheet.js';
 
 export const title = 'My schedule';
 
@@ -185,16 +186,22 @@ export function render(state, view = { loading: true }) {
     const asks = rest.filter((i) => i.status === 'pending');
     const later = rest.filter((i) => i.status !== 'pending');
     const dayRoster = top ? roster(top, view) : '';
-    body = top
-      ? html`${hero(top, view, today)}
-        ${dayRoster ? html`<div class="card hero-roster">${dayRoster}</div>` : ''}
-        ${asks.length ? html`<h2 class="section-title">Also needs your answer</h2><ul class="cards">${asks.map((i) => card(i, view))}</ul>` : ''}
-        ${later.length ? html`<h2 class="section-title">Coming up</h2><ul class="cards">${later.map((i) => card(i, view))}</ul>` : ''}`
-      : html`<section class="hero hero-quiet" aria-label="Next time you serve">
+    if (!top) {
+      body = html`<section class="hero hero-quiet" aria-label="Next time you serve">
         <span class="hero-eyebrow">${iconSlot('calendar', 'icon-sm')} Nothing yet</span>
         <p class="banner" data-banner>${NONE}</p>
       </section>
       ${emptyState('You have nothing coming up. When you are asked to serve, it will show here.', 'art-calendar')}`;
+    } else {
+      const first = html`${hero(top, view, today)}
+        ${dayRoster ? html`<div class="card hero-roster">${dayRoster}</div>` : ''}
+        ${asks.length ? html`<h2 class="section-title">Also needs your answer</h2><ul class="cards">${asks.map((i) => card(i, view))}</ul>` : ''}`;
+      const coming = later.length ? html`<ul class="cards">${later.map((i) => card(i, view))}</ul>` : '';
+      // Wide screens: what comes up sits beside the hero.
+      body = view.wide && coming
+        ? html`<div class="split split-wide"><div>${first}</div><aside class="pane" aria-label="Coming up"><h2 class="section-title pane-title">Coming up</h2>${coming}</aside></div>`
+        : html`${first}${coming ? html`<h2 class="section-title">Coming up</h2>${coming}` : ''}`;
+    }
   }
   return String(html`
     ${pageHead(title)}
@@ -208,6 +215,7 @@ export function render(state, view = { loading: true }) {
 export function mount(main, ctx) {
   const root = makeHost(main);
   const view = { loading: true, today: ctx.today ?? todayString(), openRosters: new Set(), openCards: new Set() };
+  view.wide = host(ctx.win) === 'pane';
   const paint = () => { if (isAlive(root, main)) root.innerHTML = render(ctx.state, view); };
 
   async function load() {
@@ -286,6 +294,11 @@ export function mount(main, ctx) {
     view.iosSteps = isIosSafari(ctx.win);
   }
   checkInstall();
+  const stopWide = watchHost(ctx.win, () => {
+    if (!isAlive(root, main)) { stopWide(); return; }
+    view.wide = host(ctx.win) === 'pane';
+    paint();
+  });
   const stop = ctx.installer?.onChange?.(() => {
     if (!isAlive(root, main)) { stop?.(); return; }
     checkInstall();

@@ -7,7 +7,7 @@ import * as account from './views/account.js';
 import * as offline from './views/offline.js';
 import * as installSteps from './views/install-steps.js';
 import { createInstall, canInstall, isIosSafari } from './lib/install.js';
-import { createSheet } from './lib/sheet.js';
+import { createSheet, host, watchHost } from './lib/sheet.js';
 import { watchScroll } from './lib/topbar.js';
 import { swipeToDismiss } from './lib/swipe.js';
 import { TOAST_REGION, createToaster } from './lib/toast.js';
@@ -99,7 +99,7 @@ export function createApp({ root, win = globalThis.window, api = createApi() }) 
   function paintLayer() {
     accountSheet.before();
     stepsSheet.before();
-    layer.innerHTML = account.render(state, { canInstall: canInstall(installer, win) }) || installSteps.render(state);
+    layer.innerHTML = account.render(state, { canInstall: canInstall(installer, win), pop: host(win) === 'pane' }) || installSteps.render(state);
     accountSheet.update();
     stepsSheet.update();
     const sheet = layer.querySelector('.sheet');
@@ -177,6 +177,8 @@ export function createApp({ root, win = globalThis.window, api = createApi() }) 
     install, installer, canInstall: () => canInstall(installer, win),
   };
   account.mount(layer, ctx);
+  // Wide screens show the account sheet as a small menu: redraw it when the window crosses that width.
+  watchHost(win, () => { if (state.accountOpen) paintLayer(); });
 
   // Push notifications (decision 0008): loaded once per login, in the
   // background; pages that show them wait on ctx.pushReady. Never breaks the app.

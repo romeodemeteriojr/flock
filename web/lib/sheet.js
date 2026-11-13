@@ -9,6 +9,24 @@
 // Works with a real DOM, and degrades quietly with the test fakes.
 
 const SLOT_PANEL = '[data-slot-panel]';
+
+/** Wide screens show a sheet in a pane beside its list; anything narrower, as a layer. */
+export const WIDE = '(min-width: 1024px)';
+export function host(win) {
+  try { return win?.matchMedia?.(WIDE)?.matches ? 'pane' : 'layer'; } catch { return 'layer'; }
+}
+
+/**
+ * Calls fn when the window crosses the wide-screen width. Returns a function
+ * that stops listening (call it when the screen goes away).
+ */
+export function watchHost(win, fn) {
+  let mql = null;
+  try { mql = win?.matchMedia?.(WIDE) ?? null; } catch { mql = null; }
+  if (typeof mql?.addEventListener !== 'function') return () => {};
+  mql.addEventListener('change', fn);
+  return () => mql.removeEventListener?.('change', fn);
+}
 const FOCUSABLE = 'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 const canFocus = (el) => !!el && typeof el.focus === 'function';
@@ -38,6 +56,7 @@ function pick(root, selector) {
 export function createSheet({
   root, isOpen, close, panel: PANEL = SLOT_PANEL,
   opener = (id) => `[data-action="slot-open"][data-id="${id}"]`, openerRoot = root,
+  modal = () => true, // false while it shows in a pane: then Tab may leave it
 }) {
   let openerId = null;
   let wasOpen = false;
@@ -92,7 +111,7 @@ export function createSheet({
     if (e.key === 'Escape' || e.key === 'Esc') {
       e.preventDefault?.();
       close();
-    } else if (e.key === 'Tab') {
+    } else if (e.key === 'Tab' && modal()) {
       trapTab(e);
     }
   });

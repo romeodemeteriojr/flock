@@ -3,10 +3,10 @@
 // that stays closed (a count of open, waiting and confirmed positions) until
 // tapped. Both are in the page; style.css shows the right one. Tapping a slot
 // opens the slot panel (suggestions, assign, remove person).
-import { html } from '../lib/html.js';
+import { html, raw } from '../lib/html.js';
 import { formatDate, formatTime, todayString } from '../lib/dates.js';
 import { createSlotPanel, statusChip, statusOf, STATUS } from '../lib/slotpanel.js';
-import { createSheet } from '../lib/sheet.js';
+import { createSheet, host, watchHost } from '../lib/sheet.js';
 import { swipeToDismiss } from '../lib/swipe.js';
 import { iconSlot } from '../lib/icons.js';
 import { toasts } from '../lib/toast.js';
@@ -99,22 +99,23 @@ export const panelSlot = (slot, svc) => ({ ...slot, date: svc.date, time: svc.ti
 
 // ---------- rendering ----------
 
-function slotButton(slot) {
+function slotButton(slot, current = null) {
   const has = slot.personId !== null && slot.personId !== undefined;
+  const here = slot.id === current ? html` aria-current="true"` : '';
   if (has) {
-    return html`<button type="button" class="slot-btn" data-action="slot-open" data-id="${slot.id}">
+    return html`<button type="button" class="slot-btn" data-action="slot-open" data-id="${slot.id}"${here}>
       <span class="slot-who">${slot.personName}</span>
       ${statusChip(statusOf(slot), { compact: true })}
     </button>`;
   }
-  return html`<button type="button" class="slot-btn is-open" data-action="slot-open" data-id="${slot.id}" aria-label="Nobody yet, choose someone">
+  return html`<button type="button" class="slot-btn is-open" data-action="slot-open" data-id="${slot.id}" aria-label="Nobody yet, choose someone"${here}>
     ${iconSlot('plus', 'icon-sm')}
   </button>`;
 }
 
 const todayContent = html` ${iconSlot('dot', 'icon-today')}<span class="visually-hidden">Today</span>`;
 
-function grid(s, today) {
+function grid(s, today, current) {
   return html`<div class="table-wrap sched-grid">
     <table class="sched-table">
       <caption class="visually-hidden">Schedule for the next ${WEEKS} weeks</caption>
@@ -126,7 +127,7 @@ function grid(s, today) {
         <th scope="row" class="sched-date"><span class="sched-day num">${formatDate(r.service.date)}</span>${r.service.date === today ? todayContent : ''}<br><span class="num">${formatTime(r.service.time)}</span><br><span class="hint">${r.service.title}</span>${pips(r.service)}</th>
         ${s.columns.map((c) => c.positions.map((p) => {
     const slots = r.cells.get(p.id) ?? [];
-    return html`<td>${slots.length ? slots.map(slotButton) : html`<span class="hint not-needed">Not needed</span>`}</td>`;
+    return html`<td>${slots.length ? slots.map((x) => slotButton(x, current)) : html`<span class="hint not-needed">Not needed</span>`}</td>`;
   }))}
       </tr>`)}</tbody>
     </table>
@@ -225,18 +226,23 @@ function autofillSheet(a) {
   </section></div>`;
 }
 
-export function renderScreen(m, panelHtml = '') {
+/**
+ * panelHtml: the slot panel as a layer. paneHtml: on wide screens (m.wide) it
+ * docks beside the grid instead, and the picked position is marked.
+ */
+export function renderScreen(m, panelHtml = '', paneHtml = '') {
   if (m.loading) return String(skeleton('Loading…', 'rows', 6));
   const s = buildSchedule(m.services, m.teams);
+  const main = html`<p class="hint sched-range">${iconSlot('calendar', 'icon-sm')} <span class="num">${formatDate(m.from)} to ${formatDate(m.to)}</span></p>
+    ${fillCard(m.services)}
+    ${s.rows.length ? html`${grid(s, m.today, m.current)}${cards(s, m.today, m.open ?? new Set())}`
+    : emptyState(`No services in the next ${WEEKS} weeks. Add them on the Services page.`, 'art-calendar')}`;
   return String(html`
     ${m.error ? html`<p class="form-error" role="alert">${m.error}</p>` : ''}
     ${toasts([[m.notice, 'ok']])}
     ${panelHtml}
     ${autofillSheet(m.autofill ?? { weekOf: '', weeks: 1 })}
-    <p class="hint sched-range">${iconSlot('calendar', 'icon-sm')} <span class="num">${formatDate(m.from)} to ${formatDate(m.to)}</span></p>
-    ${fillCard(m.services)}
-    ${s.rows.length ? html`${grid(s, m.today)}${cards(s, m.today, m.open ?? new Set())}`
-    : emptyState(`No services in the next ${WEEKS} weeks. Add them on the Services page.`, 'art-calendar')}
+    ${m.wide ? html`<div class="split split-wide"><div>${main}</div><aside class="card pane" aria-label="Position">${paneHtml ? raw(String(paneHtml)) : html`<p class="pane-empty">${iconSlot('calendar', 'icon-lg')}Choose a position.</p>`}</aside></div>` : main}
   `);
 }
 
@@ -252,7 +258,8 @@ export function createScreen({ api, root, today = todayString(), onChange = () =
   const paint = () => {
     sheet.before();
     fillSheet.before();
-    root.innerHTML = renderScreen(m, panel.render());
+    m.current = panel.state?.slot?.id ?? null;
+    root.innerHTML = m.wide ? renderScreen(m, '', panel.render({ pane: true })) : renderScreen(m, panel.render());
     m.autofill.entered = m.autofill.open; // slide in once, not on every repaint
     sheet.update();
     fillSheet.update();
@@ -277,7 +284,13 @@ export function createScreen({ api, root, today = todayString(), onChange = () =
     },
   });
 
-  const sheet = createSheet({ root, isOpen: () => !!panel.state, close: () => panel.close() });
+  const sheet = createSheet({ root, isOpen: () => !!panel.state, close: () => panel.close(), modal: () => !m.wide });
+  m.wide = host(win) === 'pane';
+  const stopWatching = watchHost(win, () => {
+    if (root.isConnected === false) { stopWatching(); return; }
+    m.wide = host(win) === 'pane';
+    paint();
+  });
   const fillSheet = createSheet({
     root, isOpen: () => m.autofill.open, close: () => closeAutofill(),
     panel: '[data-autofill]', opener: () => '[data-action="autofill-open"]',

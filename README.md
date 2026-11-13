@@ -266,6 +266,12 @@ show one kind of gap. People is a quiet list; tap someone for everything you
 can do for them, in a sheet. The slot panel shows who is in the position now
 and marks the best match.
 
+**On a computer** (1024px wide and up) the menu becomes a column on the left,
+with your name at the bottom; your account opens as a small menu above it.
+People, Gaps and Schedule show what you picked in a pane beside the list
+instead of a sheet over it, and My schedule puts what is coming up beside the
+next thing. Tablets keep the phone layout with the menu along the top.
+
 To change the brand colour, edit the colour list at the top of `web/style.css`
 (`--brand`, `--accent` and the few colours next to them, once for light and once
 for dark). `npm test` checks that every text and background pair is still easy

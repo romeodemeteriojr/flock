@@ -179,7 +179,8 @@ export function createSlotPanel({ api, paint, changed = () => {} }) {
     return fn(Number(id)) ?? true;
   }
 
-  function render() {
+  // pane: true on wide screens, where it sits beside the list (not a modal layer).
+  function render({ pane = false } = {}) {
     if (!p) return '';
     const { slot } = p;
     const status = statusOf(slot);
@@ -226,9 +227,7 @@ export function createSlotPanel({ api, paint, changed = () => {} }) {
       : html`<button type="button" class="segment" data-action="slot-toggle" aria-pressed="false" aria-label="${full}">${label}</button>`);
     const entering = !p.entered; // slide in once, not on every repaint
     p.entered = true;
-    return html`<div class="sheet-layer${entering ? ' is-entering' : ''}" data-sheet>
-    <div class="sheet-backdrop" data-action="slot-close"></div>
-    <section class="sheet slot-panel" data-slot-panel="${slot.id}" role="dialog" aria-modal="true" aria-labelledby="slot-panel-title" aria-describedby="slot-panel-when">
+    const section = html`<section class="sheet slot-panel" data-slot-panel="${slot.id}" ${pane ? '' : html`role="dialog" aria-modal="true" `}aria-labelledby="slot-panel-title" aria-describedby="slot-panel-when">
       <div class="sheet-grab" aria-hidden="true"></div>
       <div class="sheet-head">
         <div class="sheet-titles"><h2 id="slot-panel-title" tabindex="-1">${slot.positionName}</h2><p class="sheet-sub" id="slot-panel-when">${slot.teamName ? html`${slot.teamName} · ` : ''}${formatDate(slot.date)}${slot.time ? html` at <span class="num">${formatTime(slot.time)}</span>` : ''}</p></div>
@@ -246,7 +245,10 @@ export function createSlotPanel({ api, paint, changed = () => {} }) {
       ${list}
       </div>
       <div class="sheet-foot"><button type="button" class="btn btn-block" data-action="slot-close">Close</button></div>
-    </section></div>`;
+    </section>`;
+    return pane ? section : html`<div class="sheet-layer${entering ? ' is-entering' : ''}" data-sheet>
+    <div class="sheet-backdrop" data-action="slot-close"></div>
+    ${section}</div>`;
   }
 
   return { open, close, handle, render, get state() { return p; } };

@@ -497,6 +497,25 @@ part. Skip it for now and tick **Skipped**.
 
 - [ ] Pass   [ ] Fail   [ ] Skipped   Notes: ______________________________
 
+### 19a. On a computer (1024px wide and up)
+
+1. Open Flock on a laptop with the window wide. The menu is a column on the
+   left: **Schedule, Gaps, People**, then under **More** the other pages, with
+   the counts at the end of their rows, and your name at the bottom. Click
+   your name: a small menu opens above it.
+2. On **People**, click a person: their sheet shows in a pane on the right,
+   and their row is highlighted. Click another person: the pane changes.
+   **Choose a person.** shows when nobody is picked.
+3. On **Gaps** and **Schedule**, click a position: the slot panel shows in the
+   pane on the right, and the position is highlighted. Tab moves on out of it;
+   Escape closes it.
+4. On **My schedule**, what is coming up sits on the right of the big card.
+5. Make the window narrower than a tablet: everything goes back to the phone
+   layout, with sheets from the bottom. Log out: the login page is centred,
+   with no left column.
+
+- [ ] Pass   [ ] Fail   Notes: ______________________________
+
 ### 19. What the page looks like at phone width
 
 You can do this on the laptop: make the browser window narrow (about as narrow as

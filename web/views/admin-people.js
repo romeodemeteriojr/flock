@@ -13,7 +13,7 @@ import { inviteMessage } from '../lib/invite.js';
 import { copyText } from '../lib/slotpanel.js';
 import { canShare, share } from '../lib/share.js';
 import { skeleton, emptyState, pageHead } from '../lib/ui.js';
-import { createSheet } from '../lib/sheet.js';
+import { createSheet, host, watchHost } from '../lib/sheet.js';
 import { swipeToDismiss } from '../lib/swipe.js';
 
 export const title = 'People';
@@ -161,7 +161,8 @@ function tags(p, m, { role = true } = {}) {
 
 function personRow(p, m) {
   const t = tags(p, m);
-  return html`<li data-person="${p.id}"><button type="button" class="menu-row person-row${p.active ? '' : ' is-inactive'}" data-action="select" data-id="${p.id}" aria-haspopup="dialog">
+  const here = m.wide && m.selected === p.id ? html` aria-current="true"` : '';
+  return html`<li data-person="${p.id}"><button type="button" class="menu-row person-row${p.active ? '' : ' is-inactive'}" data-action="select" data-id="${p.id}"${m.wide ? '' : html` aria-haspopup="dialog"`}${here}>
     ${avatar(p.name)}<span class="menu-text"><strong>${p.name}</strong>${p.email ? html`<span class="menu-sub">${p.email}</span>` : ''}${t.length ? html`<span class="person-tags">${t}</span>` : ''}</span><span class="menu-end">${iconSlot('chevron', 'icon-sm')}</span>
   </button></li>`;
 }
@@ -184,7 +185,7 @@ const row = ({ icon, label, sub = '', end = '', action, id, danger = false }) =>
 
 // One person's sheet: who they are, then everything you can do for them. A
 // confirm step, the name form or the positions list takes the rows' place.
-function personSheet(p, m) {
+function personSheet(p, m, { pane = false } = {}) {
   const panel = m.panel && m.panel.id === p.id ? m.panel : null;
   let body;
   if (panel) {
@@ -207,16 +208,17 @@ function personSheet(p, m) {
     </ul>`;
   }
   const t = tags(p, m, { role: false });
-  return html`<div class="sheet-layer${m.entered ? '' : ' is-entering'}" data-person-sheet>
-  <div class="sheet-backdrop" data-action="person-close"></div>
-  <section class="sheet person-sheet" data-person-panel="${p.id}" role="dialog" aria-modal="true" aria-labelledby="person-name">
+  const section = html`<section class="sheet person-sheet" data-person-panel="${p.id}" ${pane ? '' : html`role="dialog" aria-modal="true" `}aria-labelledby="person-name">
     <div class="sheet-grab" aria-hidden="true"></div>
     <div class="account-head">${avatar(p.name, 'lg')}
       <div class="account-text"><h2 class="account-name" id="person-name" tabindex="-1">${p.name}</h2><p class="account-sub">${roleWord(p)}${p.email ? html` · ${p.email}` : ''}</p>${t.length ? html`<p class="person-tags">${t}</p>` : ''}</div>
       <button type="button" class="icon-btn" data-action="person-close" aria-label="Close">${iconSlot('x')}</button>
     </div>
     ${body}
-  </section></div>`;
+  </section>`;
+  return pane ? section : html`<div class="sheet-layer${m.entered ? '' : ' is-entering'}" data-person-sheet>
+  <div class="sheet-backdrop" data-action="person-close"></div>
+  ${section}</div>`;
 }
 
 // Adding someone: name, email, and whether they schedule (explained right there).
@@ -274,8 +276,10 @@ export function renderScreen(m) {
       <button type="button" class="btn btn-primary" data-action="add-open" aria-label="Add a person" aria-haspopup="dialog">${iconSlot('plus')}</button>
     </div>
     ${filters(m)}
-    <section class="card people-card"><div data-list>${raw(renderList(m))}</div></section>
-    ${m.adding ? addSheet(m) : open ? personSheet(open, m) : ''}
+    ${m.wide ? html`<div class="split"><section class="card people-card"><div data-list>${raw(renderList(m))}</div></section>
+      <aside class="card pane" aria-label="${open ? open.name : 'Person'}">${open && !m.adding ? personSheet(open, m, { pane: true }) : html`<p class="pane-empty">${iconSlot('users', 'icon-lg')}Choose a person.</p>`}</aside></div>`
+    : html`<section class="card people-card"><div data-list>${raw(renderList(m))}</div></section>`}
+    ${m.adding ? addSheet(m) : open && !m.wide ? personSheet(open, m) : ''}
   `);
 }
 
@@ -305,12 +309,19 @@ export function createScreen({ api, root, ctx = {}, win = globalThis }) {
     if (open) swipeToDismiss(open, { win, onDismiss: () => (m.adding ? actions['add-cancel']() : actions['person-close']()) });
   };
   const personSheet = createSheet({
-    root, isOpen: () => m.selected !== null && !m.adding, close: () => actions['person-close'](),
+    root, isOpen: () => m.selected !== null && !m.adding, close: () => actions['person-close'](), modal: () => !m.wide,
     panel: '[data-person-panel]', opener: (id) => `[data-action="select"][data-id="${id}"]`,
   });
   const addSheetFocus = createSheet({
     root, isOpen: () => m.adding, close: () => actions['add-cancel'](),
     panel: '[data-add-panel]', opener: () => '[data-action="add-open"]',
+  });
+  // Wide screens: the person's sheet sits in a pane beside the list.
+  m.wide = host(win) === 'pane';
+  const stopWatching = watchHost(win, () => {
+    if (root.isConnected === false) { stopWatching(); return; }
+    m.wide = host(win) === 'pane';
+    paint();
   });
   const paintList = () => {
     const el = root.querySelector('[data-list]');
