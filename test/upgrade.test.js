@@ -152,6 +152,8 @@ test('upgrade: the upgraded data works through the app (login with an old sessio
       assert.equal((await c.services.auth.authenticate(token)).email, 'old.member1@example.com');
       const schedule = await c.services.assignments.mySchedule(ids.ids[0]);
       assert.deepEqual(schedule.items.map((i) => [i.date, i.status]), [['2024-06-02', 'accepted']]);
+      const teams = await c.services.teams.list({ id: ids.ids[0], role: 'admin' });
+      assert.deepEqual(teams.map((t) => [t.name, t.positions.map((p) => p.name)]), [['Band', ['Keys']]], 'old teams and positions are not deleted');
     } finally { c.close(); }
   } finally { t.done(); }
 });
