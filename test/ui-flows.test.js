@@ -39,6 +39,8 @@ const said = (page, re, note = '') => assert.match(page.text(), re, `${note}\nON
 // The avatar in the top bar names who is logged in; Log out is in its account sheet.
 const loggedInAs = (page, name) => assert.ok(page.has(`[aria-label="Your account: ${name}"]`), `logged in as ${name}\nBUTTONS: ${page.buttons().map((b) => b.label).join(' | ')}`);
 const logOut = async (page) => { await page.click('account'); return page.clickButton('Log out'); };
+// A person on the People list: their name, with their email under it.
+const listed = (page, name, email) => assert.ok(page.html().includes(`<strong>${esc(name)}</strong><span class="menu-sub">${esc(email)}</span>`), `${name} (${email}) is listed`);
 const notSaid = (page, re, note = '') => assert.doesNotMatch(page.text(), re, `${note}\nON SCREEN: ${page.text()}`);
 
 // Every page a person sees must have named buttons, links and inputs, and no
@@ -234,7 +236,7 @@ test('UAT 3 to 8: scheduler adds people, a team, positions, a service, assigns, 
   await page.goto('#/people');
   said(page, /Demo Alice/);
   wellBuilt(page);
-  await page.clickButton('Add person');
+  await page.clickButton('Add a person');
   await page.type('new-name', 'Pat Example');
   await page.submit('add-person', { name: '' });
   said(page, /Please type a name\./);
@@ -250,15 +252,15 @@ test('UAT 3 to 8: scheduler adds people, a team, positions, a service, assigns, 
   await page.clickButton('Done');
   assert.equal(page.has('#invite-box'), false, 'the invite is gone once Done is pressed');
   notSaid(page, new RegExp(rx(patLink)));
-  await page.clickButton('Add person');
+  await page.clickButton('Add a person');
   await page.submit('add-person', { name: 'Quinn Example', email: 'quinn.example@example.com' });
   inviteFrom(page, 'Quinn Example');
   await page.clickButton('Done');
-  said(page, /Pat Example \(pat\.example@example\.com\)/);
-  said(page, /Quinn Example \(quinn\.example@example\.com\)/);
+  listed(page, 'Pat Example', 'pat.example@example.com');
+  listed(page, 'Quinn Example', 'quinn.example@example.com');
 
   // The same email twice is refused in plain words.
-  await page.clickButton('Add person');
+  await page.clickButton('Add a person');
   await page.submit('add-person', { name: 'Someone Else', email: 'pat.example@example.com' });
   said(page, /That email is already used by someone else/);
   await page.clickButton('Cancel');
@@ -549,14 +551,13 @@ test('UAT 12 to 15: change access level, deactivate, reset password, log out, se
   // The scheduler cannot change or deactivate their own access by accident.
   const me = personId(admin, 'Demo Admin');
   await tapOpen(admin, 'select', me);
-  assert.deepEqual([admin.focused?.attrs.get('data-action'), admin.focused?.attrs.get('data-id')], ['select', String(me)], 'focus stays on the row that was opened');
-  assert.equal(admin.has(`[data-action="edit"][data-id="${me}"]`), true, 'my own row is open');
-  assert.equal(admin.has(`[data-action="role-ask"][data-id="${me}"]`), false, 'no role button on my own row');
+  assert.equal(admin.focusedText(), 'Demo Admin', 'focus moves into the person sheet');
+  assert.equal(admin.has(`[data-action="edit"][data-id="${me}"]`), true, 'my own sheet is open');
+  assert.equal(admin.has(`[data-action="role-ask"][data-id="${me}"]`), false, 'no role change on my own sheet');
+  assert.equal(admin.has(`[data-action="active-ask"][data-id="${me}"]`), false, 'no deactivate on my own sheet (the server refuses it too)');
   said(admin, /That's you/);
-  await admin.click('active-ask', me);
-  await admin.click('deactivate-yes', me);
-  said(admin, /can't deactivate your own account/);
-  wellBuilt(admin, 'a refused change');
+  wellBuilt(admin, 'my own sheet');
+  await admin.click('person-close');
 
   // Volunteer -> scheduler. "No, go back" sends nothing.
   await tapOpen(admin, 'select', bob.id);
@@ -682,7 +683,7 @@ test('UAT 20 (odd text): hostile and odd text is shown as plain text on every pa
   wellBuilt(admin, 'teams');
 
   await admin.goto('#/people');
-  await admin.clickButton('Add person');
+  await admin.clickButton('Add a person');
   await admin.submit('add-person', { name: HOSTILE.person, email: 'eve@example.com' });
   const eveLink = inviteFrom(admin, HOSTILE.person);
   await admin.clickButton('Done');
@@ -760,7 +761,7 @@ test('UAT 20: double clicks, odd names, stale tabs, rapid page changes and the b
 
   // Very long and odd names.
   await admin.goto('#/people');
-  await admin.clickButton('Add person');
+  await admin.clickButton('Add a person');
   assert.match(admin.html(), /id="new-name"[^>]*maxlength="80"/, 'the name box stops at 80 letters');
   const longName = 'L'.repeat(81);
   await admin.submit('add-person', { name: longName });
@@ -774,14 +775,14 @@ test('UAT 20: double clicks, odd names, stale tabs, rapid page changes and the b
   said(admin, new RegExp(`Invite for ${exact}`));
   await admin.clickButton('Done');
   said(admin, new RegExp(exact), 'an 80-letter name is shown whole');
-  await admin.clickButton('Add person');
+  await admin.clickButton('Add a person');
   await admin.submit('add-person', { name: '   ' });
   said(admin, /Please type a name\./);
   await admin.submit('add-person', { name: 'Zoë 🎺 Trumpet', email: 'zoe@example.com' });
   said(admin, /Invite for Zoë 🎺 Trumpet/);
   await admin.clickButton('Done');
-  said(admin, /Zoë 🎺 Trumpet \(zoe@example\.com\)/);
-  await admin.clickButton('Add person');
+  listed(admin, 'Zoë 🎺 Trumpet', 'zoe@example.com');
+  await admin.clickButton('Add a person');
   await admin.submit('add-person', { name: '🎺🎺🎺' });
   said(admin, /🎺🎺🎺 is added\. Without an email they cannot log in/, 'someone without an email can still be added');
   wellBuilt(admin, 'emoji names');

@@ -25,41 +25,58 @@ async function setup(extra = {}) {
 }
 const flush = () => new Promise((r) => setImmediate(r));
 
+// The open person sheet (everything after the list).
+const sheetOf = (root) => { const h = root.innerHTML; const i = h.indexOf('data-person-sheet'); return i < 0 ? '' : h.slice(i); };
+const sheetActions = (root) => [...sheetOf(root).matchAll(/data-action="(edit|positions|reset-ask|active-ask|role-ask|invite)" data-id="(\d+)"/g)].map((x) => `${x[1]} ${x[2]}`);
+
 test('list shows name, email, role and Deactivated marker', async () => {
   const { root } = await setup();
   assert.match(root.innerHTML, /Sam Ortiz/);
   assert.match(root.innerHTML, /sam\.ortiz@example\.com/);
-  assert.match(root.innerHTML, /Scheduler/);
+  assert.match(root.innerHTML, /chip-info"><span class="icon chip-icon" data-icon="shield" aria-hidden="true"><\/span>Scheduler</);
   assert.equal(root.innerHTML.match(/Deactivated<\/span>/g).length, 1);
-  assert.doesNotMatch(root.innerHTML, /data-action="active-ask"/, 'no row buttons until a row is tapped');
+  assert.match(root.innerHTML, /<button type="button" class="menu-row person-row is-inactive" data-action="select" data-id="3" aria-haspopup="dialog">/);
+  assert.doesNotMatch(root.innerHTML, /data-action="active-ask"/, 'no actions until a person is opened');
+  assert.match(root.innerHTML, /data-action="add-open" aria-label="Add a person" aria-haspopup="dialog"/);
   root.click('select', 3);
-  assert.match(root.innerHTML, /Reactivate/);
-  assert.match(root.innerHTML, /Add person/);
+  assert.match(sheetOf(root), /Reactivate/);
 });
 
-test('a row shows its buttons once tapped, one row at a time; tapping it again hides them', async () => {
+test('tapping a person opens their sheet with what you can do; Back and close; nothing is sent', async () => {
   const { api, root } = await setup();
-  const buttons = () => [...root.innerHTML.matchAll(/data-action="(edit|positions|reset-ask|active-ask|role-ask|invite)" data-id="(\d+)"/g)].map((x) => `${x[1]} ${x[2]}`);
-  assert.deepEqual(buttons(), []);
-  assert.match(root.innerHTML, /data-action="select" data-id="2" aria-expanded="false"/);
+  assert.deepEqual(sheetActions(root), []);
   root.click('select', 2);
-  assert.match(root.innerHTML, /data-action="select" data-id="2" aria-expanded="true"/);
-  assert.deepEqual(buttons(), ['role-ask 2', 'edit 2', 'positions 2', 'reset-ask 2', 'active-ask 2']);
+  assert.match(sheetOf(root), /role="dialog" aria-modal="true" aria-labelledby="person-name"/);
+  assert.match(sheetOf(root), /<h2 class="account-name" id="person-name" tabindex="-1">Sam Ortiz<\/h2><p class="account-sub">Volunteer · sam\.ortiz@example\.com<\/p>/);
+  assert.deepEqual(sheetActions(root), ['positions 2', 'edit 2', 'role-ask 2', 'reset-ask 2', 'active-ask 2']);
+  assert.match(sheetOf(root), /Positions<\/span><span class="menu-end">Drums/, 'the positions they can do, in words');
   root.click('select', 1);
-  assert.deepEqual(buttons(), ['role-ask 1', 'edit 1', 'positions 1', 'reset-ask 1', 'active-ask 1']);
-  root.click('select', 1);
-  assert.deepEqual(buttons(), []);
-  // A panel keeps its row open (also after Cancel); tapping another row closes the panel.
-  root.click('select', 2);
-  root.click('edit', 2);
-  assert.match(root.innerHTML, /data-form="edit-name" data-id="2"/);
+  assert.deepEqual(sheetActions(root), ['positions 1', 'edit 1', 'role-ask 1', 'reset-ask 1', 'active-ask 1']);
+  // A step takes the rows' place; its Back / Cancel shows the rows again.
+  root.click('edit', 1);
+  assert.match(sheetOf(root), /data-form="edit-name" data-id="1"/);
+  assert.deepEqual(sheetActions(root), []);
   root.click('cancel');
-  assert.deepEqual(buttons().map((b) => b.split(' ')[1]), ['2', '2', '2', '2', '2']);
-  root.click('edit', 2);
-  root.click('select', 3);
-  assert.doesNotMatch(root.innerHTML, /data-form="edit-name"/);
-  assert.deepEqual(buttons().map((b) => b.split(' ')[1]), ['3', '3', '3', '3']);
-  assert.equal(api.calls.length, 0, 'tapping rows sends nothing');
+  assert.deepEqual(sheetActions(root).map((b) => b.split(' ')[1]), ['1', '1', '1', '1', '1']);
+  root.click('person-close');
+  assert.equal(sheetOf(root), '');
+  assert.equal(api.calls.length, 0, 'opening people sends nothing');
+});
+
+test('filters: All, Schedulers, Not joined, Deactivated, each with a count; they combine with search', async () => {
+  const { root } = await setup({ 'GET /api/people': [...PEOPLE, P(4, 'New Nia', 'nia@example.com', { joined: false })] });
+  const h = root.innerHTML;
+  assert.match(h, /data-filter="all" aria-pressed="true">All <span class="filter-count num" data-count="all">4</);
+  assert.match(h, /data-filter="admins" aria-pressed="false">Schedulers <span class="filter-count num" data-count="admins">1</);
+  assert.match(h, /data-filter="invited" aria-pressed="false">Not joined <span class="filter-count num" data-count="invited">1</);
+  assert.match(h, /data-filter="inactive" aria-pressed="false">Deactivated <span class="filter-count num" data-count="inactive">1</);
+  root.click('filter', undefined, { dataset: { action: 'filter', filter: 'inactive' } });
+  assert.deepEqual([...root.innerHTML.matchAll(/<li data-person="(\d+)">/g)].map((x) => Number(x[1])), [3]);
+  root.click('filter', undefined, { dataset: { action: 'filter', filter: 'all' } });
+  assert.equal(people.filterKind(PEOPLE, 'admins').length, 1);
+  assert.equal(people.filterKind(PEOPLE, 'nonsense').length, PEOPLE.length);
+  const none = await setup({ 'GET /api/people': [P(1, 'Ann', 'a@example.com')] });
+  assert.doesNotMatch(none.root.innerHTML, /data-filter="inactive"|data-filter="admins"/, 'empty filters are not shown');
 });
 
 test('filterPeople matches name or email, any case, all words', () => {
@@ -274,14 +291,15 @@ test('unjoined rows offer a new invite and local-only links explain the limitati
     'GET /api/people': [pending],
     'POST /api/people/2/invite': { person: pending, invite: { ...INVITE, localOnly: true } },
   });
-  assert.match(root.innerHTML, /Not joined yet/);
+  assert.match(root.innerHTML, /chip-wait"><span class="icon chip-icon" data-icon="clock" aria-hidden="true"><\/span>Not joined yet/);
   root.click('select', 2);
-  assert.match(root.innerHTML, /data-action="invite" data-id="2">[^]*?Copy new invite<\/button>/);
+  assert.match(sheetOf(root), /data-action="invite" data-id="2">[^]*?Copy new invite<\/span>/);
   root.click('invite', 2);
   await flush();
   assert.deepEqual(api.calls, ['POST /api/people/2/invite {}']);
   assert.match(root.innerHTML, /This link uses localhost/);
   assert.match(root.innerHTML, /FLOCK_PUBLIC_URL/);
+  assert.equal(sheetOf(root), '', 'the sheet makes way for the invite box');
 });
 
 test('joined rows offer neither the pending label nor an invite action', async () => {
@@ -426,64 +444,64 @@ const rowOf = (root, id) => {
   return h.slice(start, end);
 };
 
-test('people page explains the two access levels in plain words', async () => {
+test('people page explains the two access levels in plain words, where the role is chosen', async () => {
   const { root } = await setupAs(9);
-  assert.match(root.innerHTML, /Scheduler: can manage people, teams, services and the schedule\./);
-  assert.match(root.innerHTML, /Volunteer: can see their own schedule and mark days they cannot serve\./);
+  root.click('add-open');
+  const add = root.innerHTML.slice(root.innerHTML.indexOf('data-add-sheet'));
+  assert.match(add, /Make this person a scheduler<\/label>\s*<div class="hint" id="new-role-hint"><p>Scheduler: can manage people, teams, services and the schedule\.<\/p><p>Volunteer: can see their own schedule and mark days they cannot serve\.<\/p><\/div>/);
+  assert.match(add, /aria-describedby="new-role-hint"/);
+  root.click('add-cancel');
+  assert.doesNotMatch(root.innerHTML, /data-add-sheet/);
 });
 
-test('each row shows a text level badge and the matching role button', async () => {
+test('each person shows their level in words, and the sheet offers the other one', async () => {
   const { root } = await setupAs(9);
-  assert.match(rowOf(root, 1), /chip-plain">Scheduler</);
-  assert.match(rowOf(root, 2), /chip-plain">Volunteer</);
+  assert.match(rowOf(root, 1), /Scheduler</);
+  assert.doesNotMatch(rowOf(root, 2), /Scheduler</, 'volunteers carry no tag');
   root.click('select', 1);
-  assert.match(rowOf(root, 1), /data-action="role-ask" data-id="1">[^]*?Make volunteer<\/button>/);
+  assert.match(sheetOf(root), /<p class="account-sub">Scheduler · /);
+  assert.match(sheetOf(root), /data-action="role-ask" data-id="1">[^]*?Make a volunteer<span class="menu-sub">Sees only their own schedule</);
   root.click('select', 2);
-  assert.match(rowOf(root, 2), /data-action="role-ask" data-id="2">[^]*?Make scheduler<\/button>/);
+  assert.match(sheetOf(root), /data-action="role-ask" data-id="2">[^]*?Make a scheduler<span class="menu-sub">Can change the schedule and people</);
 });
 
-test('own row has no role button and says That\'s you', async () => {
+test('own row says That\'s you; your own sheet has no role or deactivate', async () => {
   const { root } = await setupAs(1);
-  assert.match(rowOf(root, 1), /chip-info">That's you</, 'shown on the row itself, tapped or not');
+  assert.match(rowOf(root, 1), /chip-plain"><span class="icon chip-icon" data-icon="user" aria-hidden="true"><\/span>That's you</);
   root.click('select', 1);
-  const ann = rowOf(root, 1);
-  assert.match(ann, /data-action="edit" data-id="1"/);
-  assert.ok(!ann.includes('role-ask'));
-  assert.ok(!ann.includes('Make volunteer'));
+  assert.match(sheetOf(root), /data-action="edit" data-id="1"/);
+  assert.doesNotMatch(sheetOf(root), /role-ask|active-ask|Make a volunteer/);
   root.click('select', 2);
-  assert.match(rowOf(root, 2), /role-ask/);
+  assert.match(sheetOf(root), /role-ask/);
   root.click('role-ask', 1);
-  assert.ok(!root.innerHTML.includes("Make Ann Admin a volunteer?"));
+  assert.ok(!root.innerHTML.includes('Make Ann Admin a volunteer?'));
 });
 
-test('deactivated row shows its level but no role button', async () => {
+test('a deactivated person shows their level but no role change', async () => {
   const { root } = await setupAs(9);
   root.click('select', 3);
-  const joe = rowOf(root, 3);
+  const joe = sheetOf(root);
   assert.match(joe, /data-action="edit" data-id="3"/);
-  assert.match(joe, /chip-plain">Volunteer</);
+  assert.match(joe, /<p class="account-sub">Volunteer · joe@example\.com<\/p>/);
   assert.match(joe, /Deactivated/);
   assert.ok(!joe.includes('role-ask'));
-  assert.ok(!joe.includes('Make scheduler'));
 });
 
-test('row buttons: each one has an icon and words, and each action opens its panel', async () => {
+test('sheet rows: each one has an icon and words, and each action opens its step', async () => {
   const { root } = await setupAs(9);
   root.click('select', 1);
-  const ann = rowOf(root, 1);
-  const buttons = [...ann.matchAll(/<button[^>]*>[\s\S]*?<\/button>/g)].map((m) => m[0]).filter((b) => !b.includes('data-action="select"'));
-  assert.equal(buttons.length, 5, ann);
-  for (const b of buttons) {
-    assert.match(b, /data-icon="[\w-]+"/, `a row button has no icon: ${b}`);
-    assert.ok(b.replace(/<[^>]+>/g, '').trim(), `a row button has no words: ${b}`);
+  const rows = [...sheetOf(root).matchAll(/<button type="button" class="menu-row[^"]*" data-action="[\w-]+" data-id="1">[\s\S]*?<\/button>/g)].map((m) => m[0]);
+  assert.equal(rows.length, 5);
+  for (const b of rows) {
+    assert.match(b, /class="icon menu-icon" data-icon="[\w-]+"/, `a row has no icon: ${b}`);
+    assert.ok(b.replace(/<[^>]+>/g, '').trim(), `a row has no words: ${b}`);
   }
-  // The five actions still exist with their data-action names.
-  for (const [action, name] of [['role-ask', 'Make volunteer'], ['edit', 'Edit name'], ['positions', 'What can they do?'], ['reset-ask', 'Reset login'], ['active-ask', 'Deactivate']]) {
-    const btns = buttons.filter((b) => b.includes(`data-action="${action}"`));
-    assert.equal(btns.length, 1, `expected exactly one ${action} button: ${ann}`);
-    assert.ok(btns[0].endsWith(` ${name}</button>`), `the ${action} button is misnamed: ${btns[0]}`);
+  for (const [action, name] of [['positions', 'Positions'], ['edit', 'Change name'], ['role-ask', 'Make a volunteer'], ['reset-ask', 'Reset login'], ['active-ask', 'Deactivate']]) {
+    const hit = rows.filter((b) => b.includes(`data-action="${action}"`));
+    assert.equal(hit.length, 1, action);
+    assert.match(hit[0], new RegExp(`<span class="menu-text">${name}`), action);
   }
-  // Each action opens the same panel as before.
+  assert.match(sheetOf(root), /class="menu-row is-danger" data-action="active-ask" data-id="1"/);
   root.click('edit', 1);
   assert.match(root.innerHTML, /data-form="edit-name" data-id="1"/);
   root.click('cancel');
@@ -500,13 +518,13 @@ test('row buttons: each one has an icon and words, and each action opens its pan
   assert.match(root.innerHTML, /Deactivate <strong>Ann Admin<\/strong>\?/);
 });
 
-test('deactivated row: the active button says Reactivate, and its actions still open their panels', async () => {
+test('a deactivated person: Reactivate (not a danger row), and their steps still open', async () => {
   const { root } = await setupAs(9);
   root.click('select', 3);
-  const joe = rowOf(root, 3);
-  assert.match(joe, /class="btn btn-sm" data-action="active-ask" data-id="3">[^]*? Reactivate<\/button>/, 'a reactivate button is not a danger button');
+  assert.match(sheetOf(root), /class="menu-row" data-action="active-ask" data-id="3">[^]*?Reactivate/);
   root.click('select', 2);
-  assert.match(rowOf(root, 2), /class="btn btn-sm btn-danger" data-action="active-ask" data-id="2">[^]*? Deactivate<\/button>/);
+  assert.match(sheetOf(root), /class="menu-row is-danger" data-action="active-ask" data-id="2">[^]*?Deactivate/);
+  root.click('select', 3);
   root.click('edit', 3);
   assert.match(root.innerHTML, /data-form="edit-name" data-id="3"/);
   root.click('cancel');

@@ -972,6 +972,21 @@ th, td { text-align: left; padding: var(--s-2) var(--s-3); border-bottom: 1px so
 .secret-box h2 { margin-top: 0; display: flex; gap: var(--s-2); align-items: center; }
 .secret-box [data-invite-text] { overflow-wrap: anywhere; }
 
+/* People: quiet rows that open a person's sheet. */
+.people-tools { display: flex; align-items: flex-end; gap: var(--s-2); margin-bottom: var(--s-3); }
+.people-tools .search-field { flex: 1; margin: 0; }
+.people-card { padding: var(--s-1) var(--s-2); }
+.people-card .people-list > li { padding: 0; }
+.person-row { min-height: 64px; padding: var(--s-2); }
+.person-row .menu-text strong { display: block; }
+.person-row.is-inactive { color: var(--muted); }
+.person-row.is-inactive .avatar { filter: grayscale(1); }
+.person-tags { display: flex; flex-wrap: wrap; gap: var(--s-1); margin: 2px 0 0; }
+.person-tags .chip { font-size: var(--fs-xs); }
+.person-sheet .sheet-menu { padding-bottom: max(var(--s-4), env(safe-area-inset-bottom)); }
+.person-panel { padding-top: 0; }
+.person-panel .confirm { margin: 0; }
+
 /* ---------- teams and services ---------- */
 .team-card .team-head { margin: 0; }
 .position-list { margin-top: var(--s-3); }

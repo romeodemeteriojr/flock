@@ -1,8 +1,9 @@
 // People page (scheduler only): find, add and look after the people in the church.
-// A row shows its buttons once tapped (one row at a time), so a long list stays
-// easy to read. All clicks go through one delegated listener on the screen.
-// Anything risky first shows a plain "Are you sure?" step; nothing is sent until
-// the person says yes.
+// Quiet rows (a picture, the name, the email, only the tags that apply); tapping
+// one opens that person's sheet with everything you can do for them. Adding a
+// person is a sheet too. All clicks go through one delegated listener on the
+// screen. Anything risky first shows a plain "Are you sure?" step inside the
+// sheet; nothing is sent until the scheduler says yes.
 import { html, raw } from '../lib/html.js';
 import { iconSlot } from '../lib/icons.js';
 import { flashCopied } from '../lib/copyflash.js';
@@ -11,7 +12,9 @@ import { toasts } from '../lib/toast.js';
 import { inviteMessage } from '../lib/invite.js';
 import { copyText } from '../lib/slotpanel.js';
 import { canShare, share } from '../lib/share.js';
-import { skeleton, emptyState, pageHead, disclosure, refocus } from '../lib/ui.js';
+import { skeleton, emptyState, pageHead } from '../lib/ui.js';
+import { createSheet } from '../lib/sheet.js';
+import { swipeToDismiss } from '../lib/swipe.js';
 
 export const title = 'People';
 
@@ -40,6 +43,18 @@ export function friendlyMessage(err) {
 }
 
 const roleWord = (p) => (p.role === 'admin' ? 'Scheduler' : 'Volunteer');
+
+// The list's filters: who each one keeps.
+export const PEOPLE_FILTERS = Object.freeze({
+  all: ['All', () => true],
+  admins: ['Schedulers', (p) => p.role === 'admin'],
+  invited: ['Not joined', (p) => !!p.email && !p.joined && p.active],
+  inactive: ['Deactivated', (p) => !p.active],
+});
+export function filterKind(people, kind) {
+  const keep = (PEOPLE_FILTERS[kind] ?? PEOPLE_FILTERS.all)[1];
+  return people.filter(keep);
+}
 
 // The level a person would get if their role button were pressed.
 const nextRole = (p) => (p.role === 'admin' ? 'member' : 'admin');
@@ -131,62 +146,88 @@ function checklistPanel(p, teams, checked) {
       <button type="button" class="btn" data-action="cancel">Cancel</button>
     </div></div>`;
 }
-// One button with an icon and words (the row's actions show once it is tapped).
-const actionButton = (icon, label, action, id, cls = '') => html`<button type="button" class="btn btn-sm${cls}" data-action="${action}" data-id="${id}">${iconSlot(icon)} ${label}</button>`;
+// Only the tags that apply, each a word with its icon. The sheet leaves out
+// the Scheduler tag (its line under the name already says the role).
+function tags(p, m, { role = true } = {}) {
+  const list = [];
+  if (role && p.role === 'admin') list.push(html`<span class="chip chip-info">${iconSlot('shield', 'chip-icon')}Scheduler</span>`);
+  if (p.id === m.me) list.push(html`<span class="chip chip-plain">${iconSlot('user', 'chip-icon')}That's you</span>`);
+  if (p.email && !p.joined && p.active) list.push(html`<span class="chip chip-wait">${iconSlot('clock', 'chip-icon')}Not joined yet</span>`);
+  if (!p.email && p.active) list.push(html`<span class="chip chip-bad">${iconSlot('warning', 'chip-icon')}No email, cannot log in</span>`);
+  if (p.notifications && p.active) list.push(html`<span class="chip chip-plain" title="Gets notifications from Flock">${iconSlot('bell', 'chip-icon')}Notifications on</span>`);
+  if (!p.active) list.push(html`<span class="chip chip-plain">${iconSlot('user-off', 'chip-icon')}Deactivated</span>`);
+  return list;
+}
 
 function personRow(p, m) {
-  const panel = m.panel && m.panel.id === p.id ? m.panel : null;
-  const selected = m.selected === p.id;
-  let extra = '';
-  if (panel) {
-    if (panel.kind === 'reset' || panel.kind === 'active') extra = confirmPanel(p, panel.kind);
-    else if (panel.kind === 'role') extra = roleConfirmPanel(p, panel.role);
-    else if (panel.kind === 'edit') extra = editPanel(p);
-    else if (panel.kind === 'positions') extra = checklistPanel(p, m.teams, panel.checked);
-  }
-  const label = html`<span class="person${p.active ? '' : ' is-inactive'}">
-      ${avatar(p.name)}
-      <span class="person-text">
-        <span class="person-name"><strong>${p.name}</strong>${p.email ? html` <span class="hint">(${p.email})</span>` : ''}</span>
-        <span class="person-chips"><span class="chip chip-plain">${roleWord(p)}</span>
-        ${p.id === m.me ? html`<span class="chip chip-info">That's you</span>` : ''}
-        ${!p.email && p.active ? html`<span class="chip chip-plain">No email, cannot log in</span>` : ''}
-        ${p.email && !p.joined && p.active ? html`<span class="chip chip-plain">Not joined yet</span>` : ''}
-        ${p.notifications && p.active ? html`<span class="chip chip-plain" title="Gets notifications from Flock">${iconSlot('bell', 'chip-icon')}Notifications on</span>` : ''}
-        ${p.active ? '' : html`<span class="chip chip-bad">Deactivated</span>`}</span>
-      </span>
-    </span>`;
-  const actions = !selected ? '' : html`<div class="btn-row btn-row-compact row-actions">
-      ${p.active && p.id !== m.me ? actionButton('shield', nextRole(p) === 'admin' ? 'Make scheduler' : 'Make volunteer', 'role-ask', p.id) : ''}
-      ${actionButton('edit', 'Edit name', 'edit', p.id)}
-      ${actionButton('list-check', 'What can they do?', 'positions', p.id)}
-      ${p.email && !p.joined && p.active ? actionButton('send', 'Copy new invite', 'invite', p.id) : ''}
-      ${p.email ? actionButton('key', 'Reset login', 'reset-ask', p.id) : ''}
-      ${p.active ? actionButton('user-off', 'Deactivate', 'active-ask', p.id, ' btn-danger') : actionButton('user-check', 'Reactivate', 'active-ask', p.id)}
-    </div>`;
-  return html`<li data-person="${p.id}">
-    ${disclosure({ action: 'select', id: p.id, open: selected, label, cls: 'row-select' })}
-    ${actions}
-    ${extra}
-  </li>`;
+  const t = tags(p, m);
+  return html`<li data-person="${p.id}"><button type="button" class="menu-row person-row${p.active ? '' : ' is-inactive'}" data-action="select" data-id="${p.id}" aria-haspopup="dialog">
+    ${avatar(p.name)}<span class="menu-text"><strong>${p.name}</strong>${p.email ? html`<span class="menu-sub">${p.email}</span>` : ''}${t.length ? html`<span class="person-tags">${t}</span>` : ''}</span><span class="menu-end">${iconSlot('chevron', 'icon-sm')}</span>
+  </button></li>`;
 }
 
 export function renderList(m) {
-  const shown = filterPeople(m.people, m.query);
   if (!m.people.length) return String(emptyState('No people yet.', 'art-people'));
+  const shown = filterPeople(filterKind(m.people, m.filter), m.query);
   if (!shown.length) return String(emptyState('Nobody matches that. Try fewer letters.', 'art-lost'));
   return String(html`<ul class="list people-list">${shown.map((p) => personRow(p, m))}</ul>`);
 }
 
-export function renderScreen(m) {
-  if (m.loading) return String(skeleton('Loading…', 'list', 4));
-  return String(html`
-    ${m.error ? html`<p class="form-error" role="alert">${m.error}</p>` : ''}
-    ${toasts([[m.notice, 'ok']])}
-    ${m.invite ? inviteBox(m.invite, m.canShare) : ''}
-    ${m.adding ? html`
-      <form class="form card form-card" data-form="add-person" novalidate>
-        <h2 class="card-title">Add person</h2>
+// The names of the positions a person can do, in the Teams page order.
+function positionNames(p, teams) {
+  const mine = new Set(p.positionIds ?? []);
+  return teams.flatMap((t) => t.positions.filter((pos) => mine.has(pos.id)).map((pos) => pos.name));
+}
+
+const row = ({ icon, label, sub = '', end = '', action, id, danger = false }) => html`<li><button type="button" class="menu-row${danger ? ' is-danger' : ''}" data-action="${action}" data-id="${id}">
+    ${iconSlot(icon, 'menu-icon')}<span class="menu-text">${label}${sub ? html`<span class="menu-sub">${sub}</span>` : ''}</span>${danger ? '' : html`<span class="menu-end">${end}${iconSlot('chevron', 'icon-sm')}</span>`}</button></li>`;
+
+// One person's sheet: who they are, then everything you can do for them. A
+// confirm step, the name form or the positions list takes the rows' place.
+function personSheet(p, m) {
+  const panel = m.panel && m.panel.id === p.id ? m.panel : null;
+  let body;
+  if (panel) {
+    if (panel.kind === 'reset' || panel.kind === 'active') body = confirmPanel(p, panel.kind);
+    else if (panel.kind === 'role') body = roleConfirmPanel(p, panel.role);
+    else if (panel.kind === 'edit') body = editPanel(p);
+    else body = checklistPanel(p, m.teams, panel.checked);
+    body = html`<div class="sheet-body person-panel">${body}</div>`;
+  } else {
+    const isMe = p.id === m.me;
+    const can = positionNames(p, m.teams);
+    body = html`<ul class="menu sheet-menu">
+      ${row({ icon: 'puzzle', label: 'Positions', end: can.length ? can.join(', ') : 'None yet', action: 'positions', id: p.id })}
+      ${row({ icon: 'edit', label: 'Change name', action: 'edit', id: p.id })}
+      ${p.active && !isMe ? row({ icon: 'shield', label: nextRole(p) === 'admin' ? 'Make a scheduler' : 'Make a volunteer', sub: nextRole(p) === 'admin' ? 'Can change the schedule and people' : 'Sees only their own schedule', action: 'role-ask', id: p.id }) : ''}
+      ${p.email && !p.joined && p.active ? row({ icon: 'mail', label: 'Copy new invite', action: 'invite', id: p.id }) : ''}
+      ${p.email ? row({ icon: 'key', label: 'Reset login', action: 'reset-ask', id: p.id }) : ''}
+      ${isMe ? '' : html`<li class="menu-sep" role="separator"></li>
+      ${p.active ? row({ icon: 'user-off', label: 'Deactivate', action: 'active-ask', id: p.id, danger: true }) : row({ icon: 'user-check', label: 'Reactivate', action: 'active-ask', id: p.id })}`}
+    </ul>`;
+  }
+  const t = tags(p, m, { role: false });
+  return html`<div class="sheet-layer${m.entered ? '' : ' is-entering'}" data-person-sheet>
+  <div class="sheet-backdrop" data-action="person-close"></div>
+  <section class="sheet person-sheet" data-person-panel="${p.id}" role="dialog" aria-modal="true" aria-labelledby="person-name">
+    <div class="sheet-grab" aria-hidden="true"></div>
+    <div class="account-head">${avatar(p.name, 'lg')}
+      <div class="account-text"><h2 class="account-name" id="person-name" tabindex="-1">${p.name}</h2><p class="account-sub">${roleWord(p)}${p.email ? html` · ${p.email}` : ''}</p>${t.length ? html`<p class="person-tags">${t}</p>` : ''}</div>
+      <button type="button" class="icon-btn" data-action="person-close" aria-label="Close">${iconSlot('x')}</button>
+    </div>
+    ${body}
+  </section></div>`;
+}
+
+// Adding someone: name, email, and whether they schedule (explained right there).
+function addSheet(m) {
+  return html`<div class="sheet-layer${m.entered ? '' : ' is-entering'}" data-add-sheet>
+  <div class="sheet-backdrop" data-action="add-cancel"></div>
+  <section class="sheet" data-add-panel role="dialog" aria-modal="true" aria-labelledby="add-title">
+    <div class="sheet-grab" aria-hidden="true"></div>
+    <div class="sheet-head"><h2 id="add-title" tabindex="-1">Add a person</h2><button type="button" class="icon-btn" data-action="add-cancel" aria-label="Close">${iconSlot('x')}</button></div>
+    <div class="sheet-body">
+      <form class="form" data-form="add-person" novalidate>
         <div class="field">
           <label for="new-name">Name</label>
           <input id="new-name" name="name" type="text" maxlength="80" required data-action="new-name" value="${m.newName}">
@@ -197,25 +238,44 @@ export function renderScreen(m) {
           <p class="hint" id="new-email-hint">How they log in, with a password or with Google. Leave it empty for someone who will not log in; you can still schedule them.</p>
         </div>
         <div class="field">
-          <label class="check"><input type="checkbox" name="scheduler"> Make this person a scheduler</label>
+          <label class="check"><input type="checkbox" name="scheduler" aria-describedby="new-role-hint"> Make this person a scheduler</label>
+          <div class="hint" id="new-role-hint"><p>Scheduler: can manage people, teams, services and the schedule.</p><p>Volunteer: can see their own schedule and mark days they cannot serve.</p></div>
         </div>
         <div class="btn-row">
           <button type="submit" class="btn btn-primary">Add person</button>
           <button type="button" class="btn" data-action="add-cancel">Cancel</button>
         </div>
-      </form>` : html`<div class="btn-row add-person-row"><button type="button" class="btn btn-primary" data-action="add-open">${iconSlot('plus')} Add person</button></div>`}
-    <div class="card info-card">
-      ${iconSlot('info', 'info-icon')}
-      <div>
-      <p>Scheduler: can manage people, teams, services and the schedule.</p>
-      <p>Volunteer: can see their own schedule and mark days they cannot serve.</p>
+      </form>
+    </div>
+  </section></div>`;
+}
+
+function filters(m) {
+  const chip = ([key, [label]]) => {
+    const n = filterKind(m.people, key).length;
+    if (!n && key !== 'all') return '';
+    return html`<button type="button" class="filter-chip" data-action="filter" data-filter="${key}" aria-pressed="${(m.filter ?? 'all') === key ? 'true' : 'false'}">${label} <span class="filter-count num" data-count="${key}">${n}</span></button>`;
+  };
+  return html`<div class="filters" role="group" aria-label="Show">${Object.entries(PEOPLE_FILTERS).map(chip)}</div>`;
+}
+
+export function renderScreen(m) {
+  if (m.loading) return String(skeleton('Loading…', 'list', 4));
+  const open = m.selected !== null && m.selected !== undefined ? m.people.find((p) => p.id === m.selected) : null;
+  return String(html`
+    ${m.error ? html`<p class="form-error" role="alert">${m.error}</p>` : ''}
+    ${toasts([[m.notice, 'ok']])}
+    ${m.invite ? inviteBox(m.invite, m.canShare) : ''}
+    <div class="people-tools">
+      <div class="field search-field">
+        <label for="people-search" class="visually-hidden">Search by name or email</label>
+        <div class="input-icon">${iconSlot('search')}<input id="people-search" type="search" data-action="search" autocomplete="off" placeholder="Search by name or email" value="${m.query}"></div>
       </div>
+      <button type="button" class="btn btn-primary" data-action="add-open" aria-label="Add a person" aria-haspopup="dialog">${iconSlot('plus')}</button>
     </div>
-    <div class="field search-field">
-      <label for="people-search">Search by name or email</label>
-      <div class="input-icon">${iconSlot('search')}<input id="people-search" type="search" data-action="search" autocomplete="off" value="${m.query}"></div>
-    </div>
-    <div data-list>${raw(renderList(m))}</div>
+    ${filters(m)}
+    <section class="card people-card"><div data-list>${raw(renderList(m))}</div></section>
+    ${m.adding ? addSheet(m) : open ? personSheet(open, m) : ''}
   `);
 }
 
@@ -225,14 +285,33 @@ export function createScreen({ api, root, ctx = {}, win = globalThis }) {
   const m = {
     people: [], teams: [], query: '', loading: true, adding: false, newName: '',
     panel: null, invite: null, error: '', notice: '', me: null,
-    selected: null, // the person whose buttons show
+    selected: null, // the person whose sheet is open
+    filter: 'all',
+    entered: false, // the open sheet has slid in (it does not slide again on a repaint)
     canShare: canShare(win),
   };
   const hold = { timer: null, key: null };
   const me = () => ctx.state?.user?.id ?? null;
   let busy = false;
 
-  const paint = () => { root.innerHTML = renderScreen(m); };
+  const paint = () => {
+    personSheet.before();
+    addSheetFocus.before();
+    root.innerHTML = renderScreen(m);
+    m.entered = m.selected !== null || m.adding;
+    personSheet.update();
+    addSheetFocus.update();
+    const open = root.querySelector?.('[data-person-panel], [data-add-panel]');
+    if (open) swipeToDismiss(open, { win, onDismiss: () => (m.adding ? actions['add-cancel']() : actions['person-close']()) });
+  };
+  const personSheet = createSheet({
+    root, isOpen: () => m.selected !== null && !m.adding, close: () => actions['person-close'](),
+    panel: '[data-person-panel]', opener: (id) => `[data-action="select"][data-id="${id}"]`,
+  });
+  const addSheetFocus = createSheet({
+    root, isOpen: () => m.adding, close: () => actions['add-cancel'](),
+    panel: '[data-add-panel]', opener: () => '[data-action="add-open"]',
+  });
   const paintList = () => {
     const el = root.querySelector('[data-list]');
     if (el) el.innerHTML = renderList(m);
@@ -263,15 +342,26 @@ export function createScreen({ api, root, ctx = {}, win = globalThis }) {
     paint();
   }
 
-  // A panel under a row keeps that row open.
+  // A step (confirm, name, positions) shows in that person's sheet.
   const openPanel = (panel) => { m.panel = panel; m.selected = panel.id; paint(); };
 
   const actions = {
-    'add-open': () => { m.adding = true; m.error = ''; m.notice = ''; paint(); },
-    'add-cancel': () => { m.adding = false; m.newName = ''; paint(); },
+    'add-open': () => { m.adding = true; m.selected = null; m.panel = null; m.entered = false; m.error = ''; m.notice = ''; addSheetFocus.opened('add'); paint(); },
+    'add-cancel': () => { if (!m.adding) return; m.adding = false; m.newName = ''; paint(); },
     cancel: () => { m.panel = null; paint(); },
     done: () => { m.invite = null; paint(); },
-    select: (id) => { m.selected = m.selected === id ? null : id; m.panel = null; paint(); refocus(root, 'select', id); },
+    select: (id) => {
+      if (!find(id)) return;
+      m.selected = id; m.panel = null; m.adding = false; m.entered = false;
+      personSheet.opened(id);
+      paint();
+    },
+    'person-close': () => { if (m.selected === null) return; m.selected = null; m.panel = null; paint(); },
+    filter: (_id, el) => {
+      m.filter = Object.hasOwn(PEOPLE_FILTERS, el?.dataset?.filter) ? el.dataset.filter : 'all';
+      paint();
+      root.querySelector?.(`[data-action="filter"][data-filter="${m.filter}"]`)?.focus?.();
+    },
     edit: (id) => openPanel({ kind: 'edit', id }),
     'reset-ask': (id) => openPanel({ kind: 'reset', id }),
     'active-ask': (id) => openPanel({ kind: 'active', id }),
@@ -307,6 +397,7 @@ export function createScreen({ api, root, ctx = {}, win = globalThis }) {
       const r = await api.post(`/api/people/${p.id}/invite`, {});
       m.invite = { name: r.person.name, email: r.person.email, ...r.invite };
       m.panel = null;
+      m.selected = null; // the sheet makes way for the invite box
     }),
     'reset-yes': (id) => attempt(async () => {
       const p = find(id);
@@ -315,6 +406,7 @@ export function createScreen({ api, root, ctx = {}, win = globalThis }) {
       m.invite = { name: r.person.name, email: r.person.email, ...r.invite };
       m.people = m.people.map((person) => person.id === p.id ? r.person : person);
       m.panel = null;
+      m.selected = null; // the sheet makes way for the invite box
     }),
     'role-ask': (id) => {
       const p = find(id);
