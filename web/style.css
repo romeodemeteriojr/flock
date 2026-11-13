@@ -1286,6 +1286,10 @@ th, td { text-align: left; padding: var(--s-2) var(--s-3); border-bottom: 1px so
 .gallery-frame .toast, .gallery-static .toast { animation: none; margin-bottom: var(--s-2); }
 .gallery-frame:has(.sheet-layer) { min-height: 40rem; }
 .gallery-frame .sheet-layer { position: absolute; }
+/* The More sheet and the start-up page, drawn inside a frame. */
+.gallery-frame:has(.nav.is-open) { min-height: 28rem; display: flex; flex-direction: column; justify-content: flex-end; }
+.gallery-frame .nav.is-open .nav-scrim { position: absolute; }
+.gallery-frame .offline { position: relative; min-height: 28rem; }
 .gallery-live { min-height: 10rem; }
 
 /* Notifications (decision 0008): the bell page and the My schedule invitation. */

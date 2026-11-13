@@ -78,8 +78,8 @@ logs them out everywhere, then shows a new invite message.
 Once someone has joined, their email is locked: scammers try to get
 schedulers to "update" someone's email so they can log in as them. To change
 a joined person's email, choose **Reset login** first, then edit it. Nobody, including the scheduler, can read
-another person's password. To change your own password, use the key button
-at the top (**Change my password**).
+another person's password. To change your own password, tap your initials at
+the top right, then **Change my password**.
 
 On the same page you can mark which positions a person can do, make someone
 a scheduler, or deactivate people who have left. A deactivated person cannot
@@ -235,6 +235,26 @@ motion. On phones the main pages sit in a tab bar at the bottom, with the page
 you are on marked by a soft pill, a filled-in icon and bold text; on wider
 screens they are a row of buttons along the top. Printing the Schedule page
 gives a plain black-and-white grid.
+
+**On a phone Flock behaves like an app.** Add it to the Home Screen (My
+schedule offers it, or tap your initials, then **Install Flock**; on an
+iPhone it shows the three steps). It then opens straight away, even while the
+server is waking up or the signal is poor, because the phone keeps a copy of
+Flock's own files (never your data; see
+`docs/decisions/0009-app-shell-cache.md`). With no connection at all it says
+**Can't reach the server** with **Try again**, and opens by itself when the
+connection is back. A new version reaches an installed phone by itself: it is
+fetched in the background and used from the next tap that changes the page.
+
+The top bar is slim: the mark, the bell and your initials, which open your
+account (notifications, password, install, log out). Scroll down and the page
+title takes the place of "Flock". The tabs show numbers: on **My schedule**
+the asks waiting for your answer (also on the app icon of an installed app),
+on **Gaps** the gaps. Sheets come up from the bottom and can be swiped down to
+close; **More** is one of them. Invites and reminders can go straight to the
+phone's share sheet. Pages fade in, things you press give a little, and
+saying yes is thanked with a check. With reduced motion turned on, none of it
+moves.
 
 To change the brand colour, edit the colour list at the top of `web/style.css`
 (`--brand`, `--accent` and the few colours next to them, once for light and once

@@ -112,11 +112,12 @@ Use the laptop. Keep the terminal window open.
    not the same.** Try `short`: the message should require at least 8 characters.
 5. Choose your own password twice, such as `my own password 1`, and click
    **Choose password** twice quickly. You should be logged in once, on
-   **My schedule**, with **Logged in as Demo Admin** and the menu.
+   **My schedule**, with your initials (**DA**) at the top right and the menu.
+   Tap the initials: a sheet shows **Demo Admin**, **Scheduler** and your email.
    The address should end in `#/`, with no token left in it.
 6. In a private window open the same invite again. It must say the link was
    used or expired and offer a link to log in. Log in with the password you chose.
-7. On the original page click the key button at the top (**Change my password**).
+7. On the original page tap your initials at the top right, then **Change my password**.
    The page should have Current password, New password and confirmation fields.
    Try a missing current password, a short new password, mismatches and an
    unchanged password. Each should show a plain message without leaving the page.
@@ -130,7 +131,7 @@ Use the laptop. Keep the terminal window open.
 
 ### 2. Wrong password and lockout
 
-1. Click **Log out** (top right). You should be on the Log in page.
+1. Tap your initials (top right), then **Log out**. You should be on the Log in page.
 2. Type `demo-admin` and a wrong password, and click **Log in**, five times in a row.
    You should see **Wrong email or password** each time (the fifth try may
    already say it is locked).
@@ -400,11 +401,11 @@ Back on the laptop, logged in as the scheduler.
 
 ### 15. Log out and session expiry
 
-1. On the phone, tap **Log out**. You should be on the Log in page, with no
+1. On the phone, tap your initials (top right), then **Log out**. You should be on the Log in page, with no
    menu. Press the browser's **Back** button and also try typing
    `#/blockouts` at the end of the address. You should stay on the Log in page.
 2. **Two-tab check.** On the laptop open Flock in two browser tabs, both
-   logged in. In the second tab click **Log out**. In the first tab click
+   logged in. In the second tab click your initials, then **Log out**. In the first tab click
    **Teams**. You should be sent to the Log in page with **Please log in
    again.**
 3. A login lasts until 14 days after you last used it, which you cannot wait
@@ -596,11 +597,60 @@ iPhone (iOS 16.4 or newer) and an Android phone or a computer with Chrome.
 9. **People.** The test people with notifications on show **Notifications
    on**.
 10. **Turning off.** On the bell page tap **Turn off**: nothing more arrives on
-    that device. Turn on again, then **Log out**: nothing more arrives there
+    that device. Turn on again, then **Log out** (in the sheet under your initials): nothing more arrives there
     either. Reset login on another test person: their phone stops getting
     notifications.
 11. **Blocked.** On a phone, say **Don't Allow** when asked. The bell page
     explains how to allow notifications in Settings.
+
+- [ ] Pass   [ ] Fail   Notes: ______________________________
+
+---
+
+### 22. The installed app (release 0.7)
+
+This also needs the real, online Flock (HTTPS). Use made-up test people. You
+need an iPhone and an Android phone.
+
+1. **Install on Android.** Open Flock in Chrome and log in. On My schedule a
+   card says **Put Flock on your Home Screen** (if the notifications card is
+   showing, tap **Not now** there first). Tap **Install** and accept. Flock is
+   on the Home Screen and opens without the browser's address bar.
+2. **Install on iPhone.** In Safari, the card's button says **Show me how**;
+   tap it: three steps (Share, Add to Home Screen, Add). Follow them. The same
+   steps are under your initials, **Install Flock**.
+3. **Not now.** On another phone tap **Not now** on the card. Reload: it stays
+   away. **Install Flock** is still under your initials.
+4. **No connection.** Open the installed Flock once with signal, close it, put
+   the phone in aeroplane mode and open it again. It should show **Can't reach
+   the server** with **Try again**, not an error page from the phone. Turn
+   aeroplane mode off: Flock opens by itself within a few seconds (or tap
+   **Try again**).
+5. **Updates.** After a new release is deployed, open the installed Flock and
+   tap to another page. It reloads once and then shows what that release
+   changed (see its entry in `CHANGELOG.md`). It never reloads by itself
+   while you are filling something in.
+6. **Numbers on the tabs.** As a volunteer with two asks waiting, the **My
+   schedule** tab shows **2**, and an installed app on Android shows 2 on its
+   icon. Answer one: it shows **1**. As a scheduler, **Gaps** shows the number
+   of gaps.
+7. **Account sheet.** Tap your initials: name, Volunteer or Scheduler, email,
+   **Notifications**, **Change my password**, **Log out**. Close it with the X,
+   by tapping outside it, and by swiping it down.
+8. **Share.** As a scheduler on a phone, **Copy new invite** for a test person,
+   then **Share**: the phone's share sheet opens with the invite message. On
+   Gaps, **Share all** and **Share** do the same for reminders.
+9. **Swipe and More.** As a scheduler on a phone, tap **More**: a sheet rises
+   from behind the tab bar. Swipe it down: it closes. The same works for the
+   slot panel on Schedule and Gaps.
+10. **Thank you.** As a volunteer, tap **Yes, I can**: the card shows a green
+    **You're confirmed. Thank you!** with a check, and the phone buzzes once
+    (Android).
+11. **Reduced motion.** Turn on Reduce Motion (iPhone: Settings, Accessibility,
+    Motion; Android: Remove animations). Pages, sheets and the check no
+    longer move, and everything still works.
+12. **Shortcuts (Android).** Press and hold the Flock icon: **My schedule** and
+    **Days off** open those pages.
 
 - [ ] Pass   [ ] Fail   Notes: ______________________________
 
@@ -631,6 +681,7 @@ iPhone (iOS 16.4 or newer) and an Android phone or a computer with Chrome.
 | 19 | Phone width | [ ] | [ ] |
 | 20 | Things to try to break it | [ ] | [ ] |
 | 21 | Notifications on real phones | [ ] | [ ] |
+| 22 | The installed app | [ ] | [ ] |
 
 ---
 

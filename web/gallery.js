@@ -12,6 +12,9 @@ import { toast, toasts } from './lib/toast.js';
 import { skeleton, emptyState } from './lib/ui.js';
 import { statusChip, createSlotPanel } from './lib/slotpanel.js';
 import * as nav from './views/nav.js';
+import * as account from './views/account.js';
+import * as offline from './views/offline.js';
+import * as installSteps from './views/install-steps.js';
 import * as login from './views/login.js';
 import * as welcome from './views/welcome.js';
 import * as password from './views/password.js';
@@ -128,12 +131,17 @@ export function demoApi(d) {
   };
 }
 
-// The icons added in the new-look pass, each showing the thing itself.
+// The icons added in the new-look and app-feel passes, each showing the thing itself.
 const NEW_ICONS = [
   ['calendar-off', 'days you cannot serve'],
   ['team', 'a team of people'],
   ['church', 'a service'],
   ['puzzle', 'a gap: a position still to fill'],
+  ['share', "the phone's share sheet"],
+  ['install', 'put Flock on the Home Screen'],
+  ['add-square', "iOS's Add to Home Screen"],
+  ['offline', "can't reach the server"],
+  ['chevron-left', 'back, the month before'],
 ];
 
 // ---------- gallery pieces ----------
@@ -182,7 +190,7 @@ function components(d) {
   ${section('avatars', 'Avatars', html`<div class="card"><p class="gallery-row">${names.map((n) => html`<span class="gallery-avatar">${avatar(n)}<span class="hint">${n}</span></span>`)}</p>
     <p class="gallery-row">${avatar('Priya Demo', 'sm')} ${avatar('Priya Demo')} ${avatar('Priya Demo', 'lg')}</p></div>`)}
   ${section('icons', 'Icons', html`<ul class="gallery-icons">${ICON_NAMES.map((n) => html`<li class="gallery-icon" title="${attr(n)}">${iconSlot(n, 'icon-lg')}<code>${n}</code></li>`)}</ul>`)}
-  ${section('new-icons', 'New icons', html`<p class="hint gallery-note">The four icons added with the new look, each with what it means. Every other icon was redrawn on the same grid.</p>
+  ${section('new-icons', 'New icons', html`<p class="hint gallery-note">The icons added with the new look and the app feel, each with what it means. Every other icon was redrawn on the same grid.</p>
     <ul class="gallery-icons">${NEW_ICONS.map(([n, meaning]) => html`<li class="gallery-icon" title="${attr(n)}">${iconSlot(n, 'icon-lg')}<code>${n}</code><span class="hint icon-meaning">${esc(meaning)}</span></li>`)}</ul>`)}
   ${section('icon-buttons', 'Icon buttons', html`<p class="hint gallery-note">Real buttons built with <code>iconButton()</code>: 48×48, a visible keyboard focus ring, and a danger variant. Tab to them.</p>
     <div class="card"><p class="gallery-row">
@@ -209,8 +217,20 @@ function components(d) {
   </form>`)}
   ${section('nav', 'Top bar and menu', html`
     ${frame('Volunteer', html`<header class="top">${raw(nav.render({ user: { id: 3, name: 'Priya Demo', role: 'member' } }, '#/'))}</header>`)}
-    ${frame('Scheduler', html`<header class="top">${raw(nav.render({ user: { id: 1, name: 'Morgan Fictional', role: 'admin' } }, '#/schedule'))}</header>`)}`,
-  'On a phone the menu is a tab bar at the bottom; on a wide screen it is a row of tabs. Resize the window to see both.')}
+    ${frame('Scheduler', html`<header class="top">${raw(nav.render({ user: { id: 1, name: 'Morgan Fictional', role: 'admin' } }, '#/schedule'))}</header>`)}
+    ${frame('Scrolled: the page title takes the place of "Flock"', html`<header class="top is-scrolled">${raw(nav.render({ user: { id: 3, name: 'Priya Demo', role: 'member' } }, '#/', 'My schedule'))}</header>`)}
+    ${frame('Counts on the tabs (2 to answer, 7 gaps)', html`<header class="top">${raw(nav.render({ user: { id: 1, name: 'Morgan Fictional', role: 'admin' }, counts: { answer: 2, gaps: 7 } }, '#/schedule'))}</header>`)}
+    ${frame('More, open (a sheet from behind the tab bar)', html`<header class="top">${raw(nav.render({ user: { id: 1, name: 'Morgan Fictional', role: 'admin' }, counts: { answer: 1, gaps: 7 } }, '#/schedule')
+      .replace('class="nav nav-admin"', 'class="nav nav-admin is-open"').replace('aria-expanded="false" aria-controls', 'aria-expanded="true" aria-controls'))}</header>`)}`,
+  'On a phone the menu is a tab bar at the bottom; on a wide screen it is a row of tabs. Resize the window to see both. The avatar opens the account sheet.')}
+  ${section('account', 'Account sheet (menu rows)', html`
+    ${frame('Volunteer, notifications on, can install', account.render({ user: { id: 3, name: 'Priya Demo', role: 'member', email: 'priya.demo@example.com' }, accountOpen: true, push: { enabled: true, status: 'on' } }, { canInstall: true }))}
+    ${frame('Scheduler who signs in with Google', account.render({ user: { id: 1, name: 'Morgan Fictional', role: 'admin', email: 'morgan.fictional@example.com', hasPassword: false }, accountOpen: true }))}`,
+  'Opened by the avatar in the top bar. Swipe down, tap outside, the X or Escape to close.')}
+  ${section('installed', 'Installed-app pieces', html`
+    ${frame("Can't reach the server (start-up)", offline.render())}
+    ${frame('Trying again', offline.render({ busy: true }))}
+    ${frame('Add Flock to your Home Screen (iPhone)', installSteps.render({ installSteps: true }))}`)}
   ${section('sheet', 'Bottom sheet (slot panel)', html`
     ${frame('Suggestions', panelHtml(d, schedule.panelSlot(d.SERVICES[0].slots[2], d.SERVICES[0])))}
     ${frame('A conflict to confirm', panelHtml(d, schedule.panelSlot(d.SERVICES[0].slots[1], d.SERVICES[0]), { conflict: { code: 'blocked', personId: 3, message: 'Priya Demo is away on that date. Assign anyway?', force: true } }))}
@@ -246,6 +266,8 @@ function pages(d) {
     ${frame('Invited to turn on notifications', mySchedule.render({ push: { support: 'ok' } }, { today: d.today, loading: false, showPush: true, data: { nextServing: d.ITEMS[0], items: [d.ITEMS[0]], rosters: d.ROSTERS } }))}
     ${frame('Serving soon, one to answer', sched({ data: { nextServing: d.ITEMS[0], items: d.ITEMS, rosters: d.ROSTERS } }))}
     ${frame('Full roster of the day, opened', sched({ openRosters: new Set([101]), data: { nextServing: d.ITEMS[0], items: d.ITEMS, rosters: d.ROSTERS } }))}
+    ${frame('Put Flock on your Home Screen', sched({ showInstall: true, data: { nextServing: d.ITEMS[1], items: [d.ITEMS[1]], rosters: d.ROSTERS } }))}
+    ${frame('The moment after Yes, I can', sched({ celebrate: 102, message: 'Thank you! You are confirmed.', data: { nextServing: d.ITEMS[1], items: [d.ITEMS[1]], rosters: d.ROSTERS } }))}
     ${frame('After saying yes', sched({ message: 'Thank you! You are confirmed.', data: { nextServing: d.ITEMS[1], items: [d.ITEMS[1]], rosters: d.ROSTERS } }))}
     ${frame('Are you sure?', sched({ confirmId: 102, data: { nextServing: d.ITEMS[1], items: [d.ITEMS[1]], rosters: d.ROSTERS } }))}
     ${frame('A problem', sched({ problem: 'Someone else took it.', data: { nextServing: d.ITEMS[0], items: [d.ITEMS[0]], rosters: d.ROSTERS } }))}
@@ -263,6 +285,7 @@ function pages(d) {
     ${frame('A person tapped: their buttons', screen('People', people.renderScreen(peopleModel({ selected: 5 }))))}
     ${frame('Adding someone', screen('People', people.renderScreen(peopleModel({ adding: true, newName: 'Noor Imaginary' }))))}
     ${frame('Invite message', screen('People', people.renderScreen(peopleModel({ invite: { name: 'Noor Imaginary', email: 'noor.imaginary@example.com', link: '/#/welcome?token=gallery-example', localOnly: true }, notice: 'Copied.' }))))}
+    ${frame('Invite message on a phone that can share', screen('People', people.renderScreen(peopleModel({ canShare: true, invite: { name: 'Noor Imaginary', email: 'noor.imaginary@example.com', link: '/#/welcome?token=gallery-example', localOnly: false } }))))}
     ${frame('What can they do?', screen('People', people.renderScreen(peopleModel({ selected: 3, panel: { kind: 'positions', id: 3, checked: new Set([10]) } }))))}
     ${frame('Deactivate?', screen('People', people.renderScreen(peopleModel({ selected: 5, panel: { kind: 'active', id: 5 } }))))}
     ${frame('Make a scheduler?', screen('People', people.renderScreen(peopleModel({ selected: 6, panel: { kind: 'role', id: 6, role: 'admin' } }))))}
@@ -286,6 +309,7 @@ function pages(d) {
     ${frame('No services', screen('Schedule', schedule.renderScreen(schedModel({ services: [] }))))}`)}
   ${section('p-gaps', 'Gaps', html`
     ${frame('Gaps and reminders', screen('Gaps', gaps.renderScreen(gapsModel())))}
+    ${frame('Reminders on a phone that can share', screen('Gaps', gaps.renderScreen(gapsModel({ canShare: true }))))}
     ${frame('Reminders with notifications on', screen('Gaps', gaps.renderScreen(gapsModel({ reminders: { weekOf: d.sunday, push: true, sent: new Set(), loading: false, error: '', notice: '',
       list: d.REMINDERS.map((x, i) => ({ ...x, hasPush: i % 2 === 0 })) } }))))}
     ${frame('Reminders sent', screen('Gaps', gaps.renderScreen(gapsModel({ reminders: { weekOf: d.sunday, push: true, loading: false, error: '',

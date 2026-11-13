@@ -11,7 +11,7 @@ export function render(state) {
   if (!state?.installSteps) return '';
   return String(html`<div class="sheet-layer is-entering" data-install-sheet>
   <div class="sheet-backdrop" data-action="install-close"></div>
-  <section class="sheet install-sheet" data-install-panel role="dialog" aria-modal="true" aria-labelledby="install-title">
+  <section class="sheet" data-install-panel role="dialog" aria-modal="true" aria-labelledby="install-title">
     <div class="sheet-grab" aria-hidden="true"></div>
     <div class="sheet-head"><h2 id="install-title" tabindex="-1">${title}</h2><button type="button" class="icon-btn" data-action="install-close" aria-label="Close">${iconSlot('x')}</button></div>
     <div class="sheet-body"><ol class="howto">
