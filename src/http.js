@@ -1,25 +1,13 @@
-import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { AppError } from './errors.js';
+import { sendFile } from './static.js';
 import { silentLogger } from './infra/logger.js';
 import { systemClock } from './infra/clock.js';
 import { secureRandom } from './infra/random.js';
 
 export const BODY_LIMIT = 100 * 1024;
 const WEB_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'web');
-
-const TYPES = {
-  '.html': 'text/html; charset=utf-8',
-  '.js': 'text/javascript; charset=utf-8',
-  '.css': 'text/css; charset=utf-8',
-  '.woff2': 'font/woff2',
-  '.svg': 'image/svg+xml',
-  '.png': 'image/png',
-  '.ico': 'image/x-icon',
-  '.json': 'application/json; charset=utf-8',
-  '.webmanifest': 'application/manifest+json; charset=utf-8',
-};
 
 export function securityHeaders(res, isApi) {
   res.setHeader('Content-Security-Policy', "default-src 'self'; frame-ancestors 'none'");
@@ -226,21 +214,7 @@ export function createRouter({ logger, clock, random } = {}) {
   return { add, routes, match, setGuard, handle };
 }
 
+// The files in web/ (see src/static.js for caching, packing and the worker's list).
 export async function serveStatic(req, res, rawUrl, root = WEB_ROOT) {
-  const notFound = () => send(res, 404, { error: 'Not found' });
-  let pathname;
-  try {
-    pathname = decodeURIComponent(new URL(rawUrl, 'http://localhost').pathname);
-  } catch { return notFound(); }
-  if (pathname.includes('\0') || pathname.includes('\\')) return notFound();
-  if (pathname.endsWith('/')) pathname += 'index.html';
-  const base = path.resolve(root);
-  const file = path.resolve(base, '.' + pathname);
-  if (file !== base && !file.startsWith(base + path.sep)) return notFound();
-  const type = TYPES[path.extname(file).toLowerCase()];
-  if (!type) return notFound();
-  let data;
-  try { data = await readFile(file); } catch { return notFound(); }
-  res.writeHead(200, { 'Content-Type': type, 'Content-Length': data.length });
-  res.end(req.method === 'HEAD' ? undefined : data);
+  return sendFile(req, res, rawUrl, root, () => send(res, 404, { error: 'Not found' }));
 }

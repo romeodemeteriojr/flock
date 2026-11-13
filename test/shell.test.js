@@ -50,7 +50,14 @@ test('every web file is served with the right content type', async () => {
       const r = await fetch(t.url + rel(f));
       assert.equal(r.status, 200, rel(f));
       assert.ok(r.headers.get('content-type').startsWith(type), `${rel(f)}: ${r.headers.get('content-type')}`);
-      assert.deepEqual(Buffer.from(await r.arrayBuffer()), await readFile(f));
+      let got = Buffer.from(await r.arrayBuffer());
+      if (rel(f) === '/sw.js') {
+        // The worker is sent with one line in front: the app's file list (decision 0009).
+        const cut = got.indexOf('\n') + 1;
+        assert.match(got.subarray(0, cut).toString(), /^self\.FLOCK_SHELL=\{.*\};\n$/);
+        got = got.subarray(cut);
+      }
+      assert.deepEqual(got, await readFile(f), rel(f));
     }
     const root = await t.request('GET', '/');
     assert.equal(root.status, 200);

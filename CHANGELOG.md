@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### App feel
+
+- **Faster opening, less data.** Every file Flock sends has a fingerprint (an ETag). The phone asks "has this changed?" and gets a short "no" when it has not, instead of the whole file again. Text files are sent packed (brotli or gzip), about a third of their size. Pictures and the font may be kept for a day.
+- The service worker (`/sw.js`) is sent with the list of the app's files and a fingerprint of each in front. Any change to the app changes the worker, which is how an installed phone will learn there is a new version (decision 0009, coming in this release).
+
 ## 0.6.0
 
 No database changes: it deploys over 0.5.1 as it is. Nothing works differently; everything looks different.
