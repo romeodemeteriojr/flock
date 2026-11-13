@@ -6,6 +6,8 @@
 //                 | 'ios-update' (iOS older than 16.4) | 'unsupported'
 //   status        'on' | 'off' | 'blocked' (the person said no in the browser)
 
+import { registerWorker } from './worker.js';
+
 const CARD_KEY = 'flock.pushCard';
 
 function isIos(nav) {
@@ -62,11 +64,10 @@ function deviceBody(sub) {
   return { endpoint: j.endpoint, keys: { p256dh: j.keys?.p256dh, auth: j.keys?.auth } };
 }
 
-// Registers the worker (once; the browser ignores repeats) and waits until it runs.
+// Registers the worker (the browser ignores repeats; see lib/worker.js) and waits until it runs.
 async function registration(win) {
-  const sw = win.navigator.serviceWorker;
-  await sw.register('/sw.js', { scope: '/' });
-  return sw.ready;
+  await registerWorker(win);
+  return win.navigator.serviceWorker.ready;
 }
 
 // The registration if there is one, without waiting for anything.

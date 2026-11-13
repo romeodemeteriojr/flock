@@ -5,7 +5,9 @@
 ### App feel
 
 - **Faster opening, less data.** Every file Flock sends has a fingerprint (an ETag). The phone asks "has this changed?" and gets a short "no" when it has not, instead of the whole file again. Text files are sent packed (brotli or gzip), about a third of their size. Pictures and the font may be kept for a day.
-- The service worker (`/sw.js`) is sent with the list of the app's files and a fingerprint of each in front. Any change to the app changes the worker, which is how an installed phone will learn there is a new version (decision 0009, coming in this release).
+- **Opens at once, even on bad signal.** The phone keeps a copy of Flock's own files (pages, scripts, styles, font, icons; never your data), so an installed Flock opens straight away, also while the server is waking up. Every device now gets the small background helper (service worker), not only those with notifications on (decision `docs/decisions/0009-app-shell-cache.md`).
+- **Updates reach installed phones by themselves.** The server puts the list of the app's files, with a fingerprint of each, at the top of `/sw.js`, so any new release changes it. The phone fetches the new version in the background and switches to it at the next tap that changes the page (one quick reload). It looks for a new version when the app comes back to the screen, at most every 30 minutes.
+- The privacy page says the phone keeps a copy of Flock's files, with nothing about you in it.
 
 ## 0.6.0
 

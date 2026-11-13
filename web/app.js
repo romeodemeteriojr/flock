@@ -7,6 +7,7 @@ import { TOAST_REGION, createToaster } from './lib/toast.js';
 import { watchIcons } from './lib/icons.js';
 import { skeleton } from './lib/ui.js';
 import * as push from './lib/push.js';
+import { registerWorker, applyUpdate, watchUpdates } from './lib/worker.js';
 
 const GENERIC = 'Something went wrong. Please reload the page and try again.';
 
@@ -114,8 +115,17 @@ export function createApp({ root, win = globalThis.window, api = createApi() }) 
     showError(err && err.name === 'ApiError' ? err.message : GENERIC);
   }
 
+  // A new version of the app that is ready takes over at a page change,
+  // never in the middle of one (decision 0009). The page then reloads once.
+  function onHashChange() {
+    applyUpdate(win);
+    render();
+  }
+
   async function start() {
-    win.addEventListener('hashchange', render);
+    watchUpdates(win);
+    registerWorker(win).catch(() => { /* no worker: Flock works, just not offline */ });
+    win.addEventListener('hashchange', onHashChange);
     win.addEventListener('unhandledrejection', (e) => { e.preventDefault(); handleError(e.reason); });
     win.addEventListener('error', (e) => { e.preventDefault(); handleError(e.error); });
     main.innerHTML = String(skeleton('Loading…', 'cards', 2));

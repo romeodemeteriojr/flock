@@ -200,7 +200,7 @@ function runWorker() {
 
 test('service worker: shows the declarative message and opens Flock on tap', async () => {
   const w = runWorker();
-  assert.deepEqual(Object.keys(w.listeners).sort(), ['activate', 'install', 'notificationclick', 'push']);
+  assert.deepEqual(Object.keys(w.listeners).sort(), ['activate', 'fetch', 'install', 'message', 'notificationclick', 'push']);
   const msg = { web_push: 8030, notification: { title: 'Flock', body: 'Asked to serve: Sound, Sun 15 Nov 9:00. Tap to answer.', navigate: 'https://flock.example.org/#/gaps', tag: 'asked', lang: 'en-GB', dir: 'ltr' } };
   await w.fire('push', { data: { json: () => msg } });
   assert.equal(w.shown[0].title, 'Flock');
