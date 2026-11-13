@@ -3,6 +3,7 @@
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const LONG_DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const LONG_MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
 function parts(date) {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(date ?? ''));
@@ -56,6 +57,56 @@ export function relativeDay(date, today) {
   if (n >= 2 && n <= 6) return `This ${weekday(date)}`;
   if (n === 7) return `Next ${weekday(date)}`;
   return formatDate(date);
+}
+
+// ---------- the days-off calendar: months, weeks starting Monday ----------
+
+const pad2 = (n) => String(n).padStart(2, '0');
+const ymd = (y, mo, d) => `${String(y).padStart(4, '0')}-${pad2(mo)}-${pad2(d)}`;
+
+/** { year, month } (month 1..12) n months after the given one (n may be negative). */
+export function addMonths(year, month, n) {
+  const i = year * 12 + (month - 1) + n;
+  return { year: Math.floor(i / 12), month: (i % 12 + 12) % 12 + 1 };
+}
+
+/** 'November 2026'. */
+export function monthLabel(year, month) {
+  return `${LONG_MONTHS[month - 1] ?? ''} ${year}`;
+}
+
+/**
+ * One month as a calendar page whose weeks start on Monday: how many empty
+ * cells come before the 1st, and every day of the month as 'YYYY-MM-DD'.
+ */
+export function monthGrid(year, month) {
+  const first = parts(ymd(year, month, 1));
+  if (!first) return { blanks: 0, days: [] };
+  const next = addMonths(year, month, 1);
+  const length = Math.round((parts(ymd(next.year, next.month, 1)).ms - first.ms) / 86400000);
+  return {
+    blanks: (first.dow + 6) % 7,
+    days: Array.from({ length }, (_, i) => ymd(year, month, i + 1)),
+  };
+}
+
+/** Days from `from` to `to`, both counted: the same day is 1. */
+export function daysBetween(from, to) {
+  return daysUntil(to, from) + 1;
+}
+
+/** The date n days after `date` (n may be negative), or '' if unreadable. */
+export function shiftDate(date, n) {
+  const p = parts(date);
+  if (!p) return '';
+  const t = new Date(p.ms + n * 86400000);
+  return ymd(t.getUTCFullYear(), t.getUTCMonth() + 1, t.getUTCDate());
+}
+
+/** 'Saturday 21 November', for screen readers. */
+export function longDate(date) {
+  const p = parts(date);
+  return p ? `${LONG_DAYS[p.dow]} ${p.d} ${LONG_MONTHS[p.mo - 1]}` : String(date ?? '');
 }
 
 // Today's date in the browser's own calendar, as 'YYYY-MM-DD'.

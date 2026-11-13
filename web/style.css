@@ -905,6 +905,48 @@ th, td { text-align: left; padding: var(--s-2) var(--s-3); border-bottom: 1px so
 .serve-details .btn-row, .serve-details .notice { margin-top: var(--s-3); }
 
 /* ---------- days off ---------- */
+/* Tap the days on a calendar. */
+.cal { padding: var(--s-3) var(--s-1) var(--s-3); }
+.cal-head { display: flex; align-items: center; gap: var(--s-2); padding: 0 var(--s-2) var(--s-1); }
+.cal-month { flex: 1; margin: 0; text-align: center; font-size: var(--fs-lg); font-weight: 700; letter-spacing: -0.015em; }
+.cal-head .icon-btn { background: transparent; }
+.cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); row-gap: 2px; }
+.cal-dow { padding: var(--s-2) 0; text-align: center; color: var(--muted); font-size: var(--fs-xs); font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; }
+.cal-blank { min-height: var(--control-size); }
+.cal-day {
+  position: relative; min-height: var(--control-size); padding: 0;
+  border: 0; border-radius: var(--radius-pill); background: none; color: var(--text);
+  font: inherit; font-weight: 600; font-variant-numeric: tabular-nums; cursor: pointer;
+  transition: background-color var(--fast) var(--ease), transform var(--fast) var(--ease);
+}
+.cal-day:active { transform: scale(0.92); }
+.cal-day:disabled { color: var(--muted); opacity: 0.45; cursor: default; transform: none; }
+.cal-day.is-today { box-shadow: inset 0 0 0 2px var(--accent); }
+/* Already saved as away: grey, struck through. */
+.cal-day.is-off { border-radius: 0; color: var(--muted); background: var(--surface-3); text-decoration: line-through; }
+.cal-day.is-off.is-off-start { border-radius: var(--radius-pill) 0 0 var(--radius-pill); }
+.cal-day.is-off.is-off-end { border-radius: 0 var(--radius-pill) var(--radius-pill) 0; }
+.cal-day.is-off.is-off-start.is-off-end { border-radius: var(--radius-pill); }
+/* Being picked now: filled ends, tinted middle, bold. */
+.cal-day.is-in { border-radius: 0; color: var(--on-accent-soft); background: var(--accent-soft); font-weight: 800; }
+.cal-day.is-start, .cal-day.is-end { color: var(--on-accent); background: var(--accent); font-weight: 800; }
+.cal-day.is-start { border-radius: var(--radius-pill) 0 0 var(--radius-pill); }
+.cal-day.is-end { border-radius: 0 var(--radius-pill) var(--radius-pill) 0; }
+.cal-day.is-start.is-end { border-radius: var(--radius-pill); }
+/* A day you are already down to serve: a dot under the number. */
+.cal-day.is-serving::after {
+  content: ""; position: absolute; left: calc(50% - 3px); bottom: 6px;
+  width: 6px; height: 6px; border-radius: 50%; background: currentColor;
+}
+.cal-legend { display: flex; flex-wrap: wrap; gap: var(--s-2) var(--s-4); margin: var(--s-3) var(--s-3) 0; color: var(--muted); font-size: var(--fs-xs); }
+.cal-key { display: inline-flex; align-items: center; gap: var(--s-2); }
+.cal-swatch { display: inline-block; width: 1rem; height: 1rem; border-radius: 50%; }
+.cal-swatch-pick { background: var(--accent); }
+.cal-swatch-off { background: var(--surface-3); box-shadow: inset 0 0 0 1px var(--line-strong); }
+.cal-swatch-serve { width: 6px; height: 6px; margin: 0 5px; background: var(--text); }
+.cal-pick { margin: var(--s-4) 0 0; }
+.cal-range { margin: 0 0 var(--s-3); font-size: var(--fs-lg); font-weight: 700; }
+.cal-range-empty { color: var(--muted); font-weight: 500; font-size: var(--fs-md); }
 .off-card { display: flex; align-items: center; gap: var(--s-3); flex-wrap: wrap; }
 .off-icon {
   display: inline-flex; padding: 10px; border-radius: var(--radius);
@@ -1249,7 +1291,7 @@ th, td { text-align: left; padding: var(--s-2) var(--s-3); border-bottom: 1px so
     scroll-behavior: auto !important;
   }
   .btn:active, .segment:active, .slot-btn:active, .icon-btn:active,
-  .nav-list a:active, .nav-more:active, .serve-card:hover,
+  .nav-list a:active, .nav-more:active, .serve-card:hover, .cal-day:active,
   .serve-card:active, .sched-card:active, .avatar-btn:active { transform: none !important; }
   /* The check is drawn at once; the strip and the toast still say it. */
   .is-celebrating .done-burst path { stroke-dashoffset: 0; animation: none !important; }

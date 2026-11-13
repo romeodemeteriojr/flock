@@ -199,22 +199,74 @@ test('schedule: empty, error and failed answer states', async () => {
   assert.match(root.innerHTML, /Yes, I can/);
 });
 
-test('days off: form is prefilled, validated, and posts', async () => {
+test('days off: nothing picked at first, validated, and posts', async () => {
   const { root, api } = await setup(off, { 'GET /api/me/blockouts': { blockouts: [] }, 'POST /api/me/blockouts': { blockout: {}, conflicts: [] } });
-  assert.match(root.innerHTML, /name="from"[^>]*value="2026-11-04"/);
-  assert.match(root.innerHTML, /name="to"[^>]*value="2026-11-04"/);
+  assert.match(root.innerHTML, /<input type="hidden" name="from" value=""><input type="hidden" name="to" value="">/);
+  assert.match(root.innerHTML, /class="cal-range num cal-range-empty" data-range aria-live="polite">Tap a day to start\.</);
   assert.match(root.innerHTML, /You have no days off saved/);
 
   await root.submit('blockout', { from: '', to: '', reason: '' });
-  assert.match(root.innerHTML, /Please pick/);
+  assert.match(root.innerHTML, /Please pick the first day you can&#39;t serve: tap it on the calendar\./);
   await root.submit('blockout', { from: '2026-11-10', to: '2026-11-09', reason: '' });
-  assert.match(root.innerHTML, /be before the/);
-  assert.deepEqual(api.calls, ['GET /api/me/availability', 'GET /api/me/blockouts']);
+  assert.match(root.innerHTML, /be before the first day/);
+  assert.deepEqual(api.calls.sort(), ['GET /api/me/availability', 'GET /api/me/blockouts', 'GET /api/me/schedule']);
 
   await root.submit('blockout', { from: '2026-11-10', to: '2026-11-12', reason: 'Trip' });
-  assert.equal(api.calls[2], 'POST /api/me/blockouts {"startDate":"2026-11-10","endDate":"2026-11-12","reason":"Trip"}');
+  assert.ok(api.calls.includes('POST /api/me/blockouts {"startDate":"2026-11-10","endDate":"2026-11-12","reason":"Trip"}'));
   assert.match(root.innerHTML, /Saved/);
   assert.doesNotMatch(root.innerHTML, /data-conflicts/);
+});
+
+test('days off calendar: tap a day, then a later one; the range is said in words and posted', async () => {
+  const { root, api } = await setup(off, {
+    'GET /api/me/blockouts': { blockouts: [{ id: 7, startDate: '2026-11-24', endDate: '2026-11-26', reason: '' }] },
+    'GET /api/me/schedule': { items: [{ date: '2026-11-15', status: 'pending' }, { date: '2026-11-22', status: 'declined' }] },
+    'POST /api/me/blockouts': { blockout: {}, conflicts: [] },
+  });
+  const h = root.innerHTML;
+  assert.match(h, /<h2 class="cal-month" id="cal-month" aria-live="polite">November 2026<\/h2>/);
+  assert.match(h, /data-action="month-prev" aria-label="Previous month" disabled/, 'no going back before this month');
+  assert.match(h, /class="cal-day" data-action="day" data-date="2026-11-03" aria-pressed="false" aria-label="Tuesday 3 November" disabled>3</, 'past days cannot be picked');
+  assert.match(h, /class="cal-day is-today" [^>]*aria-label="Wednesday 4 November, today"/);
+  assert.match(h, /class="cal-day is-serving" [^>]*aria-label="Sunday 15 November, you are serving"/);
+  assert.doesNotMatch(h, /data-date="2026-11-22"[^>]*you are serving/, 'a declined one is not shown');
+  assert.match(h, /class="cal-day is-off is-off-start" [^>]*aria-label="Tuesday 24 November, already off"/);
+  assert.match(h, /class="cal-day is-off is-off-end" [^>]*data-date="2026-11-26"/);
+  assert.equal((h.match(/class="cal-blank"/g) || []).length, 6, 'November 2026 starts on a Sunday');
+
+  const tap = (date) => root.fire('click', { dataset: { action: 'day', date } });
+  await tap('2026-11-21');
+  assert.match(root.innerHTML, /class="cal-day is-start is-end" [^>]*aria-pressed="true" aria-label="Saturday 21 November, picked"/);
+  assert.match(root.innerHTML, /data-range aria-live="polite">Sat 21 Nov \(1 day\)</);
+  await tap('2026-11-23');
+  assert.match(root.innerHTML, /class="cal-day is-in" [^>]*data-date="2026-11-22"/);
+  assert.match(root.innerHTML, /class="cal-day is-end" [^>]*data-date="2026-11-23"/);
+  assert.match(root.innerHTML, /Sat 21 Nov to Mon 23 Nov \(3 days\)/);
+  assert.match(root.innerHTML, /name="from" value="2026-11-21"><input type="hidden" name="to" value="2026-11-23">/);
+
+  await root.click('month-next');
+  assert.match(root.innerHTML, /December 2026/);
+  await root.submit('blockout', { from: '2026-11-21', to: '2026-11-23', reason: '' });
+  assert.ok(api.calls.includes('POST /api/me/blockouts {"startDate":"2026-11-21","endDate":"2026-11-23","reason":""}'));
+  assert.match(root.innerHTML, /December 2026/, 'the month stays where it was');
+  assert.match(root.innerHTML, /Tap a day to start\./, 'the picked days are cleared');
+});
+
+test('days off calendar: the tap rules, the words, and twelve months ahead at most', async () => {
+  const p0 = { start: '', end: '' };
+  const one = off.tapDay(p0, '2026-11-21');
+  assert.deepEqual(one, { start: '2026-11-21', end: '2026-11-21' });
+  assert.deepEqual(off.tapDay(one, '2026-11-25'), { start: '2026-11-21', end: '2026-11-25' });
+  assert.deepEqual(off.tapDay(one, '2026-11-19'), { start: '2026-11-19', end: '2026-11-19' }, 'an earlier day starts again');
+  assert.deepEqual(off.tapDay(one, '2026-11-21'), one, 'the same day stays one day');
+  assert.deepEqual(off.tapDay({ start: '2026-11-21', end: '2026-11-25' }, '2026-11-30'), { start: '2026-11-30', end: '2026-11-30' }, 'a range starts again');
+  assert.equal(off.rangeText(p0), '');
+  assert.equal(off.rangeText({ start: '2026-11-21', end: '2026-11-22' }), 'Sat 21 Nov to Sun 22 Nov (2 days)');
+
+  const { root } = await setup(off, { 'GET /api/me/blockouts': { blockouts: [] } });
+  for (let i = 0; i < 14; i++) await root.click('month-next');
+  assert.match(root.innerHTML, /November 2027/);
+  assert.match(root.innerHTML, /data-action="month-next" aria-label="Next month" disabled/);
 });
 
 test('days off: conflict notice, list, remove, errors', async () => {
@@ -319,4 +371,32 @@ test('schedule: the hero is never repeated below, even when nextServing is its o
   const { root } = await setup(sched, { 'GET /api/me/schedule': { nextServing: { ...items[0] }, items } });
   assert.equal((root.innerHTML.match(/data-slot="1"/g) || []).length, 1);
   assert.match(root.innerHTML, /Coming up[\s\S]*data-slot="2"/);
+});
+
+test('calendar date helpers: Monday-first months, month maths, inclusive day counts', async () => {
+  const d = await import('../web/lib/dates.js');
+  assert.deepEqual([d.monthGrid(2026, 11).blanks, d.monthGrid(2026, 11).days.length], [6, 30]);
+  assert.deepEqual([d.monthGrid(2026, 6).blanks, d.monthGrid(2026, 6).days[0]], [0, '2026-06-01'], 'June 2026 starts on a Monday');
+  assert.equal(d.monthGrid(2024, 2).days.length, 29);
+  assert.equal(d.monthGrid(2025, 2).days.at(-1), '2025-02-28');
+  assert.deepEqual(d.addMonths(2026, 12, 1), { year: 2027, month: 1 });
+  assert.deepEqual(d.addMonths(2026, 1, -1), { year: 2025, month: 12 });
+  assert.deepEqual(d.addMonths(2026, 11, 12), { year: 2027, month: 11 });
+  assert.equal(d.monthLabel(2026, 11), 'November 2026');
+  assert.equal(d.daysBetween('2026-11-21', '2026-11-21'), 1);
+  assert.equal(d.daysBetween('2026-12-30', '2027-01-02'), 4);
+  assert.equal(d.shiftDate('2026-12-31', 1), '2027-01-01');
+  assert.equal(d.shiftDate('2024-03-01', -1), '2024-02-29');
+  assert.equal(d.shiftDate('nope', 1), '');
+  assert.equal(d.longDate('2026-11-21'), 'Saturday 21 November');
+});
+
+test('days off calendar: past days and months before this one cannot be picked, even if tapped', async () => {
+  const { root } = await setup(off, { 'GET /api/me/blockouts': { blockouts: [] } });
+  await root.click('month-prev');
+  assert.match(root.innerHTML, /November 2026/);
+  await root.fire('click', { dataset: { action: 'day', date: '2026-11-01' } });
+  assert.match(root.innerHTML, /Tap a day to start\./);
+  await root.fire('click', { dataset: { action: 'day', date: 'nope' } });
+  assert.match(root.innerHTML, /Tap a day to start\./);
 });
