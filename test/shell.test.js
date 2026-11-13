@@ -366,22 +366,48 @@ test('nav differs by role and marks the current page', () => {
   const m = nav.render({ user: member }, '#/blockouts');
   assert.match(m, /My schedule/);
   assert.match(m, /Days I can&#39;t serve/);
-  assert.match(m, /Log out/);
   for (const w of ['People', 'Teams', 'Services', 'Schedule<', 'Gaps']) assert.ok(!m.includes(w), w);
   assert.match(m, /<a href="#\/blockouts" aria-current="page">/);
   assert.equal((m.match(/aria-current/g) || []).length, 1);
 
   const a = nav.render({ user: admin }, '#/');
-  for (const w of ['My schedule', 'People', 'Teams', 'Services', 'Schedule<', 'Gaps', 'Log out']) assert.ok(a.includes(w), w);
+  for (const w of ['My schedule', 'People', 'Teams', 'Services', 'Schedule<', 'Gaps']) assert.ok(a.includes(w), w);
   assert.match(a, /<a href="#\/" aria-current="page">/);
 
   assert.equal(nav.render({ user: null }, '#/login'), '');
-  const f = nav.render({ user: member }, '#/password');
-  assert.match(f, /My schedule/);
-  assert.match(f, /aria-label="Change my password"/);
-  assert.match(f, /Log out/);
-  // People who only sign in with a provider have no password to change.
-  assert.doesNotMatch(nav.render({ user: { ...member, hasPassword: false } }, '#/'), /Change my password/);
+});
+
+test('slim top bar: the mark, the page title for scrolling, the bell, and the avatar that opens the account sheet', () => {
+  const m = nav.render({ user: member }, '#/blockouts', "Days I can't serve");
+  assert.match(m, /<a class="brand" href="#\/" aria-label="Flock, my schedule">/);
+  assert.match(m, /<span class="top-title" aria-hidden="true">Days I can&#39;t serve<\/span>/);
+  assert.match(m, /<button type="button" class="avatar-btn" data-action="account" aria-haspopup="dialog" aria-expanded="false" aria-label="Your account: Mary">/);
+  assert.match(nav.render({ user: member, accountOpen: true }, '#/'), /aria-expanded="true" aria-label="Your account: Mary"/);
+  // Log out, the password key and "Logged in as" have moved to the account sheet.
+  for (const gone of ['nav-who', 'nav-logout', 'Log out', 'Logged in as', '#/password']) assert.ok(!m.includes(gone), gone);
+});
+
+test('account sheet: who you are, then notifications, password, install and log out', async () => {
+  const account = await import('../web/views/account.js');
+  const me = { ...member, email: 'mary@example.org' };
+  assert.equal(account.render({ user: me }), '', 'closed: nothing');
+  const s = account.render({ user: me, accountOpen: true, push: { enabled: true, status: 'on' } }, { canInstall: true });
+  assert.match(s, /role="dialog" aria-modal="true" aria-labelledby="account-name"/);
+  assert.match(s, /<h2 class="account-name" id="account-name" tabindex="-1">Mary<\/h2>/);
+  assert.match(s, /Volunteer · mary@example\.org/);
+  const order = ['href="#/notifications"', 'On for this device', 'href="#/password"', 'data-action="install"', 'Put it on your Home Screen', 'menu-sep', 'data-action="logout"'];
+  let at = -1;
+  for (const w of order) { const i = s.indexOf(w); assert.ok(i > at, `${w} in order`); at = i; }
+  assert.match(s, /class="menu-row is-danger" data-action="logout"/);
+  assert.equal((s.match(/data-action="account-close"/g) || []).length, 2, 'the scrim and the X close it');
+
+  const admin2 = account.render({ user: { ...admin, email: 'ann@example.org' }, accountOpen: true, push: { enabled: true, status: 'off' } });
+  assert.match(admin2, /Scheduler · ann@example\.org/);
+  assert.match(admin2, /Notifications<\/span><span class="menu-end">Off/);
+  assert.doesNotMatch(admin2, /data-action="install"/, 'no install row unless it can be installed');
+  const plain = account.render({ user: { ...member, hasPassword: false }, accountOpen: true });
+  assert.doesNotMatch(plain, /#\/password|#\/notifications/, 'no password to change; notifications not set up');
+  assert.match(plain, /data-action="logout"/);
 });
 
 test('nav escapes the person name', () => {

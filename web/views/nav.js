@@ -4,11 +4,15 @@
 //    admins: Schedule, Gaps, People, More; "More" opens the other pages);
 //  - wide screens: a row of tabs under the top bar, every page in a line.
 // The current page has aria-current="page" (exactly one link).
+//
+// The top bar is slim: the mark and "Flock" (which cross-fade to the page's
+// title once its heading scrolls under the bar, see web/app.js), the bell,
+// and the person's avatar, which opens the account sheet (views/account.js:
+// notifications, password, install, log out).
 import { html } from '../lib/html.js';
 import { navRoutes, pathOf, isAdmin } from '../routes.js';
 import { iconSlot } from '../lib/icons.js';
 import { avatar } from '../lib/avatar.js';
-import { forLogout } from '../lib/push.js';
 
 // One picture per page, each showing the thing itself: a crossed-out calendar
 // for days off, a calendar for the schedule, a missing puzzle piece for gaps.
@@ -30,7 +34,8 @@ function bell(push) {
   return html`<a class="icon-btn${push.status === 'on' ? ' is-on' : ''}" href="#/notifications" aria-label="${label}" title="${label}">${iconSlot('bell')}</a>`;
 }
 
-export function render(state, hash = '') {
+/** state.accountOpen marks the avatar button as expanded; title is the page's own name. */
+export function render(state, hash = '', title = '') {
   const user = state?.user;
   if (!user) return '';
   const current = pathOf(hash);
@@ -52,13 +57,10 @@ export function render(state, hash = '') {
     </nav>` : '';
   return String(html`
     <div class="topbar">
-      <a class="brand" href="#/">${iconSlot('flock', 'brand-mark')}<span class="brand-name">Flock</span></a>
+      <a class="brand" href="#/" aria-label="Flock, my schedule">${iconSlot('flock', 'brand-mark')}<span class="top-titles"><span class="brand-name">Flock</span><span class="top-title" aria-hidden="true">${title}</span></span></a>
       <div class="nav-user">
-        ${avatar(user.name, 'sm')}
-        <p class="nav-who">Logged in as <strong>${user.name}</strong></p>
         ${state.push?.enabled ? bell(state.push) : ''}
-        ${user.hasPassword === false ? '' : html`<a class="icon-btn" href="#/password" aria-label="Change my password" title="Change my password">${iconSlot('key')}</a>`}
-        <button type="button" class="btn btn-ghost nav-logout" data-action="logout">${iconSlot('logout')}<span class="nav-logout-label">Log out</span></button>
+        <button type="button" class="avatar-btn" data-action="account" aria-haspopup="dialog" aria-expanded="${state.accountOpen ? 'true' : 'false'}" aria-label="Your account: ${user.name}">${avatar(user.name, 'sm')}<span class="avatar-name" aria-hidden="true">${user.name}</span></button>
       </div>
     </div>
     ${menu}
@@ -87,19 +89,6 @@ export function mount(root, ctx) {
     });
   }
 
-  const btn = root.querySelector('[data-action="logout"]');
-  if (!btn) return;
-  btn.addEventListener('click', async () => {
-    btn.disabled = true;
-    try {
-      // This device stops getting notifications for whoever logs in next.
-      const pushEndpoint = await forLogout(ctx.win);
-      await ctx.api.post('/api/logout', pushEndpoint ? { pushEndpoint } : {});
-    } catch (err) {
-      // Already logged out is fine; anything else is shown.
-      if (err.status !== 401) { btn.disabled = false; ctx.showError(err.message); return; }
-    }
-    ctx.setUser(null);
-    ctx.navigate('#/login');
-  });
+  const account = typeof root.querySelector === 'function' ? root.querySelector('[data-action="account"]') : null;
+  account?.addEventListener('click', () => ctx.toggleAccount?.());
 }

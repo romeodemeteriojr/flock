@@ -1,13 +1,14 @@
-// Bottom sheet (phones) / side panel (wide screens) behaviour for a screen's
-// slot panel. The markup comes from slotpanel.js; this adds the keyboard and
-// focus rules:
+// Bottom sheet (phones) / side panel (wide screens) behaviour. Made for the
+// slot panel (markup from slotpanel.js) and used by every other sheet (the
+// account sheet, ...), which pass their own `panel` and `opener`. It adds the
+// keyboard and focus rules:
 //  - when it opens, focus moves to its heading;
 //  - Escape closes it (so does tapping the backdrop: data-action="slot-close");
 //  - Tab and Shift+Tab stay inside it while it is open (it is aria-modal);
-//  - when it closes, focus goes back to the slot button that opened it.
+//  - when it closes, focus goes back to the button that opened it.
 // Works with a real DOM, and degrades quietly with the test fakes.
 
-const PANEL = '[data-slot-panel]';
+const SLOT_PANEL = '[data-slot-panel]';
 const FOCUSABLE = 'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 const canFocus = (el) => !!el && typeof el.focus === 'function';
@@ -28,11 +29,16 @@ function pick(root, selector) {
 }
 
 /**
- * root: the screen element. isOpen(): is the panel showing. close(): close it.
- * Call opened(id) when a slot button opens the panel, before() just before
- * every paint and update() just after it.
+ * root: the element the sheet is painted in. isOpen(): is the panel showing.
+ * close(): close it. panel: selector of the dialog section. opener(id): the
+ * selector of the button to focus again after closing; openerRoot: where that
+ * button lives (if not inside root). Call opened(id) when the sheet opens,
+ * before() just before every paint and update() just after it.
  */
-export function createSheet({ root, isOpen, close }) {
+export function createSheet({
+  root, isOpen, close, panel: PANEL = SLOT_PANEL,
+  opener = (id) => `[data-action="slot-open"][data-id="${id}"]`, openerRoot = root,
+}) {
   let openerId = null;
   let wasOpen = false;
   let keep = null; // the control inside the panel that had focus before a repaint
@@ -60,7 +66,7 @@ export function createSheet({ root, isOpen, close }) {
       const el = pick(root, keep) ?? pick(root, `${PANEL} h2`);
       if (canFocus(el)) el.focus();
     } else if (!open && wasOpen && openerId !== null) {
-      const back = pick(root, `[data-action="slot-open"][data-id="${openerId}"]`);
+      const back = pick(openerRoot, opener(openerId));
       if (canFocus(back)) back.focus();
       openerId = null;
     }

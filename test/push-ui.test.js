@@ -302,21 +302,20 @@ test('top bar: the bell shows only when the church turned notifications on, and 
 });
 
 test('logging out stops this device and tells the server which one', async () => {
-  const handlers = {};
-  const btn = { disabled: false, addEventListener: (t, fn) => { handlers[t] = fn; } };
-  const top = { querySelector: (sel) => (sel === '[data-action="logout"]' ? btn : null) };
+  const account = await import('../web/views/account.js');
+  const btn = { disabled: false };
   const api = fakeApi({});
   const win = fakeWin({ subscription: { endpoint: 'https://fcm.googleapis.com/x/a', key: KEY } });
   let went;
-  nav.mount(top, { api, win, setUser() {}, navigate: (h) => { went = h; }, showError() {} });
-  await handlers.click();
+  let user = 'someone';
+  await account.logout({ api, win, setUser: (u) => { user = u; }, navigate: (h) => { went = h; }, showError() {} }, btn);
   assert.deepEqual(api.calls, ['POST /api/logout {"pushEndpoint":"https://fcm.googleapis.com/x/a"}']);
   assert.deepEqual(win.log, ['unsubscribe https://fcm.googleapis.com/x/a']);
   assert.equal(went, '#/login');
+  assert.equal(user, null);
   // Without push it logs out as before.
   const api2 = fakeApi({});
-  nav.mount(top, { api: api2, win: {}, setUser() {}, navigate() {}, showError() {} });
-  await handlers.click();
+  await account.logout({ api: api2, win: {}, setUser() {}, navigate() {}, showError() {} }, btn);
   assert.deepEqual(api2.calls, ['POST /api/logout {}']);
 });
 

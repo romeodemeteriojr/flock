@@ -3,6 +3,9 @@
 import { createApi } from './api.js';
 import { resolve } from './routes.js';
 import * as nav from './views/nav.js';
+import * as account from './views/account.js';
+import { createSheet } from './lib/sheet.js';
+import { watchScroll } from './lib/topbar.js';
 import { TOAST_REGION, createToaster } from './lib/toast.js';
 import { watchIcons } from './lib/icons.js';
 import { skeleton } from './lib/ui.js';
@@ -11,15 +14,17 @@ import { registerWorker, applyUpdate, watchUpdates } from './lib/worker.js';
 
 const GENERIC = 'Something went wrong. Please reload the page and try again.';
 
-// The page frame: sticky top bar (with the menu), the toast region, the page.
+// The page frame: sticky top bar (with the menu), the toast region, the page,
+// and the layer that sheets over the whole app are painted in (the account sheet).
 export const SHELL = `
     <header class="top" id="top"></header>
     ${TOAST_REGION}
-    <main class="main" id="main" tabindex="-1"></main>`;
+    <main class="main" id="main" tabindex="-1"></main>
+    <div id="layer"></div>`;
 
 export function createApp({ root, win = globalThis.window, api = createApi() }) {
   const doc = root.ownerDocument;
-  const state = { user: null };
+  const state = { user: null, accountOpen: false };
   let pending = null; // message to keep through the next page change
   let renderCount = 0;
 
@@ -27,7 +32,10 @@ export function createApp({ root, win = globalThis.window, api = createApi() }) 
   const top = root.querySelector('#top');
   const toaster = createToaster(root.querySelector('#message'), { win });
   const main = root.querySelector('#main');
+  const layer = root.querySelector('#layer');
   watchIcons(root, win);
+  const checkScroll = watchScroll(win, top, main);
+  let pageTitle = '';
 
   // A message shown now stays through the next page change (pending.shown);
   // one saved for later (pending without shown) appears on the next page.
@@ -49,15 +57,50 @@ export function createApp({ root, win = globalThis.window, api = createApi() }) 
 
   function setUser(user) {
     state.user = user;
-    if (!user) { state.push = null; pushFor = null; }
+    if (!user) { state.push = null; pushFor = null; state.accountOpen = false; paintLayer(); }
   }
 
   function paintTop() {
-    top.innerHTML = nav.render(state, win.location.hash);
+    top.innerHTML = nav.render(state, win.location.hash, pageTitle);
     nav.mount(top, ctx);
   }
 
-  const ctx = { api, state, win, navigate, showError, showMessage, setUser, paintTop, rerender: () => render() };
+  // ----- the account sheet (opened by the avatar in the top bar) -----
+  const accountSheet = createSheet({
+    root: layer,
+    isOpen: () => state.accountOpen,
+    close: () => closeAccount(),
+    panel: '[data-account-panel]',
+    opener: () => '[data-action="account"]',
+    openerRoot: top,
+  });
+  function paintLayer() {
+    accountSheet.before();
+    layer.innerHTML = account.render(state, { canInstall: false });
+    accountSheet.update();
+  }
+  function openAccount() {
+    if (!state.user || state.accountOpen) return;
+    state.accountOpen = true;
+    accountSheet.opened('account');
+    paintTop();
+    paintLayer();
+  }
+  // focus: false when leaving the page anyway (a link, logging out).
+  function closeAccount({ focus = true } = {}) {
+    if (!state.accountOpen) return;
+    state.accountOpen = false;
+    if (!focus) accountSheet.opened(null);
+    paintTop();
+    paintLayer();
+  }
+  const toggleAccount = () => (state.accountOpen ? closeAccount() : openAccount());
+
+  const ctx = {
+    api, state, win, navigate, showError, showMessage, setUser, paintTop, rerender: () => render(),
+    openAccount, closeAccount, toggleAccount,
+  };
+  account.mount(layer, ctx);
 
   // Push notifications (decision 0008): loaded once per login, in the
   // background; pages that show them wait on ctx.pushReady. Never breaks the app.
@@ -99,6 +142,7 @@ export function createApp({ root, win = globalThis.window, api = createApi() }) 
         pending = null;
       } else toaster.clear();
       if (state.user && pushFor !== state.user.id) { pushFor = state.user.id; loadPush(); }
+      pageTitle = view.title ?? '';
       paintTop();
       main.innerHTML = view.render(state);
       doc.title = view.title ? `${view.title} – Flock` : 'Flock';
@@ -106,6 +150,7 @@ export function createApp({ root, win = globalThis.window, api = createApi() }) 
       if (renderCount++ > 0 && heading) heading.focus();
       const result = view.mount(main, ctx);
       if (result && typeof result.catch === 'function') result.catch(handleError);
+      checkScroll();
     } catch (err) {
       handleError(err);
     }
@@ -119,6 +164,7 @@ export function createApp({ root, win = globalThis.window, api = createApi() }) 
   // never in the middle of one (decision 0009). The page then reloads once.
   function onHashChange() {
     applyUpdate(win);
+    closeAccount({ focus: false });
     render();
   }
 

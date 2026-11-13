@@ -41,7 +41,7 @@ test('welcome UI: password rules remain retryable; success logs in and removes t
   assert.equal(page.hash(), '#/');
   assert.equal(page.app.state.user.id, created.person.id);
   assert.equal(page.app.state.user.hasPassword, true);
-  assert.match(page.text(), /Logged in as Pat Example/);
+  assert.ok(page.has('[aria-label="Your account: Pat Example"]'), 'the avatar names who is logged in');
   assert.deepEqual(page.errors, []);
 });
 

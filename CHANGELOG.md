@@ -9,6 +9,8 @@
 - **Updates reach installed phones by themselves.** The server puts the list of the app's files, with a fingerprint of each, at the top of `/sw.js`, so any new release changes it. The phone fetches the new version in the background and switches to it at the next tap that changes the page (one quick reload). It looks for a new version when the app comes back to the screen, at most every 30 minutes.
 - The privacy page says the phone keeps a copy of Flock's files, with nothing about you in it.
 - **Edge to edge.** On phones with a notch or rounded corners Flock now fills the whole screen; the top bar, the page and the messages keep clear of the notch and the status bar.
+- **A slimmer top bar.** Just the Flock mark, the bell and your picture. When you scroll down, the page's name slides into the bar. "Logged in as", the key and **Log out** have moved:
+- **Your account** is a new sheet that opens when you tap your picture: who you are (name, Scheduler or Volunteer, email), **Notifications**, **Change my password** and **Log out**. Close it with the X, by tapping outside it or with Escape.
 - **Shortcuts.** Press and hold the Flock icon on Android (and in desktop Chrome or Edge) for **My schedule** and **Days off**.
 
 ## 0.6.0

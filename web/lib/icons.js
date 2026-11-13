@@ -49,6 +49,14 @@ const PATHS = {
   team: '<circle cx="12" cy="8" r="3.25"/><path d="M6.5 19.75c.55-3.3 2.6-5.25 5.5-5.25s4.95 1.95 5.5 5.25"/><circle cx="4.9" cy="9.6" r="2.15" fill="none"/><circle cx="19.1" cy="9.6" r="2.15" fill="none"/><path d="M1.6 17.9c.3-1.9 1.3-3.1 3-3.5M22.4 17.9c-.3-1.9-1.3-3.1-3-3.5" fill="none"/>',
   church: '<path d="M12 2.75v4M10.4 4.35h3.2"/><path d="M7.25 20.5v-9.1L12 6.9l4.75 4.5v9.1"/><path d="M7.25 14.25L3.5 16.4v4.1h17v-4.1l-3.75-2.15" fill="none"/><path d="M10.25 20.5v-3a1.75 1.75 0 0 1 3.5 0v3" fill="none"/>',
   puzzle: '<path d="M6.15 8.1H8.6a2.3 2.3 0 1 1 2.6 0h2.45a2.25 2.25 0 0 1 2.25 2.25v2.45a2.3 2.3 0 1 1 0 2.6v2.45a2.25 2.25 0 0 1-2.25 2.25H6.15a2.25 2.25 0 0 1-2.25-2.25V15.4a2.3 2.3 0 1 0 0-2.6v-2.45A2.25 2.25 0 0 1 6.15 8.1z"/>',
+  // Installed-app pictures: the share sheet (invites, reminders, iPhone steps),
+  // installing Flock, iOS's "Add to Home Screen" square, no connection.
+  share: '<path d="M12 14.25V3.5M8.25 7.25L12 3.5l3.75 3.75" fill="none"/><path d="M8 10.5h-.75a2.75 2.75 0 0 0-2.75 2.75v4.5a2.75 2.75 0 0 0 2.75 2.75h9.5a2.75 2.75 0 0 0 2.75-2.75v-4.5a2.75 2.75 0 0 0-2.75-2.75H16" fill="none"/>',
+  install: '<path d="M12 3.75v10.5M7.75 10.25L12 14.5l4.25-4.25" fill="none"/><path d="M4.5 15.75v2a2.75 2.75 0 0 0 2.75 2.75h9.5a2.75 2.75 0 0 0 2.75-2.75v-2" fill="none"/>',
+  'add-square': '<rect x="3.75" y="3.75" width="16.5" height="16.5" rx="4.5"/><path d="M12 8.25v7.5M8.25 12h7.5"/>',
+  offline: '<path d="M7.25 18.75a4.25 4.25 0 0 1-.7-8.44 5.75 5.75 0 0 1 11.05-.66 4.6 4.6 0 0 1 .4 9.1z"/><path d="M4.25 3.75l15.5 16.5"/>',
+  // Back / previous month ("chevron" points right).
+  'chevron-left': '<path d="M14.75 5.75L8.5 12l6.25 6.25"/>',
   // The Flock mark: one bird, wings up. The same shape as the app icon.
   flock: '<path d="M12 19C9.8 13.8 6.4 9.8 1.8 7.2c5.3-1.5 8.8.7 10.2 4.3 1.4-3.6 4.9-5.8 10.2-4.3C17.6 9.8 14.2 13.8 12 19z" fill="currentColor" fill-opacity="1" stroke="none"/>',
   // Sign-in provider marks, named by provider id (src/infra/oidc.js). Brand colours, not currentColor.

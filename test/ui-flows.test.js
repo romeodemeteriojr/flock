@@ -36,6 +36,9 @@ async function world(t, { demo = true } = {}) {
 
 // Say what is on screen when a check fails.
 const said = (page, re, note = '') => assert.match(page.text(), re, `${note}\nON SCREEN: ${page.text()}`);
+// The avatar in the top bar names who is logged in; Log out is in its account sheet.
+const loggedInAs = (page, name) => assert.ok(page.has(`[aria-label="Your account: ${name}"]`), `logged in as ${name}\nBUTTONS: ${page.buttons().map((b) => b.label).join(' | ')}`);
+const logOut = async (page) => { await page.click('account'); return page.clickButton('Log out'); };
 const notSaid = (page, re, note = '') => assert.doesNotMatch(page.text(), re, `${note}\nON SCREEN: ${page.text()}`);
 
 // Every page a person sees must have named buttons, links and inputs, and no
@@ -110,7 +113,7 @@ test('UAT 1: join with the printed invite, then change a password voluntarily', 
   assert.deepEqual(results, [true, false], 'the second click is ignored');
   assert.equal(page.fetchLog.filter((c) => c.path === '/api/welcome' && c.status === 200).length, 1);
   assert.equal(page.hash(), '#/');
-  said(page, /Logged in as Demo Admin/);
+  loggedInAs(page, 'Demo Admin');
   assert.equal(page.has('nav'), true);
   wellBuilt(page);
 
@@ -140,11 +143,42 @@ test('UAT 1: join with the printed invite, then change a password voluntarily', 
   await page.submit('password', { oldPassword: NEW_PASSWORD, newPassword: changed, confirm: changed });
   assert.equal(page.hash(), '#/');
   assert.ok(page.toasts().some((x) => /Your new password is saved/.test(x)));
-  await other.clickButton('Log out');
+  await logOut(other);
   await logIn(other, 'demo-admin@example.com', NEW_PASSWORD);
   said(other, /Wrong email or password/);
   await logIn(other, 'demo-admin@example.com', changed);
   assert.equal(other.hash(), '#/');
+});
+
+test('account sheet: the avatar opens it, a row takes you to its page and closes it, and you log out from it', async (t) => {
+  const w = await world(t);
+  const page = await joinInvite(w, 'demo-admin@example.com', w.demo.invite.token);
+  assert.ok(!page.has('[data-account-sheet]'));
+  await page.click('account');
+  assert.ok(page.has('[data-account-sheet]'));
+  assert.ok(page.has('[data-action="account"][aria-expanded="true"]'));
+  assert.equal(page.focusedText(), 'Demo Admin', 'focus moves to the sheet');
+  said(page, /Scheduler · demo-admin@example\.com/);
+  wellBuilt(page, 'account sheet');
+
+  await page.click('account-close');
+  assert.ok(!page.has('[data-account-sheet]'));
+  assert.ok(page.has('[data-action="account"][aria-expanded="false"]'));
+
+  await page.click('account');
+  await page.clickLink('Change my password');
+  assert.equal(page.hash(), '#/password');
+  assert.ok(!page.has('[data-account-sheet]'), 'following a row closes the sheet');
+  said(page, /Change my password/);
+
+  await page.click('account');
+  await page.goto('#/');
+  assert.ok(!page.has('[data-account-sheet]'), 'any page change closes it');
+
+  await logOut(page);
+  assert.equal(page.hash(), '#/login');
+  assert.ok(!page.has('[data-account-sheet]'));
+  assert.ok(!page.has('[data-action="account"]'));
 });
 
 // ---------- UAT 2: wrong password and lockout ----------
@@ -152,7 +186,7 @@ test('UAT 1: join with the printed invite, then change a password voluntarily', 
 test('UAT 2: five wrong passwords lock the account for a few minutes', async (t) => {
   const w = await world(t);
   const page = await joinInvite(w, 'demo-admin@example.com', w.demo.invite.token);
-  await page.clickButton('Log out');
+  await logOut(page);
   assert.equal(page.hash(), '#/login');
 
   for (let i = 0; i < 5; i++) await logIn(page, 'demo-admin@example.com', `wrong try number ${i}`);
@@ -372,7 +406,7 @@ test('UAT 9 to 11: volunteer sees My schedule, says yes and no, adds and removes
 
   // First login on the phone.
   const phone = await joinInvite(w, 'demo.alice', token);
-  said(phone, /Logged in as Demo Alice/);
+  loggedInAs(phone, 'Demo Alice');
   said(phone, /Coming up/);
   said(phone, /Please answer/);
   assert.match(phone.html(), /data-banner>You&#39;re serving|data-banner>Next time you serve/, 'the banner tells the next time');
@@ -475,7 +509,7 @@ test('UAT 9 to 11: volunteer sees My schedule, says yes and no, adds and removes
   assert.deepEqual(removeIds(), already, 'only the two I added are gone');
 
   // Log out.
-  await phone.clickButton('Log out');
+  await logOut(phone);
   assert.equal(phone.hash(), '#/login');
   assert.equal(phone.jar.cookie, '', 'the login cookie is gone');
   assert.equal(phone.has('nav'), false);
@@ -583,7 +617,7 @@ test('UAT 12 to 15: change access level, deactivate, reset password, log out, se
   assert.equal(stale.hash(), '#/');
 
   // Log out; the back button and typing an address do not get back in.
-  await stale.clickButton('Log out');
+  await logOut(stale);
   assert.equal(stale.hash(), '#/login');
   assert.equal(stale.has('nav'), false);
   for (const to of ['#/', '#/blockouts', '#/people']) {
@@ -679,7 +713,7 @@ test('UAT 20 (odd text): hostile and odd text is shown as plain text on every pa
   said(phone, new RegExp(rx(email)));
   wellBuilt(phone, 'welcome with a hostile name');
   await phone.submit('welcome', { password: NEW_PASSWORD, confirm: NEW_PASSWORD });
-  said(phone, /Logged in as <b onmouseover=alert\(3\)>Eve<\/b>/);
+  loggedInAs(phone, '<b onmouseover=alert(3)>Eve</b>');
   said(phone, /"><script>alert\(2\)<\/script>/);
   said(phone, /<svg onload=alert\(4\)>Party' & more/);
   wellBuilt(phone, 'my schedule');
@@ -797,7 +831,7 @@ test('UAT 20: double clicks, odd names, stale tabs, rapid page changes and the b
   assert.equal(tab2.count('.toast'), 0, 'old messages do not pile up');
 
   // Two tabs, one logs out: the other asks to log in again.
-  await admin.clickButton('Log out');
+  await logOut(admin);
   assert.equal(admin.hash(), '#/login');
   await tab2.goto('#/schedule');
   assert.equal(tab2.hash(), '#/login');

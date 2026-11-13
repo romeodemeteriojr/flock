@@ -568,7 +568,8 @@ test('stored XSS: every web/views/*.js render path escapes hostile data from the
   // Pages that render straight from state or messages.
   const state = { user: { id: w.halId, name: HOSTILE.name, role: 'admin' } };
   const direct = {
-    nav: (v) => v.render(state, '#/'),
+    nav: (v) => v.render(state, '#/', HOSTILE.title),
+    account: (v) => v.render({ ...state, accountOpen: true, user: { ...state.user, email: HOSTILE.reason }, push: { enabled: true, status: 'on' } }, { canInstall: true }),
     login: (v) => v.render({}, { error: HOSTILE.reason, username: HOSTILE.position }),
     welcome: (v) => v.render({}, { info: { name: HOSTILE.name, username: HOSTILE.position }, error: HOSTILE.reason }),
     password: (v) => v.render(state, { error: HOSTILE.title }),
