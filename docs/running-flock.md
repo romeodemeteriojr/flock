@@ -1,7 +1,7 @@
 # Running Flock
 
 For whoever looks after the computer or server Flock runs on. Putting it on
-the internet with Fly.io is in [DEPLOY.md](../DEPLOY.md); using the pages is
+the internet with Fly.io is in [DEPLOY.md](https://github.com/romeodemeteriojr/flock/blob/main/DEPLOY.md); using the pages is
 in [Using Flock](using-flock.md).
 
 ## Starting Flock
@@ -84,7 +84,7 @@ Notifications are off until the church turns them on:
 1. Make the two keys once: `node bin/flock.js push-keys`. Keep a copy of both
    in the church's password manager.
 2. Start Flock with `FLOCK_VAPID_PUBLIC_KEY` and `FLOCK_VAPID_PRIVATE_KEY` set
-   (on Fly: `fly secrets set ...`, see [DEPLOY.md](../DEPLOY.md)).
+   (on Fly: `fly secrets set ...`, see [DEPLOY.md](https://github.com/romeodemeteriojr/flock/blob/main/DEPLOY.md)).
    Notifications also need `FLOCK_PUBLIC_URL` to be Flock's `https://`
    address.
 
@@ -97,7 +97,7 @@ Phones on the same Wi-Fi can reach Flock at the running computer's network
 address, for example `http://192.168.1.20:8080`. That is fine for a try-out,
 but over plain `http://` passwords and invite links travel without
 protection, and phones only allow installing and notifications over HTTPS.
-For real people, put Flock online with HTTPS ([DEPLOY.md](../DEPLOY.md),
+For real people, put Flock online with HTTPS ([DEPLOY.md](https://github.com/romeodemeteriojr/flock/blob/main/DEPLOY.md),
 [Security](security.md#running-flock-on-a-server)).
 
 ## Backups: please make one every week
@@ -113,7 +113,7 @@ node bin/flock.js backup backups/flock-2026-03-02.db
 Flock writes a complete copy, even while it is running, and never overwrites
 an existing file. Keep some backups on a different device, such as a USB stick
 kept somewhere safe. The backup holds people's names, so look after it like
-the original. On Fly.io, see [DEPLOY.md](../DEPLOY.md) for backups and
+the original. On Fly.io, see [DEPLOY.md](https://github.com/romeodemeteriojr/flock/blob/main/DEPLOY.md) for backups and
 snapshots.
 
 To restore, stop Flock, then make a fresh copy of the backup and use the copy

@@ -2,7 +2,7 @@
 
 Flock holds people's names, emails and schedules. This page says how it keeps
 logins safe and what a server running it needs. Fly.io's own checklist is in
-[DEPLOY.md](../DEPLOY.md).
+[DEPLOY.md](https://github.com/romeodemeteriojr/flock/blob/main/DEPLOY.md).
 
 ## How passwords work
 

@@ -1,0 +1,5 @@
+title: Flock
+description: Plan who serves on which Sunday.
+theme: jekyll-theme-cayman
+exclude:
+  - decisions

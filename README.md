@@ -26,6 +26,9 @@ see [Trying it with fake data](docs/running-flock.md#trying-it-with-fake-data).
 
 ## Documentation
 
+The guides are also at <https://romeodemeteriojr.github.io/flock/>.
+
+
 - [Using Flock](docs/using-flock.md): adding people, logging in, and what each
   page does.
 - [Running Flock](docs/running-flock.md): settings, the first scheduler,
