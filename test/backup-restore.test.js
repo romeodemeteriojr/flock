@@ -1,6 +1,6 @@
 // Backup and restore (C-83). A populated church database (made-up people) is
 // backed up with the real CLI command, the backup is restored the way the
-// README says (copy it, point FLOCK_DB at the copy, start flock) into a fresh
+// docs/running-flock.md says (copy it, point FLOCK_DB at the copy, start flock) into a fresh
 // app, and every table and relationship is compared. Sessions and password
 // hashes must still work. A damaged, truncated, empty or foreign backup must be
 // refused with a plain message. The CSV export must never contain a password
@@ -108,7 +108,7 @@ test('backup: the CLI writes a backup while the app is open, and refuses to over
 
 test('restore: a copy of the backup opens in a fresh app with every row and relationship the same', async () => {
   const restoredFile = t.file('restored.db');
-  copyFileSync(BACKUP, restoredFile); // as the README says: restore from a copy
+  copyFileSync(BACKUP, restoredFile); // as docs/running-flock.md says: restore from a copy
   const restored = open(restoredFile, 'restored');
   try {
     assert.deepEqual(tableCounts(restored.db), tableCounts(source.db), 'every table has the same number of rows');
