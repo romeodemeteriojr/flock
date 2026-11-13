@@ -10,7 +10,7 @@ import { registerWorker } from './worker.js';
 
 const CARD_KEY = 'flock.pushCard';
 
-function isIos(nav) {
+export function isIos(nav) {
   const ua = String(nav?.userAgent ?? '');
   // iPads ask for desktop pages and look like a Mac with a touch screen.
   return /iPhone|iPad|iPod/.test(ua) || (nav?.platform === 'MacIntel' && nav?.maxTouchPoints > 1);

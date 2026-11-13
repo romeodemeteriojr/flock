@@ -1016,6 +1016,21 @@ th, td { text-align: left; padding: var(--s-2) var(--s-3); border-bottom: 1px so
 .offline p { max-width: 20rem; color: var(--muted); }
 .offline .btn { margin-top: var(--s-2); min-width: 12rem; }
 .offline-brand { position: absolute; top: calc(var(--s-4) + env(safe-area-inset-top, 0px)); left: var(--s-4); }
+
+/* ---------- putting Flock on the Home Screen: the card and the iPhone steps ---------- */
+.install-card { display: flex; align-items: flex-start; gap: var(--s-3); }
+.install-text { flex: 1; min-width: 0; display: grid; gap: var(--s-2); }
+.install-text p { margin: 0; }
+.howto { list-style: none; margin: 0; padding: 0; }
+.howto > li { display: flex; align-items: center; gap: var(--s-3); padding: var(--s-4) 0; border-bottom: 1px solid var(--line); }
+.howto > li:last-child { border-bottom: 0; }
+.howto-num {
+  display: inline-flex; align-items: center; justify-content: center; flex: none;
+  width: 1.75rem; height: 1.75rem; border-radius: 50%;
+  color: var(--on-accent); background: var(--accent); font-size: var(--fs-sm); font-weight: 700;
+}
+.howto-text { flex: 1; min-width: 0; }
+.howto-icon { flex: none; width: 1.75rem; height: 1.75rem; color: var(--accent-text); }
 .slot-panel h3 { margin-top: var(--s-5); }
 .candidates > li { padding: var(--s-3) 0; }
 .candidate { display: flex; align-items: center; gap: var(--s-3); flex-wrap: wrap; }

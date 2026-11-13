@@ -10,6 +10,7 @@ import { skeleton, emptyState, pageHead, disclosure, refocus } from '../lib/ui.j
 import { showCard, dismissCard } from '../lib/push.js';
 import { turnOn } from './notifications.js';
 import { answerCount } from '../lib/counts.js';
+import { isIosSafari, laterChosen, chooseLater } from '../lib/install.js';
 
 export const title = 'My schedule';
 
@@ -107,7 +108,18 @@ function pushInvite(state, view) {
   </section>`;
 }
 
-// view: { loading, error, data, message, confirmId, busy, today, openRosters, showPush }
+// "Put Flock on your Home Screen", when this device can and the notifications
+// card is not showing (one invitation at a time), until installed or "Not now".
+function installCard(view) {
+  if (!view.showInstall || view.showPush) return '';
+  return html`<section class="card install-card" aria-label="Install Flock" data-install-card>
+    ${iconSlot('install', 'menu-icon')}
+    <div class="install-text"><p><strong>Put Flock on your Home Screen</strong></p><p class="hint">Opens like an app, and you can get notifications.</p>
+    <div class="btn-row"><button type="button" class="btn btn-primary" data-action="install" ${view.busy ? 'disabled' : ''}>${view.iosSteps ? 'Show me how' : 'Install'}</button><button type="button" class="btn btn-quiet" data-action="install-later">Not now</button></div></div>
+  </section>`;
+}
+
+// view: { loading, error, data, message, confirmId, busy, today, openRosters, showPush, showInstall, iosSteps }
 export function render(state, view = { loading: true }) {
   const today = view.today ?? todayString();
   let body;
@@ -132,6 +144,7 @@ export function render(state, view = { loading: true }) {
     ${pageHead(title)}
     ${toasts([[view.message, 'ok', 'data-note'], [view.problem, 'error']])}
     ${pushInvite(state, view)}
+    ${installCard(view)}
     ${body}
   `);
 }
@@ -175,6 +188,14 @@ export function mount(main, ctx) {
     const action = el.dataset.action;
     const id = Number(el.dataset.id);
     if (action === 'push-later') { dismissCard(ctx.win); view.showPush = false; paint(); return; }
+    if (action === 'install-later') { chooseLater(ctx.win); view.showInstall = false; paint(); return; }
+    if (action === 'install') {
+      return Promise.resolve(ctx.install?.()).then((result) => {
+        if (result === 'accepted') view.showInstall = false;
+        else checkInstall();
+        paint();
+      });
+    }
     if (action === 'push-on') {
       view.busy = true; view.message = null; view.problem = null; paint();
       return turnOn(ctx).then((msg) => { view.message = msg; }, (err) => {
@@ -195,6 +216,17 @@ export function mount(main, ctx) {
   });
 
   ctx.pushReady?.then(() => { view.showPush = showCard(ctx.state.push, ctx.win); paint(); });
+  // The install prompt can arrive after the page has painted (or go, once installed).
+  function checkInstall() {
+    view.showInstall = !!ctx.canInstall?.() && !laterChosen(ctx.win);
+    view.iosSteps = isIosSafari(ctx.win);
+  }
+  checkInstall();
+  const stop = ctx.installer?.onChange?.(() => {
+    if (!isAlive(root, main)) { stop?.(); return; }
+    checkInstall();
+    paint();
+  });
   paint();
   return load();
 }

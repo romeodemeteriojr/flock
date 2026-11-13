@@ -5,6 +5,8 @@ import { resolve } from './routes.js';
 import * as nav from './views/nav.js';
 import * as account from './views/account.js';
 import * as offline from './views/offline.js';
+import * as installSteps from './views/install-steps.js';
+import { createInstall, canInstall, isIosSafari } from './lib/install.js';
 import { createSheet } from './lib/sheet.js';
 import { watchScroll } from './lib/topbar.js';
 import { TOAST_REGION, createToaster } from './lib/toast.js';
@@ -26,7 +28,7 @@ export const SHELL = `
 
 export function createApp({ root, win = globalThis.window, api = createApi() }) {
   const doc = root.ownerDocument;
-  const state = { user: null, accountOpen: false, counts: { answer: 0, gaps: 0 } };
+  const state = { user: null, accountOpen: false, installSteps: false, counts: { answer: 0, gaps: 0 } };
   let pending = null; // message to keep through the next page change
   let renderCount = 0;
 
@@ -60,7 +62,7 @@ export function createApp({ root, win = globalThis.window, api = createApi() }) 
   function setUser(user) {
     state.user = user;
     if (!user) {
-      state.push = null; pushFor = null; state.accountOpen = false; paintLayer();
+      state.push = null; pushFor = null; state.accountOpen = false; state.installSteps = false; paintLayer();
       countsFor = null; state.counts = { answer: 0, gaps: 0 }; setAppBadge(win, 0);
       return;
     }
@@ -89,10 +91,13 @@ export function createApp({ root, win = globalThis.window, api = createApi() }) 
     opener: () => '[data-action="account"]',
     openerRoot: top,
   });
+  // One layer, one sheet at a time: the account sheet or the iPhone install steps.
   function paintLayer() {
     accountSheet.before();
-    layer.innerHTML = account.render(state, { canInstall: false });
+    stepsSheet.before();
+    layer.innerHTML = account.render(state, { canInstall: canInstall(installer, win) }) || installSteps.render(state);
     accountSheet.update();
+    stepsSheet.update();
   }
   function openAccount() {
     if (!state.user || state.accountOpen) return;
@@ -110,6 +115,38 @@ export function createApp({ root, win = globalThis.window, api = createApi() }) 
     paintLayer();
   }
   const toggleAccount = () => (state.accountOpen ? closeAccount() : openAccount());
+
+  // ----- putting Flock on the Home Screen (web/lib/install.js) -----
+  const installer = createInstall(win);
+  const stepsSheet = createSheet({
+    root: layer,
+    isOpen: () => state.installSteps,
+    close: () => closeInstallSteps(),
+    panel: '[data-install-panel]',
+    opener: () => '[data-action="install"]',
+    openerRoot: root,
+  });
+  function openInstallSteps() {
+    state.installSteps = true;
+    stepsSheet.opened('install');
+    paintLayer();
+  }
+  function closeInstallSteps({ focus = true } = {}) {
+    if (!state.installSteps) return;
+    state.installSteps = false;
+    if (!focus) stepsSheet.opened(null);
+    paintLayer();
+  }
+  // The browser's own prompt where there is one; the three steps on an iPhone.
+  async function install() {
+    if (installer.canPrompt()) return installer.prompt();
+    if (isIosSafari(win)) { openInstallSteps(); return 'steps'; }
+    return 'unavailable';
+  }
+  layer.addEventListener('click', (e) => {
+    const el = e.target?.closest?.('[data-action]');
+    if (state.installSteps && el?.dataset?.action === 'install-close') closeInstallSteps();
+  });
 
   // ----- the numbers on the tabs and the app icon (web/lib/counts.js) -----
   let countsFor = null;
@@ -131,6 +168,7 @@ export function createApp({ root, win = globalThis.window, api = createApi() }) 
   const ctx = {
     api, state, win, navigate, showError, showMessage, setUser, paintTop, rerender: () => render(),
     openAccount, closeAccount, toggleAccount, setCounts, refreshCounts,
+    install, installer, canInstall: () => canInstall(installer, win),
   };
   account.mount(layer, ctx);
 
@@ -199,6 +237,7 @@ export function createApp({ root, win = globalThis.window, api = createApi() }) 
     if (offlineShown) { boot(); return; }
     applyUpdate(win);
     closeAccount({ focus: false });
+    closeInstallSteps({ focus: false });
     render();
   }
 

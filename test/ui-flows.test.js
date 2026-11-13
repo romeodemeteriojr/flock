@@ -960,3 +960,51 @@ test("no connection at start-up: \"Can't reach the server\", then Try again and 
   assert.equal(stranger.has('[data-offline]'), false);
   assert.equal(stranger.hash(), '#/login');
 });
+
+// ---------- Putting Flock on the Home Screen ----------
+
+test('iPhone in Safari: the install card and the account sheet show the three steps; Not now is remembered', async (t) => {
+  const w = await world(t);
+  const first = await joinInvite(w, 'demo-admin@example.com', w.demo.invite.token);
+  const iphone = () => {
+    const page = openPage({ url: w.app.url, jar: first.jar });
+    page.win.navigator.userAgent = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1';
+    const store = new Map();
+    page.win.localStorage = { getItem: (k) => store.get(k) ?? null, setItem: (k, v) => store.set(k, v) };
+    return page;
+  };
+  const page = iphone();
+  await page.start();
+  await page.goto('#/');
+  said(page, /Put Flock on your Home Screen/);
+  await page.clickButton('Show me how');
+  assert.ok(page.has('[data-install-sheet]'));
+  assert.equal(page.focusedText(), 'Add Flock to your Home Screen');
+  said(page, /Tap Share in Safari's toolbar\./);
+  wellBuilt(page, 'install steps');
+  await page.click('install-close');
+  assert.ok(!page.has('[data-install-sheet]'));
+
+  // Not now: the card goes, and stays gone on this device.
+  await page.clickButton('Not now');
+  assert.ok(!page.has('[data-install-card]'));
+  await page.goto('#/blockouts');
+  await page.goto('#/');
+  assert.ok(!page.has('[data-install-card]'));
+
+  // The account sheet still offers it.
+  await page.click('account');
+  await page.clickButton(/^Install Flock/);
+  assert.ok(!page.has('[data-account-sheet]'), 'the account sheet makes way');
+  assert.ok(page.has('[data-install-sheet]'));
+  await page.goto('#/blockouts');
+  assert.ok(!page.has('[data-install-sheet]'), 'a page change closes it');
+
+  // Android Chrome with no prompt yet, and a plain browser: no card, no row.
+  const plain = openPage({ url: w.app.url, jar: first.jar });
+  await plain.start();
+  await plain.goto('#/');
+  assert.ok(!plain.has('[data-install-card]'));
+  await plain.click('account');
+  assert.ok(!plain.has('[data-action="install"]'));
+});

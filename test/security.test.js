@@ -575,6 +575,7 @@ test('stored XSS: every web/views/*.js render path escapes hostile data from the
     password: (v) => v.render(state, { error: HOSTILE.title }),
     notfound: (v) => v.render(state),
     offline: (v) => v.render({ busy: true }) + v.render(),
+    'install-steps': (v) => v.render({ ...state, installSteps: true }),
     notifications: (v) => [
       v.render({ ...state, push: { enabled: true, support: 'ok', status: 'on' } }, { problem: HOSTILE.reason, message: HOSTILE.title }),
       v.render({ ...state, push: { enabled: true, support: 'ios-install', status: 'off' } }),
