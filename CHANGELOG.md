@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.10.0
 
 Adds a database migration (`0004_retire.sql`); it runs by itself on start. Make a backup first.
 
