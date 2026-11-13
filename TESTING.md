@@ -75,8 +75,8 @@ and contrast are right, and the right API calls are made.
 a fake page (`test/helpers/fakepage.js`) and talk over real HTTP to a test app
 with the demo data. Each test follows a numbered scenario in `UAT.md`.
 
-**Deployment** (`test/deploy.test.js`, `test/workflows.test.js`). Dockerfile,
-fly.toml and the GitHub workflows are well formed. The Docker build runs only
+**Deployment** (`test/deploy.test.js`, `test/workflows.test.js`). Dockerfile
+and the GitHub workflows are well formed. The Docker build runs only
 when Docker is installed (otherwise it is skipped).
 
 **Stress and concurrency** (`test/stress.test.js`). A church of 70 members
@@ -167,10 +167,9 @@ injected clock and the process time zone set per test:
   Firefox or Safari. Layout, CSS, focus handling, real cookies in a browser
   and JavaScript engine differences are not tested. Check the pages by hand
   (the style gallery helps) after visual changes.
-- **No real Fly.io.** Deployment tests check the files (Dockerfile, fly.toml,
-  workflows). They never deploy, never use a real Fly volume, the Fly proxy
-  or snapshots, and never restore on Fly. The `Fly-Client-IP` handling is
-  tested with headers we set ourselves.
+- **No real hosting.** Deployment tests check the files (Dockerfile,
+  workflows). They never deploy or use a real volume, proxy or snapshot. The
+  `Fly-Client-IP` handling is tested with headers we set ourselves.
 - **Docker** is built only when Docker is installed on the machine.
 - **Real password hashing cost.** Most tests use the fast test hasher; scrypt
   itself has its own tests, but load tests do not measure real scrypt CPU

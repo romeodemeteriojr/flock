@@ -6,7 +6,7 @@ Status: proposed (being built; accept when merged)
 
 - The service worker now keeps **a copy of the app's own files** (pages,
   scripts, styles, the font, icons) on the device, so an installed Flock opens
-  at once, even while Fly is waking the machine up or the signal is poor.
+  at once, even while the host is waking the server up or the signal is poor.
 - **Never data.** Nothing under `/api/` is cached, and nothing is stored for
   use offline. With no connection Flock opens to a "Can't reach the server"
   page with **Try again**, not the browser's error page.
@@ -22,7 +22,7 @@ Status: proposed (being built; accept when merged)
 Flock is used mostly as an app on the Home Screen. Two things made it feel
 slow and broken there:
 
-- Fly stops the machine when nobody uses it. The first person to open Flock
+- Some hosts stop the server when nobody uses it. The first person to open Flock
   waits for it to start before even the page frame appears, looking at a blank
   screen.
 - On bad signal, or none, an installed app showed the browser's own error

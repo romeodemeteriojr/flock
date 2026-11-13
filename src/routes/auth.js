@@ -13,7 +13,7 @@ function textOrNone(value) {
 }
 const field = (body, key) => (body !== null && typeof body === 'object' ? body[key] : undefined);
 
-// Behind a trusted proxy (Fly.io) the real client is in a header; otherwise
+// Behind a trusted proxy the real client is in a header; otherwise
 // those headers are ignored so a client cannot pick its own IP.
 export function clientIp(req, config) {
   if (config?.trustProxy) {

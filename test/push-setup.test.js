@@ -65,7 +65,7 @@ test('flock push-keys prints a fresh matching pair and how to keep it', () => {
   const priv = r.stdout.match(/^FLOCK_VAPID_PRIVATE_KEY=(\S+)$/m)[1];
   assert.equal(vapidKeysProblem(pub, priv), null);
   assert.match(r.stdout, /password manager/);
-  assert.match(r.stdout, /fly secrets set/);
+  assert.match(r.stdout, /hosting service/);
   assert.equal(r.stdout.split(priv).length - 1, 1, 'the private key is printed once');
   assert.notEqual(run().stdout.match(/^FLOCK_VAPID_PRIVATE_KEY=(\S+)$/m)[1], priv, 'new keys every time');
   const extra = spawnSync(process.execPath, [BIN, 'push-keys', 'x'], { encoding: 'utf8', env: { PATH: process.env.PATH } });

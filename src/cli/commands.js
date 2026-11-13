@@ -166,10 +166,10 @@ export const commands = {
 FLOCK_VAPID_PUBLIC_KEY=${publicKey}
 FLOCK_VAPID_PRIVATE_KEY=${privateKey}
 
-On Fly:  fly secrets set FLOCK_VAPID_PUBLIC_KEY=${publicKey} FLOCK_VAPID_PRIVATE_KEY=<the private key above>
+On a hosting service, add both as secrets in its settings.
 
 Keep a copy of both in the church's password manager. The private key is a
-secret: never put it in fly.toml, the Dockerfile or a message. If you ever
+secret: never put it in a file in the repository, the Dockerfile or a message. If you ever
 replace the keys, each phone switches over the next time it opens Flock.`);
     return 0;
   },

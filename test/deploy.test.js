@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { checkConfig } from '../scripts/check-config.js';
@@ -8,36 +8,19 @@ import { loadConfig } from '../src/config.js';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const read = (f) => readFileSync(`${root}${f}`, 'utf8');
-const fly = read('fly.toml');
 const dockerfile = read('Dockerfile');
-const ok = (over = {}) => checkConfig({ fly, dockerfile, ...over });
-const bad = (over) => checkConfig({ fly, dockerfile, ...over });
 
-test('check-config passes on the repo files (also for production), and a placeholder only fails in production', () => {
-  // The repo's fly.toml is a template; the real one lives with whoever deploys.
-  const filled = fly.replace(/^app = '.*'$/m, "app = 'flock-example'").replace(/^primary_region = '.*'$/m, "primary_region = 'abc'");
-  assert.deepEqual(ok(), []);
-  assert.deepEqual(ok({ fly: filled, production: true }), []);
-  const problems = ok({ production: true });
-  assert.ok(problems.some((p) => /app name is still the placeholder/.test(p)));
-  assert.ok(problems.some((p) => /primary_region is still the placeholder/.test(p)));
-});
-
-test('check-config script runs as a command', () => {
-  const run = (...a) => spawnSync(process.execPath, [`${root}scripts/check-config.js`, ...a], { encoding: 'utf8' });
-  assert.equal(run().status, 0);
-  assert.equal(run('--production').status, 1, 'the template still has placeholders');
+test('check-config passes on the Dockerfile and the script runs as a command', () => {
+  assert.deepEqual(checkConfig({ dockerfile }), []);
+  assert.equal(spawnSync(process.execPath, [`${root}scripts/check-config.js`], { encoding: 'utf8' }).status, 0);
 });
 
 test('check-config fails on bad variants', () => {
-  assert.ok(bad({ fly: fly.replace("destination = '/data'", "destination = '/other'") }).some((p) => /mount/.test(p)));
-  assert.ok(bad({ fly: fly.replace('internal_port = 8080', 'internal_port = 3000') }).some((p) => /internal_port/.test(p)));
-  assert.ok(bad({ fly: `${fly}\n[[vm]]\n  memory = '256mb'\n` }).some((p) => /one machine/i.test(p)));
-  assert.ok(bad({ fly: fly.replace('min_machines_running = 0', 'min_machines_running = 2') }).some((p) => /one machine/i.test(p)));
-  assert.ok(bad({ fly: fly.replace('force_https = true', '') }).some((p) => /force_https/.test(p)));
-  assert.ok(bad({ fly: fly.replace("NODE_ENV = 'production'", "API_TOKEN = 'abc123'") }).some((p) => /secret/.test(p)));
-  assert.ok(bad({ dockerfile: `${dockerfile}\nENV SESSION_SECRET=hunter2\n` }).some((p) => /secret/.test(p)));
-  assert.ok(bad({ fly: `${fly}\n# x\nfoo = 'FlyV1 fm2_abcdefghijklmnop'\n` }).some((p) => /secret/.test(p)));
+  const bad = (d) => checkConfig({ dockerfile: d });
+  assert.ok(bad(`${dockerfile}\nENV SESSION_SECRET=hunter2\n`).some((p) => /secret/.test(p)));
+  assert.ok(bad('FROM node\n').some((p) => /FLOCK_DB/.test(p)));
+  assert.ok(bad('FROM node\nENV FLOCK_DB=/data/x.db\n').some((p) => /FLOCK_PORT/.test(p)));
+  assert.ok(bad(`${dockerfile}\nENV X=ghp_abcdefghijklmnopqrstuvwxyz0123\n`).some((p) => /secret/.test(p)));
 });
 
 test('Dockerfile is minimal and safe', () => {
@@ -67,20 +50,8 @@ test('.dockerignore lists the required entries', () => {
   }
 });
 
-test('fly.toml has the required sections', () => {
-  assert.match(fly, /^app = 'flock-CHANGE-ME'$/m);
-  assert.match(fly, /^primary_region = 'CHANGE-ME'$/m);
-  assert.doesNotMatch(fly, /^\s*FLOCK_PUBLIC_URL/m, 'the live address belongs to the deployer, not the repo');
-  assert.match(fly, /GLOBALLY UNIQUE/);
-  assert.match(fly, /^primary_region = /m);
-  assert.match(fly, /\[build\]\s+dockerfile = 'Dockerfile'/);
-  assert.match(fly, /source = 'flock_data'/);
-  assert.match(fly, /auto_stop_machines = 'suspend'/);
-  assert.match(fly, /min_machines_running = 0/);
-  assert.match(fly, /path = '\/api\/health'/);
-  assert.match(fly, /shared-cpu-1x/);
-  assert.match(fly, /memory = '256mb'/);
-  assert.match(fly, /exactly ONE machine/i);
+test('the repo holds no host-specific deploy files', () => {
+  assert.equal(existsSync(`${root}fly.toml`), false);
 });
 
 test('the server config still binds as before (all interfaces, port from FLOCK_PORT)', () => {
@@ -93,16 +64,14 @@ test('the server config still binds as before (all interfaces, port from FLOCK_P
   assert.match(read('src/server.js'), /server\.listen\(port, \(\)/);
 });
 
-test('DEPLOY.md mentions every command and has no token-like string', () => {
+test('DEPLOY.md lists what any host needs and has no token-like string', () => {
   const d = read('DEPLOY.md');
   for (const c of [
-    'fly auth login', 'fly launch --no-deploy --copy-config', 'fly volumes create flock_data --size 1 --region <region>',
-    'fly deploy', `fly ssh console -C "node bin/flock.js create-admin <email> 'Full Name'"`,
-    'https://<app>.fly.dev', 'fly certs add', 'fly logs', 'fly releases',
-    `fly ssh console -C 'node bin/flock.js backup /data/backup-YYYYMMDD.db'`, 'fly ssh sftp get /data/backup-YYYYMMDD.db',
-    '$2.34', 'own computer', 'one machine', 'RESTORE'.toLowerCase(),
+    'one running copy', 'persistent volume', 'HTTPS', 'FLOCK_DB', 'FLOCK_PORT', 'FLOCK_SECURE_COOKIES', 'FLOCK_TRUST_PROXY',
+    'FLOCK_PUBLIC_URL', 'create-admin', 'node bin/flock.js backup', '/api/health', 'exactly one instance',
   ]) assert.ok(d.toLowerCase().includes(c.toLowerCase()), c);
-  assert.doesNotMatch(d, /FlyV1|\bfo1_|\bgh[pousr]_|\bsk-[A-Za-z0-9]{20,}|[A-Za-z0-9+/_-]{40,}={0,2}/);
+  assert.doesNotMatch(d, /\bfly(ctl)?\b|fly\.dev|fly\.toml/i, 'no hosting provider is named');
+  assert.doesNotMatch(d, /\bgh[pousr]_|\bsk-[A-Za-z0-9]{20,}|[A-Za-z0-9+/_-]{40,}={0,2}/);
 });
 
 const hasDocker = spawnSync('docker', ['--version']).status === 0;

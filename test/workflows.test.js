@@ -115,8 +115,8 @@ test('DEPLOY.md has the releases section and no token-like string', () => {
   const t = read('DEPLOY.md');
   assert.match(t, /^## Automatic checks and releases$/m);
   const section = t.slice(t.indexOf('## Automatic checks and releases'));
-  for (const w of ['release label', 'roll back', 'snapshot']) assert.ok(section.toLowerCase().includes(w), w);
-  assert.doesNotMatch(t, /\bFlyV1\s+\S+|\bfo1_[A-Za-z0-9_-]{10,}|\bgh[pousr]_[A-Za-z0-9]{20,}|\b[A-Za-z0-9+/_-]{40,}={0,2}(?=\s|$)/);
+  for (const w of ['release label', 'release workflow']) assert.ok(section.toLowerCase().includes(w), w);
+  assert.doesNotMatch(t, /\bgh[pousr]_[A-Za-z0-9]{20,}|\b[A-Za-z0-9+/_-]{40,}={0,2}(?=\s|$)/);
 });
 
 // ---------- semantic versioning from pull request labels ----------
