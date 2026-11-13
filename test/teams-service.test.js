@@ -118,7 +118,7 @@ test('teams service: deleting a position with people on upcoming services needs 
   assert.equal((await data.slots.listForService(svc.id)).length, 2);
   await teams.deletePosition(admin, p, { confirm: true });
   assert.equal((await data.slots.listForService(svc.id)).length, 0);
-  assert.deepEqual(notifications.events.map((e) => [e[0], e[2].personId]), [['removed', memberId]], 'declined person not told');
+  assert.deepEqual(notifications.events.map((e) => [e[0], [e[2]].flat().map((x) => x.personId)]), [['removed', [memberId]]], 'declined person not told');
   const [last] = (await actions()).slice(-1);
   assert.equal(last.action, 'position.delete');
   assert.match(last.detail, /\(1 people taken off\)$/);

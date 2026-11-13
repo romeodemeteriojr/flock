@@ -146,12 +146,24 @@ export function createNotificationsService(deps) {
       });
     },
 
-    /** Someone was taken off a slot (unassigned, replaced, or the position removed). `slot` is as it was. */
-    removed(actor, slot) {
-      if (!holding(slot) || slot.serviceDate < today() || slot.personId === actor?.id) return;
-      later(() => sendTo('removed', [slot.personId],
-        () => message(`You're no longer on ${slot.positionName}, ${at(slot.serviceDate, slot.serviceTime)}.`),
-        { ttl: ttlUntil(slot.serviceDate, slot.serviceTime), urgency: 'high' }));
+    /**
+     * People were taken off slots (unassigned, replaced, or the position removed).
+     * `slots` (one slot or a list) are as they were. One notification per person
+     * per service, naming every position they lost there (decision 0010).
+     */
+    removed(actor, slots) {
+      const groups = new Map();
+      for (const slot of [slots].flat()) {
+        if (!holding(slot) || slot.serviceDate < today() || slot.personId === actor?.id) continue;
+        const key = `${slot.personId}:${slot.serviceId}`;
+        groups.set(key, [...(groups.get(key) ?? []), slot]);
+      }
+      for (const g of groups.values()) {
+        const s = g[0];
+        later(() => sendTo('removed', [s.personId],
+          () => message(`You're no longer on ${joinAnd(g.map((x) => x.positionName))}, ${at(s.serviceDate, s.serviceTime)}.`),
+          { ttl: ttlUntil(s.serviceDate, s.serviceTime), urgency: 'high' }));
+      }
     },
 
     /** A service's date or time changed. `slots` are its slots. */

@@ -6,6 +6,7 @@
 import { ConflictError, NotFoundError, ValidationError } from '../errors.js';
 import { v, parse } from '../validate.js';
 import { todayStr } from '../dates.js';
+import { takenOff } from './taken-off.js';
 
 export const TEAM_DUP = 'A team with that name already exists';
 export const POS_DUP = 'That team already has a position with that name';
@@ -46,7 +47,6 @@ function check(schema, value, message) {
 const teamJson = (t) => ({ id: t.id, name: t.name, sort: t.sort });
 const posJson = (p) => ({ id: p.id, teamId: p.teamId, name: p.name, sort: p.sort });
 const holds = (s) => s.personId !== null && (s.status === 'pending' || s.status === 'accepted');
-const who = (s) => ({ name: s.personName, positionName: s.positionName, date: s.serviceDate });
 
 /**
  * @param {object} deps  Injected by src/container.js (nothing is imported or global).
@@ -67,15 +67,15 @@ export function createTeamsService(deps) {
     const slots = await d.slots.listForPositionsFrom(positionIds, today());
     const held = slots.filter(holds);
     if (held.length && !confirm) {
-      const n = held.length;
+      const { count: n, people } = takenOff(held);
       throw new ConflictError(`${n} ${n === 1 ? 'person is' : 'people are'} scheduled in it on upcoming services`, {
-        code: 'has_people', details: { count: n, people: held.map(who) },
+        code: 'has_people', details: { count: n, people },
       });
     }
     for (const s of slots) await d.slots.remove(s.id);
     return held;
   }
-  const tellRemoved = (actor, held) => { for (const s of held) notifications.removed(actor, s); };
+  const tellRemoved = (actor, held) => { if (held.length) notifications.removed(actor, held); };
   const audit = (d, actor, action, detail) => d.audit.log({ at: clock.now(), actorId: actor?.id ?? null, action, detail });
 
   async function mustTeam(d, id) {
@@ -159,7 +159,7 @@ export function createTeamsService(deps) {
         const team = await mustTeam(d, id);
         held = await clearUpcoming(d, team.positions.map((p) => p.id), confirm);
         await d.teams.retire(team.id, clock.now().toISOString());
-        const off = held.length ? ` (${held.length} people taken off)` : '';
+        const off = held.length ? ` (${takenOff(held).count} people taken off)` : '';
         await audit(d, actor, 'team.delete', `team ${team.id} "${team.name}"${off}`);
         return { ok: true };
       });
@@ -218,7 +218,7 @@ export function createTeamsService(deps) {
         const pos = await mustPosition(d, id);
         held = await clearUpcoming(d, [pos.id], confirm);
         await d.positions.retire(pos.id, clock.now().toISOString());
-        const off = held.length ? ` (${held.length} people taken off)` : '';
+        const off = held.length ? ` (${takenOff(held).count} people taken off)` : '';
         await audit(d, actor, 'position.delete', `position ${pos.id} "${pos.name}"${off}`);
         return { ok: true };
       });
