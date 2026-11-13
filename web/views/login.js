@@ -1,6 +1,9 @@
 import { html } from '../lib/html.js';
 import { iconSlot } from '../lib/icons.js';
 
+// Branded and centred: the mark large on a soft glow, the form, then "or" and
+// a button per sign-in provider (when the church set one up).
+
 export const title = 'Log in';
 
 const SIGNIN_FAILED = 'That sign-in did not work. If you are new, ask your scheduler to add your email.';
@@ -10,11 +13,8 @@ const SIGNIN_FAILED = 'That sign-in did not work. If you are new, ask your sched
 export function render(state, opts = {}) {
   const error = opts.error ?? '';
   return String(html`
-    <section class="auth">
-      <div class="auth-card">
-        <span class="auth-mark">${iconSlot('flock', 'icon-lg')}</span>
-        <h1 tabindex="-1">Log in to Flock</h1>
-        <p class="page-lead">Your church serving schedule.</p>
+    <section class="auth-page">
+        <div class="auth-hero">${iconSlot('flock', 'auth-mark-lg')}<h1 tabindex="-1">Log in to Flock</h1><p class="page-lead">Your church serving schedule.</p></div>
         <form class="form" data-form="login" novalidate>
           ${error ? html`<p class="form-error" role="alert" id="login-error">${error}</p>` : ''}
           <div class="field">
@@ -28,10 +28,9 @@ export function render(state, opts = {}) {
           </div>
           <button type="submit" class="btn btn-primary btn-block btn-lg">Log in</button>
         </form>
-        ${opts.providers?.length ? html`<div class="auth-providers">
+        ${opts.providers?.length ? html`<p class="auth-or">or</p><div class="auth-providers">
           ${opts.providers.map((p) => html`<a class="btn btn-block btn-lg" href="/api/auth/${encodeURIComponent(p.id)}" data-provider="${p.id}">${iconSlot(p.id)} Sign in with ${p.label}</a>`)}
         </div>` : ''}
-      </div>
       <p class="hint auth-foot">${iconSlot('lock', 'icon-sm')} Forgot your password? Ask the scheduler to reset your login.</p>
       <p class="hint auth-foot"><a href="/privacy.html">Privacy</a></p>
     </section>

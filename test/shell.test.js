@@ -446,3 +446,20 @@ test('every web module imports in Node without touching document or window', asy
     }
   }
 });
+
+test('login and welcome: branded and centred; "or" only when there is a provider; the person in a card', async () => {
+  const welcome = await import('../web/views/welcome.js');
+  const plain = loginView.render({});
+  assert.match(plain, /<section class="auth-page">\s*<div class="auth-hero"><span class="icon auth-mark-lg" data-icon="flock" aria-hidden="true"><\/span><h1 tabindex="-1">Log in to Flock<\/h1><p class="page-lead">Your church serving schedule\.<\/p><\/div>/);
+  assert.doesNotMatch(plain, /auth-or|auth-card/);
+  const withGoogle = loginView.render({}, { providers: [{ id: 'google', label: 'Google' }] });
+  assert.match(withGoogle, /<\/form>\s*<p class="auth-or">or<\/p><div class="auth-providers">/);
+  const w = welcome.render({}, { info: { name: 'Pat Example', email: 'pat@example.org' } });
+  assert.match(w, /<p class="page-lead">Choose a password and you're in\.<\/p>/);
+  assert.match(w, /<div class="auth-who" id="welcome-person"><span class="avatar[^"]*" aria-hidden="true">PE<\/span><p>Hi <strong>Pat Example<\/strong>\. You will log in with <strong>pat@example\.org<\/strong>\.<\/p><\/div>/);
+  assert.match(w, /aria-describedby="welcome-person welcome-rule"/, 'the password field still names who it is for');
+  for (const s of [welcome.render({}), welcome.render({}, { error: 'Gone' })]) {
+    assert.match(s, /<section class="auth-page">/);
+    assert.doesNotMatch(s, /Choose a password and you/, 'no lead before we know who it is');
+  }
+});

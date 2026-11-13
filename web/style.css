@@ -776,6 +776,32 @@ th, td { text-align: left; padding: var(--s-2) var(--s-3); border-bottom: 1px so
 .auth-foot { text-align: center; margin-top: var(--s-5); }
 .doc { max-width: 40rem; margin: var(--s-8) auto; padding: 0 var(--s-4); }
 .auth-providers { display: flex; flex-direction: column; gap: var(--s-3); margin-top: var(--s-4); }
+/* Login and Welcome: branded and centred. */
+.auth-page {
+  min-height: calc(100vh - var(--s-12)); min-height: calc(100dvh - var(--s-12));
+  display: flex; flex-direction: column; justify-content: center;
+  max-width: 24rem; margin: 0 auto; padding: var(--s-6) var(--s-2);
+}
+/* A soft glow of the brand colour behind the mark. Decoration only. */
+.auth-page::before {
+  content: ""; position: fixed; z-index: -1; pointer-events: none;
+  top: 0; left: 0; right: 0; height: 55vh;
+  background: radial-gradient(120% 70% at 50% 0%, var(--accent-soft), transparent 72%);
+}
+.auth-hero { display: flex; flex-direction: column; align-items: center; text-align: center; margin-bottom: var(--s-6); }
+.auth-mark-lg {
+  width: 4.5rem; height: 4.5rem; padding: 14px; border-radius: 22px;
+  color: var(--on-brand); background: var(--brand);
+  box-shadow: 0 18px 30px -14px color-mix(in srgb, var(--brand) 85%, transparent);
+}
+.auth-hero h1 { margin: var(--s-5) 0 var(--s-1); }
+.auth-hero .page-lead { font-size: var(--fs-lg); }
+.auth-or { display: flex; align-items: center; gap: var(--s-3); margin: var(--s-5) 0 var(--s-4); color: var(--muted); font-size: var(--fs-sm); }
+.auth-or::before, .auth-or::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+.auth-page .auth-providers { margin-top: 0; }
+.auth-page .auth-foot { color: var(--muted); font-size: var(--fs-sm); }
+.auth-who { display: flex; align-items: center; gap: var(--s-3); padding: var(--s-3) var(--s-4); margin-bottom: var(--s-5); border-radius: var(--radius-lg); background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow-1); text-align: left; }
+.auth-who p { margin: 0; }
 
 /* ---------- my schedule: hero card and serving cards ---------- */
 .hero {

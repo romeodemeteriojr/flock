@@ -1,16 +1,15 @@
 import { html } from '../lib/html.js';
 import { iconSlot } from '../lib/icons.js';
+import { avatar } from '../lib/avatar.js';
 
 export const title = 'Welcome';
 
 export function render(state, { info = null, error = '' } = {}) {
   return String(html`
-    <section class="auth">
-      <div class="auth-card">
-        <span class="auth-mark">${iconSlot('flock', 'icon-lg')}</span>
-        <h1 tabindex="-1">Welcome to Flock</h1>
+    <section class="auth-page">
+        <div class="auth-hero">${iconSlot('flock', 'auth-mark-lg')}<h1 tabindex="-1">Welcome to Flock</h1>${info ? html`<p class="page-lead">Choose a password and you're in.</p>` : ''}</div>
         ${info ? html`
-          <p class="lead" id="welcome-person">Hi ${info.name}. You will log in with <strong>${info.email}</strong>.</p>
+          <div class="auth-who" id="welcome-person">${avatar(info.name)}<p>Hi <strong>${info.name}</strong>. You will log in with <strong>${info.email}</strong>.</p></div>
           <form class="form" data-form="welcome" novalidate>
             ${error ? html`<p class="form-error" role="alert">${error}</p>` : ''}
             <input type="hidden" name="email" autocomplete="username" value="${info.email}">
@@ -29,7 +28,6 @@ export function render(state, { info = null, error = '' } = {}) {
           <p class="form-error" role="alert">${error}</p>
           <p><a href="#/login">Go to log in</a></p>` : html`
           <p class="loading" role="status">Checking your link…</p>`}
-      </div>
     </section>`);
 }
 
