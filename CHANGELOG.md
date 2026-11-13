@@ -16,6 +16,7 @@ A scheduler can now put the same person in **up to 3 positions on one service**,
 - **Volunteers** answer each position on its own. A card with other positions at the same service says **Also on Vocals**, and saying no names the position ("Are you sure you can't do Sound on ...?") so it is clear the others stay. Taking back a "no" is refused if it would make 4 positions, or a second of the same one.
 - **Notifications, reminders and days off** put positions at one service together: "Asked to serve: Sound and Vocals, Sun 15 Nov 9:00".
 - **Deleting a service** counts people once each: "1 person is scheduled on this date" for one person in two positions.
+- **Deleting a position or team, or taking positions off a service,** also counts people once each, lists one line per person per service ("Sam (Sound and Slides, Sun 15 Nov)"), and sends one "You're no longer on Sound and Slides" per service.
 - "Served 2 times in the last 8 weeks", the order of who could do a position, and Fill's fairness count services, not positions: two positions on one Sunday is serving once.
 
 API: the 409 code `double_booked` is gone. New 409 codes `same_position` and `too_many_positions` (on assign, and on accept when taking back a "no"); neither can be forced. `GET /api/admin/suggest` candidates and `GET /api/me/schedule` items have `alsoOn`, the person's other positions at that service.

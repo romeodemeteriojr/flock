@@ -278,3 +278,48 @@ test('asked: positions at the same service share one part; "more" still counts a
     assert.equal(got.at(-1), `Asked to serve: ${c.s15.slots[0].positionName} and ${c.s15.slots[1].positionName}, Sun 15 Nov 9:00; Slides, Sun 22 Nov 10:30. Tap to answer.`);
   } finally { await c.t.close(); }
 });
+
+test('taken off several positions at once: one person counts once, and hears once per service', async () => {
+  const c = await church();
+  try {
+    const { ada } = c.browsers;
+    const { data } = c.t.container;
+    const assign = async (slot, id) => assert.equal((await ada.put(`/api/slots/${slot.id}/assign`, { personId: id })).status, 200);
+    const [sound15, slides15] = c.s15.slots;
+    // Sam: Sound and Slides on 15 Nov, Slides on 22 Nov.
+    await assign(sound15, c.ids.sam);
+    await assign(slides15, c.ids.sam);
+    await assign(c.s22.slots[1], c.ids.sam);
+
+    // Editing 29 Nov down to Keys only: Sam is on both positions there, so it is 1 person.
+    const keys = await data.positions.create(c.sound.teamId, { name: 'Keys' });
+    await assign(c.s29.slots[0], c.ids.sam);
+    await assign(c.s29.slots[1], c.ids.sam);
+    await c.inbox();
+    const edit = await ada.patch(`/api/services/${c.s29.id}`, { slots: [{ positionId: keys.id, count: 1 }] });
+    assert.equal(edit.status, 409);
+    assert.equal(edit.json.code, 'has_people');
+    assert.equal(edit.json.error, '1 person will be taken off');
+    assert.equal(edit.json.count, 1);
+    assert.deepEqual(edit.json.people, [{ name: 'Sam Smith', positionName: 'Sound and Slides', date: '2026-11-29' }]);
+    assert.equal((await ada.patch(`/api/services/${c.s29.id}?confirm=1`, { slots: [{ positionId: keys.id, count: 1 }] })).status, 200);
+    assert.deepEqual(await c.inbox(), { sam: ["You're no longer on Sound and Slides, Sun 29 Nov 9:00."] });
+
+    // Deleting the team: Sam is on 2 services but is still 1 person; Kim, who said no, is not counted.
+    await assign(c.s06.slots[0], c.ids.kim);
+    assert.equal((await c.browsers.kim.post(`/api/me/slots/${c.s06.slots[0].id}/decline`)).status, 200);
+    await c.inbox();
+    const del = await ada.del(`/api/teams/${c.sound.teamId}`);
+    assert.equal(del.status, 409);
+    assert.equal(del.json.count, 1);
+    assert.equal(del.json.error, '1 person is scheduled in it on upcoming services');
+    assert.deepEqual(del.json.people, [
+      { name: 'Sam Smith', positionName: 'Sound and Slides', date: '2026-11-15' },
+      { name: 'Sam Smith', positionName: 'Slides', date: '2026-11-22' },
+    ]);
+    assert.equal((await ada.del(`/api/teams/${c.sound.teamId}?confirm=1`)).status, 200);
+    assert.deepEqual(await c.inbox(), {
+      sam: ["You're no longer on Sound and Slides, Sun 15 Nov 9:00.", "You're no longer on Slides, Sun 22 Nov 10:30."],
+    });
+  } finally { await c.t.close(); }
+});

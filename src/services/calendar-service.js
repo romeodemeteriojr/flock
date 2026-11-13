@@ -5,6 +5,7 @@
 // src/container.js.
 import { ValidationError, ConflictError, NotFoundError } from '../errors.js';
 import { isValidDate, isValidTime, addDays, daysBetween, todayStr } from '../dates.js';
+import { takenOff } from './taken-off.js';
 
 export const DATE_ERR = 'Date must be a real date like 2026-03-01';
 export const TIME_ERR = 'Time must look like 09:00';
@@ -23,7 +24,6 @@ export const MAX_RANGE_DAYS = 366;
 
 const isInt = (v) => Number.isSafeInteger(v);
 const holds = (s) => s.personId !== null && (s.status === 'pending' || s.status === 'accepted');
-const who = (s) => ({ name: s.personName, positionName: s.positionName, date: s.serviceDate });
 // Which slots go first when a count is lowered: open, then declined; newest first.
 const emptyFirst = (a, b) => (a.status === 'open' ? 0 : 1) - (b.status === 'open' ? 0 : 1) || b.id - a.id;
 
@@ -129,9 +129,9 @@ export function createCalendarService(deps) {
     }
     const held = drop.filter(holds);
     if (held.length && !confirm) {
-      const n = held.length;
+      const { count: n, people } = takenOff(held);
       throw new ConflictError(`${n} ${n === 1 ? 'person' : 'people'} will be taken off`, {
-        code: 'has_people', details: { count: n, people: held.map(who) },
+        code: 'has_people', details: { count: n, people },
       });
     }
     for (const s of drop) await d.slots.remove(s.id);
@@ -257,12 +257,12 @@ export function createCalendarService(deps) {
         if (clash && clash.id !== svc.id) throw new ConflictError(CLASH);
         const shaped = list ? await reshape(d, svc, list, confirm) : { added: 0, removed: 0, held: [] };
         const updated = await d.services.update(svc.id, { date, time, title });
-        const slotNote = list ? ` slots +${shaped.added} -${shaped.removed} (${shaped.held.length} people taken off)` : '';
+        const slotNote = list ? ` slots +${shaped.added} -${shaped.removed} (${takenOff(shaped.held).count} people taken off)` : '';
         await audit(d, actor, 'service.update', `service ${svc.id} ${date} ${time} "${title}"${slotNote}`);
         change = { before: svc, after: updated, slots: await d.slots.listForService(svc.id), held: shaped.held };
         return view(d, updated);
       });
-      for (const s of change.held) notifications.removed(actor, s);
+      if (change.held.length) notifications.removed(actor, change.held);
       notifications.moved(actor, change.before, change.after, change.slots);
       return result;
     },

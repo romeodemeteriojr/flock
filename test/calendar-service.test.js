@@ -313,7 +313,7 @@ test('calendar: updateService dropping a position with people needs confirm; mov
   await svc.updateService(admin, s.id, { date: '2026-02-08', slots: keep }, { confirm: true });
   assert.deepEqual(await shape(s.id), ['Drums:Pat Person:accepted']);
   assert.deepEqual(notifications.events.map((e) => e[0]), ['removed', 'moved']);
-  assert.equal(notifications.events[0][2].personName, 'Sam Singer');
+  assert.deepEqual(notifications.events[0][2].map((x) => x.personName), ['Sam Singer']);
   assert.deepEqual(notifications.events[1][4].map((x) => x.personName), ['Pat Person']);
 });
 
