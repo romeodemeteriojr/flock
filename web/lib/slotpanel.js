@@ -194,32 +194,36 @@ export function createSlotPanel({ api, paint, changed = () => {} }) {
     : html`<button type="button" class="btn" data-action="slot-conflict-back">OK</button>`}
         </div></div></div>`;
     }
-    let removeBox = '';
-    if (hasPerson) {
-      removeBox = p.removeAsk
-        ? html`<div class="confirm confirm-danger" role="alertdialog" aria-label="Confirm">
+    // Who is in it now (or nobody yet), with Remove; its are-you-sure takes the button's place.
+    const chip = slot.statusLabel ? html`<span class="chip chip-plain">${slot.statusLabel}</span>` : statusChip(status);
+    const current = hasPerson
+      ? html`<div class="slot-current">${avatar(slot.personName)}<div class="slot-current-text"><p class="sheet-who"><strong>${slot.personName}</strong> ${chip}</p></div>
+          ${p.removeAsk ? '' : html`<button type="button" class="btn btn-danger btn-sm" data-action="slot-remove-ask" aria-label="Remove ${slot.personName}">Remove</button>`}</div>
+        ${p.removeAsk ? html`<div class="confirm confirm-danger" role="alertdialog" aria-label="Confirm">
             <p>Take ${slot.personName} off ${slotWhere(slot)}?</p>
             <div class="btn-row">
               <button type="button" class="btn btn-danger" data-action="slot-remove-yes">Yes, remove ${slot.personName}</button>
               <button type="button" class="btn" data-action="slot-remove-no">No, go back</button>
-            </div></div>`
-        : html`<div class="btn-row"><button type="button" class="btn btn-danger btn-quiet" data-action="slot-remove-ask">Remove person</button></div>`;
-    }
+            </div></div>` : ''}`
+      : html`<div class="slot-current is-empty"><p class="sheet-who"><span class="chip chip-plain chip-open">${iconSlot('plus', 'chip-icon')}Nobody yet</span></p></div>`;
     let list;
     if (p.loading) list = html`<p class="hint">Looking for people…</p>${skeleton('Loading…', 'list', 3)}`;
     else if (!p.candidates.length) {
       list = emptyState(p.showAll ? 'Nobody is free for this.' : 'Nobody trained for this is free. Try showing people not trained for this.', 'art-people');
     } else {
+      // The list comes sorted by who has served least; the first one trained for it is the best match.
+      const best = p.candidates.find((c) => c.qualified !== false)?.personId;
       list = html`<ol class="list candidates" data-candidates>${p.candidates.map((c) => html`<li class="candidate" data-candidate="${c.personId}">
         <div class="candidate-main">${avatar(c.name)}<div class="candidate-text">
-        <p class="candidate-name"><strong>${c.name}</strong>${c.qualified === false ? html` <span class="chip chip-plain">Not trained</span>` : ''}</p>
+        <p class="candidate-name"><strong>${c.name}</strong>${c.personId === best ? html` <span class="chip chip-info">${iconSlot('sparkle', 'chip-icon')}Best match</span>` : ''}${c.qualified === false ? html` <span class="chip chip-plain">Not trained</span>` : ''}</p>
         <ul class="hint reasons">${(c.reasons ?? []).map((r) => html`<li>${r}</li>`)}</ul></div></div>
-        <div class="btn-row candidate-actions"><button type="button" class="btn btn-primary" data-action="slot-assign" data-id="${c.personId}">Assign</button></div>
+        <div class="btn-row candidate-actions"><button type="button" class="btn${c.personId === best ? ' btn-primary' : ''}" data-action="slot-assign" data-id="${c.personId}">Assign</button></div>
       </li>`)}</ol>`;
     }
-    const seg = (pressed, label) => (pressed
-      ? html`<button type="button" class="segment" aria-pressed="true">${label}</button>`
-      : html`<button type="button" class="segment" data-action="slot-toggle" aria-pressed="false">${label}</button>`);
+    // Short words on the buttons; the full sentence is the name a screen reader says.
+    const seg = (pressed, label, full) => (pressed
+      ? html`<button type="button" class="segment" aria-pressed="true" aria-label="${full}">${label}</button>`
+      : html`<button type="button" class="segment" data-action="slot-toggle" aria-pressed="false" aria-label="${full}">${label}</button>`);
     const entering = !p.entered; // slide in once, not on every repaint
     p.entered = true;
     return html`<div class="sheet-layer${entering ? ' is-entering' : ''}" data-sheet>
@@ -227,19 +231,17 @@ export function createSlotPanel({ api, paint, changed = () => {} }) {
     <section class="sheet slot-panel" data-slot-panel="${slot.id}" role="dialog" aria-modal="true" aria-labelledby="slot-panel-title" aria-describedby="slot-panel-when">
       <div class="sheet-grab" aria-hidden="true"></div>
       <div class="sheet-head">
-        <h2 id="slot-panel-title" tabindex="-1">${slot.positionName}</h2>
+        <div class="sheet-titles"><h2 id="slot-panel-title" tabindex="-1">${slot.positionName}</h2><p class="sheet-sub" id="slot-panel-when">${slot.teamName ? html`${slot.teamName} · ` : ''}${formatDate(slot.date)}${slot.time ? html` at <span class="num">${formatTime(slot.time)}</span>` : ''}</p></div>
         <button type="button" class="icon-btn" data-action="slot-close" aria-label="Close">${iconSlot('x')}</button>
       </div>
       <div class="sheet-body">
-      <p class="sheet-when" id="slot-panel-when">${iconSlot('calendar', 'icon-sm')} <span>${slot.title ? html`${slot.title}, ` : ''}${formatDate(slot.date)}${slot.time ? html` at <span class="num">${formatTime(slot.time)}</span>` : ''}${slot.teamName ? html` (${slot.teamName})` : ''}</span></p>
-      <p class="sheet-who">${hasPerson ? html`${avatar(slot.personName)}<strong>${slot.personName}</strong> ` : html`<strong>Nobody yet</strong> `}${slot.statusLabel ? html`<span class="chip chip-plain">${slot.statusLabel}</span>` : statusChip(status)}</p>
+      ${current}
       ${p.error ? html`<p class="form-error" role="alert">${p.error}</p>` : ''}
       ${conflict}
-      ${removeBox}
       <h3>Who could do this</h3>
       <div class="segmented" role="group" aria-label="Who to show">
-        ${seg(!p.showAll, 'Only people trained for this')}
-        ${seg(p.showAll, 'Show people not trained for this')}
+        ${seg(!p.showAll, 'Trained', 'Only people trained for this')}
+        ${seg(p.showAll, 'Everyone', 'Show people not trained for this')}
       </div>
       ${list}
       </div>

@@ -338,7 +338,8 @@ test('slot panel: ranked suggestions with reasons, toggle shows untrained people
   assert.match(h, /Has not served in 8 weeks/);
   assert.match(h, /data-action="slot-assign" data-id="30">Assign</);
   assert.match(h, /Show people not trained for this/);
-  assert.ok(!h.includes('Remove person')); // nobody in this slot
+  assert.ok(!h.includes('slot-remove-ask')); // nobody in this slot
+  assert.match(h, /<div class="slot-current is-empty">.*Nobody yet/s);
   root.click('slot-toggle');
   await flush();
   assert.equal(api.calls[1], 'GET /api/admin/suggest?slotId=4&includeUnqualified=true');
@@ -533,7 +534,7 @@ test('gaps: a now-away item shows the gap label, not a guessed status', async ()
   const panel = root.innerHTML.split('data-slot-panel')[1];
   assert.match(panel, /Ann Lee<\/strong> <span class="chip chip-plain">Now away</);
   assert.ok(!panel.includes('Waiting for answer'));
-  assert.match(panel, /Remove person/);
+  assert.match(panel, /<button type="button" class="btn btn-danger btn-sm" data-action="slot-remove-ask" aria-label="Remove Ann Lee">Remove<\/button>/);
 });
 
 test('gaps: hostile names stay text', async () => {
@@ -812,4 +813,32 @@ test('gaps: a filter shows one kind and hides services left empty; the tabs swap
   assert.doesNotMatch(h, /data-gap-service|data-summary/);
   await root.click('tab', undefined, { dataset: { action: 'tab', tab: 'gaps' } });
   assert.match(root.innerHTML, /data-summary/);
+});
+
+test('slot sheet: the position and when in the head, who is in it, short toggle words, and the best match', async () => {
+  const { root } = await schedSetup({ 'GET /api/admin/suggest?slotId=4': CANDS });
+  await root.click('slot-open', 4);
+  await flush();
+  const h = root.innerHTML.slice(root.innerHTML.indexOf('data-slot-panel'));
+  assert.match(h, /<div class="sheet-titles"><h2 id="slot-panel-title" tabindex="-1">Keys<\/h2><p class="sheet-sub" id="slot-panel-when">Band · Sun 8 Nov at <span class="num">9:00 am<\/span><\/p><\/div>/);
+  assert.match(h, /aria-describedby="slot-panel-when"|slot-panel-when/);
+  assert.match(h, /class="segment" aria-pressed="true" aria-label="Only people trained for this">Trained</);
+  assert.match(h, /class="segment" data-action="slot-toggle" aria-pressed="false" aria-label="Show people not trained for this">Everyone</);
+  const cands = [...h.matchAll(/data-candidate="(\d+)">[\s\S]*?<\/li>\s*(?=<li class="candidate"|<\/ol>)/g)].map((m) => m[0]);
+  assert.match(cands[0], /<span class="chip chip-info"><span class="icon chip-icon" data-icon="sparkle" aria-hidden="true"><\/span>Best match<\/span>/);
+  assert.match(cands[0], /class="btn btn-primary" data-action="slot-assign"/);
+  for (const c of cands.slice(1)) {
+    assert.doesNotMatch(c, /Best match/);
+    assert.match(c, /class="btn" data-action="slot-assign"/);
+  }
+  // A filled slot: the person and their status, with Remove; its are-you-sure takes the button's place.
+  await root.click('slot-close');
+  await root.click('slot-open', 2);
+  await flush();
+  const f = root.innerHTML.slice(root.innerHTML.indexOf('data-slot-panel'));
+  assert.match(f, /<div class="slot-current"><span class="avatar[^>]*>[A-Z]+<\/span><div class="slot-current-text"><p class="sheet-who"><strong>/);
+  root.click('slot-remove-ask');
+  const r = root.innerHTML.slice(root.innerHTML.indexOf('data-slot-panel'));
+  assert.doesNotMatch(r, /data-action="slot-remove-ask"/);
+  assert.match(r, /data-action="slot-remove-yes"/);
 });

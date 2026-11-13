@@ -1145,8 +1145,20 @@ th, td { text-align: left; padding: var(--s-2) var(--s-3); border-bottom: 1px so
 .sheet-head h2 { margin: 0; flex: 1; font-size: var(--fs-xl); }
 .sheet-body { overflow-y: auto; overscroll-behavior: contain; padding: 0 var(--s-5) var(--s-4); flex: 1; }
 .sheet-foot { padding: var(--s-3) var(--s-5) var(--s-4); border-top: 1px solid var(--line); flex: none; }
-.sheet-when { display: flex; gap: var(--s-2); align-items: flex-start; color: var(--muted); margin-bottom: var(--s-3); }
 .sheet-who { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-2); }
+/* The slot sheet: the position and when in the head; who is in it now. */
+.sheet-sub { margin: var(--s-1) 0 0; color: var(--muted); font-size: var(--fs-sm); }
+.sheet-titles { flex: 1; min-width: 0; }
+.sheet-titles h2 { margin: 0; font-size: var(--fs-xl); }
+/* The title gets focus when the sheet opens: keep its ring off the line under it. */
+.sheet-titles h2:focus-visible { outline-offset: 0; }
+.slot-current { display: flex; align-items: center; gap: var(--s-3); padding: var(--s-3); margin: var(--s-2) 0 0; border-radius: var(--radius-lg); background: var(--surface-2); }
+.slot-current-text { flex: 1; min-width: 0; }
+.slot-current-text p { margin: 0; }
+.slot-current.is-empty { border: 1.5px dashed var(--line-strong); background: none; }
+.slot-current + .confirm { margin-top: var(--s-3); }
+/* On a phone the X, the scrim, swiping and Escape close it; the footer button is for wide screens. */
+.slot-panel .sheet-foot { display: none; }
 /* Swipe to dismiss (web/lib/swipe.js sets --sheet-drag in px while a finger is down). */
 .sheet { transform: translateY(var(--sheet-drag, 0px)); }
 .sheet.is-dragging { transition: none; }
@@ -1328,6 +1340,7 @@ th, td { text-align: left; padding: var(--s-2) var(--s-3); border-bottom: 1px so
   .sched-table tr.is-today .sched-date { box-shadow: inset 4px 0 0 var(--accent); }
   .sched-grid .slot-btn { min-width: 9rem; }
 
+  .slot-panel .sheet-foot { display: block; }
   /* Side panel instead of a bottom sheet. */
   .sheet {
     left: auto; top: 0; width: min(440px, 100%); max-height: none;
