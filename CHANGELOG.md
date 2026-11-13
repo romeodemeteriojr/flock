@@ -15,6 +15,7 @@
 - **Numbers on the tabs.** My schedule shows how many asks are waiting for your answer; schedulers see how many gaps there are on Gaps (on a phone, the asks also show on More). Screen readers hear the words ("2 to answer"). An installed Flock also shows the number of asks on its app icon, where the phone supports it.
 - **More is a bottom sheet** on phones, rising from behind the tab bar with bigger rows.
 - **Put Flock on your Home Screen.** On a phone that can install Flock and has not yet, My schedule shows a small card (after the notifications card, never both at once). On Android and in desktop Chrome or Edge, **Install** brings up the browser's own install box. On an iPhone, **Show me how** opens the three steps in Safari (Share, Add to Home Screen, Add). **Not now** hides it on that device; **Install Flock** stays in the account sheet.
+- **Share** invites and reminders straight to Messages, WhatsApp or email, on phones that have a share sheet: **Share** in the invite box (before **Copy message**), **Share all** and **Share** on each reminder in Gaps. What is shared is exactly what Copy copies. Copy is still there; where there is no share sheet nothing changes.
 - **Shortcuts.** Press and hold the Flock icon on Android (and in desktop Chrome or Edge) for **My schedule** and **Days off**.
 
 ## 0.6.0

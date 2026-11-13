@@ -7,6 +7,7 @@ import { formatDate, formatTime, todayString } from '../lib/dates.js';
 import { createSlotPanel, copyText } from '../lib/slotpanel.js';
 import { createSheet } from '../lib/sheet.js';
 import { flashCopied } from '../lib/copyflash.js';
+import { canShare, share } from '../lib/share.js';
 import { iconSlot } from '../lib/icons.js';
 import { avatar } from '../lib/avatar.js';
 import { toasts } from '../lib/toast.js';
@@ -111,16 +112,19 @@ function reminders(m) {
   else if (r.list) {
     const canSend = r.push && r.list.some((x) => x.hasPush && !r.sent?.has(x.personId));
     const reachable = r.list.filter((x) => x.hasPush).length;
+    // One main button: Send reminders if it can, else Share all (phones), else Copy all.
+    const sharing = !!m.canShare;
     body = r.list.length
       ? html`<div class="btn-row">
           ${canSend ? html`<button type="button" class="btn btn-primary" data-action="send-reminders" ${r.sending ? 'disabled' : ''}>${iconSlot('bell')} ${r.sending ? 'Sending…' : `Send reminders (${reachable})`}</button>` : ''}
-          <button type="button" class="btn${canSend ? '' : ' btn-primary'}" data-action="copy-all" data-copy-key="all">${iconSlot('copy')} Copy all</button></div>
+          ${sharing ? html`<button type="button" class="btn${canSend ? '' : ' btn-primary'}" data-action="share-all">${iconSlot('share')} Share all</button>` : ''}
+          <button type="button" class="btn${canSend || sharing ? '' : ' btn-primary'}" data-action="copy-all" data-copy-key="all">${iconSlot('copy')} Copy all</button></div>
         <ul class="list reminder-list" data-reminders>${r.list.map((x) => html`<li class="reminder" data-reminder="${x.personId}">
           <p class="reminder-who">${avatar(x.name, 'sm')}<strong>${x.name}</strong>
             ${r.sent?.has(x.personId) ? html`<span class="chip chip-ok">${iconSlot('check', 'chip-icon')}Sent</span>`
               : r.push && x.hasPush ? html`<span class="chip chip-plain" title="Gets notifications from Flock">${iconSlot('bell', 'chip-icon')}Notifications on</span>` : ''}</p>
           <p class="reminder-text">${x.message}</p>
-          ${r.sent?.has(x.personId) ? '' : html`<div class="btn-row"><button type="button" class="btn btn-sm" data-action="copy-one" data-id="${x.personId}" data-copy-key="${x.personId}">${iconSlot('copy')} Copy</button></div>`}
+          ${r.sent?.has(x.personId) ? '' : html`<div class="btn-row">${sharing ? html`<button type="button" class="btn btn-sm" data-action="share-one" data-id="${x.personId}" aria-label="Share the reminder for ${x.name}">${iconSlot('share')} Share</button>` : ''}<button type="button" class="btn btn-sm" data-action="copy-one" data-id="${x.personId}" data-copy-key="${x.personId}">${iconSlot('copy')} Copy</button></div>`}
         </li>`)}</ul>`
       : emptyState('Nobody is scheduled that week.', 'art-calendar');
   }
@@ -163,6 +167,7 @@ export function createScreen({ api, root, today = todayString(), win = globalThi
   const m = {
     loading: true, error: '', notice: '', summary: {}, items: [],
     reminders: { weekOf: today, list: null, loading: false, error: '', notice: '', push: false, sent: new Set(), sending: false },
+    canShare: canShare(win),
   };
   const hold = { timer: null, key: null };
   let reminderSeq = 0;
@@ -232,6 +237,11 @@ export function createScreen({ api, root, today = todayString(), win = globalThi
     paint();
   }
 
+  // The share sheet; if it fails (not just closed), copy instead.
+  async function shareOr(text, fallback) {
+    try { await share(win, { title: 'Reminder', text }); } catch { await fallback(); }
+  }
+
   async function copy(text, target, label, key) {
     const ok = await copyText(win, text);
     m.reminders.notice = ok ? 'Copied. Paste it into your messages app.' : '';
@@ -254,6 +264,14 @@ export function createScreen({ api, root, today = todayString(), win = globalThi
       return panel.open(gapSlot(it));
     }
     if (action === 'copy-all') return copy(allRemindersText(toCopy(m.reminders)), el, 'Copy all', 'all');
+    if (action === 'share-all') {
+      const text = allRemindersText(toCopy(m.reminders));
+      return shareOr(text, () => copy(text, root.querySelector('[data-copy-key="all"]'), 'Copy all', 'all'));
+    }
+    if (action === 'share-one') {
+      const x = (m.reminders.list ?? []).find((y) => y.personId === id);
+      return x ? shareOr(x.message, () => copy(x.message, root.querySelector(`[data-copy-key="${id}"]`), 'Copy', String(id))) : undefined;
+    }
     if (action === 'send-reminders') return sendReminders();
     if (action === 'copy-one') {
       const x = (m.reminders.list ?? []).find((y) => y.personId === id);
@@ -287,5 +305,5 @@ export function render(state) { // eslint-disable-line no-unused-vars
 export function mount(root, ctx) {
   const screen = root?.querySelector?.('[data-screen]');
   if (!screen) return undefined;
-  return createScreen({ api: ctx.api, root: screen, today: ctx.today ?? todayString(), onGaps: (gaps) => ctx.setCounts?.({ gaps }) }).ready;
+  return createScreen({ api: ctx.api, root: screen, today: ctx.today ?? todayString(), win: ctx.win ?? globalThis, onGaps: (gaps) => ctx.setCounts?.({ gaps }) }).ready;
 }

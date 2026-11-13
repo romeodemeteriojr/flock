@@ -10,6 +10,7 @@ import { avatar } from '../lib/avatar.js';
 import { toasts } from '../lib/toast.js';
 import { inviteMessage } from '../lib/invite.js';
 import { copyText } from '../lib/slotpanel.js';
+import { canShare, share } from '../lib/share.js';
 import { skeleton, emptyState, pageHead, disclosure, refocus } from '../lib/ui.js';
 
 export const title = 'People';
@@ -56,14 +57,16 @@ function roleConfirmPanel(p, target) {
     </div></div>`;
 }
 
-function inviteBox(invite) {
+// Share (the phone's share sheet) comes first where there is one; Copy is always there.
+function inviteBox(invite, sharing = false) {
   return html`
     <section class="card secret-box" id="invite-box" role="alert" aria-labelledby="invite-head">
       <h2 id="invite-head">${iconSlot('send', 'icon-sm')} Invite for ${invite.name}</h2>
       <p class="lead" data-invite-text>${inviteMessage(invite)}</p>
       ${invite.localOnly ? html`<p class="notice">This link uses localhost, so it only works on this computer. Set FLOCK_PUBLIC_URL, or open Flock using this computer's network address, then copy a new invite.</p>` : ''}
       <div class="btn-row">
-        <button type="button" class="btn btn-primary" data-action="copy" data-copy-key="invite">${iconSlot('copy')} Copy message</button>
+        ${sharing ? html`<button type="button" class="btn btn-primary" data-action="share">${iconSlot('share')} Share</button>` : ''}
+        <button type="button" class="btn${sharing ? '' : ' btn-primary'}" data-action="copy" data-copy-key="invite">${iconSlot('copy')} Copy message</button>
         <button type="button" class="btn" data-action="done">Done</button>
       </div>
     </section>`;
@@ -180,7 +183,7 @@ export function renderScreen(m) {
   return String(html`
     ${m.error ? html`<p class="form-error" role="alert">${m.error}</p>` : ''}
     ${toasts([[m.notice, 'ok']])}
-    ${m.invite ? inviteBox(m.invite) : ''}
+    ${m.invite ? inviteBox(m.invite, m.canShare) : ''}
     ${m.adding ? html`
       <form class="form card form-card" data-form="add-person" novalidate>
         <h2 class="card-title">Add person</h2>
@@ -223,6 +226,7 @@ export function createScreen({ api, root, ctx = {}, win = globalThis }) {
     people: [], teams: [], query: '', loading: true, adding: false, newName: '',
     panel: null, invite: null, error: '', notice: '', me: null,
     selected: null, // the person whose buttons show
+    canShare: canShare(win),
   };
   const hold = { timer: null, key: null };
   const me = () => ctx.state?.user?.id ?? null;
@@ -279,6 +283,15 @@ export function createScreen({ api, root, ctx = {}, win = globalThis }) {
       if (m.panel?.kind !== 'positions') return;
       const pid = Number(el.dataset.position);
       if (el.checked) m.panel.checked.add(pid); else m.panel.checked.delete(pid);
+    },
+    share: async () => {
+      if (!m.invite) return;
+      try {
+        await share(win, { title: `Invite for ${m.invite.name}`, text: inviteMessage(m.invite) });
+      } catch {
+        // The share sheet failed (not closed by the person): copy instead.
+        await actions.copy(null, root.querySelector('[data-action="copy"]'));
+      }
     },
     copy: async (_id, el) => {
       if (!m.invite) return;
