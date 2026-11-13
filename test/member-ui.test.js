@@ -40,34 +40,65 @@ test('date helpers', () => {
   assert.equal(relativeDay('2026-11-22', TODAY), 'Sun 22 Nov');
 });
 
-test('banner text cases', () => {
-  assert.equal(sched.bannerText(item(), TODAY), "You're serving this Sunday as Sound at 9:00 am");
-  assert.equal(sched.bannerText(item({ date: TODAY }), TODAY), "You're serving today as Sound at 9:00 am");
-  assert.equal(sched.bannerText(item({ date: '2026-11-05' }), TODAY), "You're serving tomorrow as Sound at 9:00 am");
-  assert.equal(sched.bannerText(item({ date: '2026-11-22' }), TODAY), 'Next time you serve: Sun 22 Nov, Sound');
-  assert.equal(sched.bannerText(null, TODAY), "You're not scheduled yet. Your scheduler will let you know.");
+test('hero: carries the earliest ask, else the next time serving; says who else serves', () => {
+  const ask = item({ slotId: 3, date: '2026-11-15' });
+  const yes = item({ slotId: 2, status: 'accepted' });
+  assert.equal(sched.heroItem({ nextServing: yes, items: [yes, ask] }), ask, 'an ask comes first');
+  assert.equal(sched.heroItem({ nextServing: yes, items: [yes] }), yes);
+  assert.equal(sched.heroItem({ nextServing: yes, items: [yes, ask] }, 2), yes, 'the one just confirmed, for its thank-you');
+  assert.equal(sched.heroItem({ nextServing: null, items: [] }), null);
+  const co = (...names) => names.map((name) => ({ name, positionName: 'X' }));
+  assert.equal(sched.withWords([]), '');
+  assert.equal(sched.withWords(co('Ana Lee')), 'With Ana');
+  assert.equal(sched.withWords(co('Ana Lee', 'Bo Kim')), 'With Ana and Bo');
+  assert.equal(sched.withWords(co('Ana', 'Bo', 'Cy')), 'With Ana, Bo and Cy');
+  assert.equal(sched.withWords(co('Ana', 'Bo', 'Cy', 'Di', 'Ed')), 'With Ana, Bo and 3 others');
+  assert.equal(sched.withWords(co('Ana Lee', 'Ana Kim')), 'With Ana Lee and Ana Kim', 'full names when first names repeat');
 });
 
-test('schedule: pending has both buttons, confirmed does not; chips have words', async () => {
+test('schedule: the hero asks with Yes / I can\'t; others follow as compact cards', async () => {
   const { root } = await setup(sched, {
-    'GET /api/me/schedule': data([item(), item({ slotId: 2, status: 'accepted', date: '2026-11-15' })]),
+    'GET /api/me/schedule': data([item(), item({ slotId: 2, status: 'accepted', date: '2026-11-15' }), item({ slotId: 4, date: '2026-11-22' })]),
   });
-  const [a, b] = root.innerHTML.split('<li ').slice(1);
-  assert.match(a, />Yes, I can</);
-  assert.match(a, />I can't</);
-  assert.match(a, /Please answer/);
-  assert.doesNotMatch(b, /Yes, I can</);
-  assert.match(b, /Confirmed/);
-  assert.match(b, /I can't make it after all/);
-  assert.match(root.innerHTML, /data-banner>You&#39;re serving this Sunday as Sound at 9:00 am/);
+  const h = root.innerHTML;
+  const heroHtml = h.slice(h.indexOf('<section class="hero hero-next'), h.indexOf('</section>', h.indexOf('hero-next')));
+  assert.match(heroHtml, /data-slot="1"/);
+  assert.match(heroHtml, /data-icon="clock"[^>]*><\/span> Please answer · This Sunday/);
+  assert.match(heroHtml, /data-banner>Sun 8 Nov at <span class="num">9:00 am<\/span>/);
+  assert.match(heroHtml, /<p class="hero-role"><strong>Sound<\/strong> · Tech<\/p>/);
+  assert.match(heroHtml, /<p class="hero-ask" id="hero-ask">Can you serve\?<\/p>/);
+  assert.match(heroHtml, /role="group" aria-labelledby="hero-ask"><button type="button" class="btn btn-lg btn-hero" data-action="accept" data-id="1"/);
+  assert.match(heroHtml, /class="btn btn-lg btn-hero-quiet" data-action="decline" data-id="1"/);
+  assert.match(h, /<h2 class="section-title">Also needs your answer<\/h2>[\s\S]*data-slot="4"[\s\S]*data-action="accept" data-id="4"/);
+  assert.match(h, /<h2 class="section-title">Coming up<\/h2>[\s\S]*data-slot="2"/);
+  assert.equal((h.match(/data-slot="1"/g) || []).length, 1, 'the hero item is not repeated');
+  const confirmed = h.slice(h.indexOf('data-slot="2"'));
+  assert.match(confirmed, /chip-ok[^>]*>.*Confirmed/s);
+  assert.doesNotMatch(confirmed.slice(0, confirmed.indexOf('</li>')), /Yes, I can/);
+});
+
+test('schedule: a confirmed hero says so, with the way out; details of a compact card open on tap', async () => {
+  const { root } = await setup(sched, {
+    'GET /api/me/schedule': data([item({ status: 'accepted' }), item({ slotId: 2, status: 'accepted', date: '2026-11-15', coVolunteers: [{ name: 'Ana', positionName: 'Keys' }] })]),
+  });
+  assert.match(root.innerHTML, /data-icon="sparkle"[^>]*><\/span> Next up · This Sunday/);
+  assert.match(root.innerHTML, /<span class="chip hero-chip">.*Confirmed<\/span><button type="button" class="hero-link" data-action="decline-ask" data-id="1"/);
+  assert.match(root.innerHTML, /data-action="card" data-id="2" aria-expanded="false"/);
+  assert.doesNotMatch(root.innerHTML, /Serving with/);
+  await root.click('card', 2);
+  assert.match(root.innerHTML, /data-action="card" data-id="2" aria-expanded="true"/);
+  assert.match(root.innerHTML, /Serving with: Ana \(Keys\)/);
+  assert.match(root.innerHTML, /data-action="decline-ask" data-id="2"/);
+  await root.click('card', 2);
+  assert.doesNotMatch(root.innerHTML, /Serving with/);
 });
 
 test('status chip compact: each of the four statuses has an accessible name, and the icons differ', async () => {
   const { root } = await setup(sched, {
     'GET /api/me/schedule': data([item(), item({ slotId: 2, status: 'accepted', date: '2026-11-15' })]),
   });
-  // the schedule page shows full chips (icon + visible word), never colour alone
-  assert.match(root.innerHTML, /chip-wait[^>]*>.*Please answer/s);
+  // the schedule page says it in words (with an icon), never colour alone
+  assert.match(root.innerHTML, /hero-eyebrow">.*Please answer/s);
   assert.match(root.innerHTML, /chip-ok[^>]*>.*Confirmed/s);
   const { statusChip } = await import('../web/lib/slotpanel.js');
   const names = ['open', 'pending', 'accepted', 'declined'].map((s) => String(statusChip(s, { compact: true })));
@@ -81,9 +112,13 @@ test('status chip compact: each of the four statuses has an accessible name, and
 });
 
 test('schedule: co-volunteers listed and escaped', async () => {
+  const co = [{ name: '<b>x</b>', positionName: 'Drums' }, { name: 'Ana', positionName: 'Keys' }];
   const { root } = await setup(sched, {
-    'GET /api/me/schedule': data([item({ coVolunteers: [{ name: '<b>x</b>', positionName: 'Drums' }, { name: 'Ana', positionName: 'Keys' }] })]),
+    'GET /api/me/schedule': data([item({ coVolunteers: co }), item({ slotId: 2, status: 'accepted', date: '2026-11-15', coVolunteers: co })]),
   });
+  assert.match(root.innerHTML, /<span>With &lt;b&gt;x&lt;\/b&gt; and Ana<\/span>/);
+  assert.equal((root.innerHTML.match(/class="avatar /g) || []).length, 2, 'one small picture each');
+  await root.click('card', 2);
   assert.match(root.innerHTML, /Serving with: &lt;b&gt;x&lt;\/b&gt; \(Drums\), Ana \(Keys\)/);
   assert.doesNotMatch(root.innerHTML, /<b>x<\/b>/);
 });
@@ -264,4 +299,24 @@ test('a slow load finishing after navigation does not overwrite the new page', a
   release();
   await p;
   assert.equal(root.innerHTML, '');
+});
+
+test('schedule: after Yes, I can the hero stays on that time until the page loads again', async () => {
+  const items = [item(), item({ slotId: 2, date: '2026-11-15' })];
+  const routes = { 'GET /api/me/schedule': data(items) };
+  const { root } = await setup(sched, routes);
+  assert.match(root.innerHTML, /class="hero hero-next" aria-label="Next time you serve" data-slot="1"/);
+  routes['GET /api/me/schedule'] = data([item({ status: 'accepted' }), items[1]]);
+  await root.click('accept', 1);
+  assert.match(root.innerHTML, /hero-next is-celebrating" aria-label="Next time you serve" data-slot="1"/);
+  await root.click('card', 2); // any tap repaints
+  assert.match(root.innerHTML, /class="hero hero-next" aria-label="Next time you serve" data-slot="1"/, 'still the one just confirmed');
+  assert.match(root.innerHTML, /Also needs your answer[\s\S]*data-slot="2"/);
+});
+
+test('schedule: the hero is never repeated below, even when nextServing is its own copy (as the API sends it)', async () => {
+  const items = [item({ status: 'accepted' }), item({ slotId: 2, status: 'accepted', date: '2026-11-15' })];
+  const { root } = await setup(sched, { 'GET /api/me/schedule': { nextServing: { ...items[0] }, items } });
+  assert.equal((root.innerHTML.match(/data-slot="1"/g) || []).length, 1);
+  assert.match(root.innerHTML, /Coming up[\s\S]*data-slot="2"/);
 });

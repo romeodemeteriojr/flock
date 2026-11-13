@@ -414,11 +414,12 @@ test('UAT 9 to 11: volunteer sees My schedule, says yes and no, adds and removes
   loggedInAs(phone, 'Demo Alice');
   said(phone, /Coming up/);
   said(phone, /Please answer/);
-  assert.match(phone.html(), /data-banner>You&#39;re serving|data-banner>Next time you serve/, 'the banner tells the next time');
+  assert.match(phone.html(), /data-banner>\w{3} \d{1,2} \w{3} at <span class="num">\d{1,2}:\d{2} [ap]m<\/span>/, 'the hero says when');
   // The My schedule tab says how many asks are waiting.
   const badge = () => /<span class="nav-badge" aria-hidden="true">(\d)<\/span><span class="visually-hidden">, \d to answer/.exec(phone.html())?.[1] ?? null;
-  const pendingCards = () => (phone.html().match(/class="card serve-card is-pending"/g) || []).length;
-  const asksAtStart = pendingCards();
+  // Every ask still to answer, in the hero or below it: the ones with a Yes button.
+  const waiting = () => [...new Set([...phone.html().matchAll(/data-action="accept" data-id="(\d+)"/g)].map((m) => Number(m[1])))];
+  const asksAtStart = waiting().length;
   assert.ok(asksAtStart >= 2);
   assert.equal(badge(), String(asksAtStart));
   wellBuilt(phone, 'My schedule');
@@ -434,8 +435,8 @@ test('UAT 9 to 11: volunteer sees My schedule, says yes and no, adds and removes
   assert.deepEqual(await phone.api.get('/api/people').catch((e) => e.status), 403, 'and the server agrees');
 
   // Yes, I can: one request even on a double click.
-  const waiting = () => [...phone.html().matchAll(/<li class="card serve-card is-pending" data-slot="(\d+)">/g)].map((m) => Number(m[1]));
   const [first, second] = waiting();
+  assert.ok(phone.has(`section.hero[data-slot="${first}"]`), 'the earliest ask is the hero');
   assert.ok(first && second, 'two waiting requests');
   const buttonsBefore = phone.buttons().map((b) => b.label);
   assert.ok(buttonsBefore.includes('Yes, I can') && buttonsBefore.includes("I can't"));
@@ -467,6 +468,8 @@ test('UAT 9 to 11: volunteer sees My schedule, says yes and no, adds and removes
   assert.equal(badge(), asksAtStart > 2 ? String(asksAtStart - 2) : null, 'and down again (no badge at 0)');
 
   // Changing my mind about a confirmed one asks "Are you sure?" first.
+  // (a confirmed card below the hero keeps "I can't make it after all" under Details)
+  if (!phone.canClick('decline-ask', first)) await phone.click('card', first);
   await phone.click('decline-ask', first);
   said(phone, /Are you sure you can't serve on/);
   wellBuilt(phone, 'the are-you-sure box');
@@ -474,6 +477,7 @@ test('UAT 9 to 11: volunteer sees My schedule, says yes and no, adds and removes
   await phone.click('keep', first);
   notSaid(phone, /Are you sure/);
   assert.equal(phone.fetchLog.length, sends, 'No, keep me on sends nothing');
+  if (!phone.canClick('decline-ask', first)) await phone.click('card', first);
   await phone.click('decline-ask', first);
   await phone.click('decline-sure', first);
   assert.equal(phone.has(`[data-slot="${first}"]`), false);

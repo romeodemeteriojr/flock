@@ -100,21 +100,22 @@ test('no swipe: on wide screens, from the list or a button, while the list is sc
   off();
 });
 
-test('success moment: the card just confirmed shows the thank-you strip once', () => {
-  const item = { slotId: 7, status: 'confirmed', date: '2026-11-15', time: '10:00', positionName: 'Sound', teamName: 'Tech', serviceTitle: 'Sunday service' };
-  const view = { loading: false, today: '2026-11-13', data: { items: [item], nextServing: item }, openRosters: new Set() };
+test('success moment: the hero shows the thank-you for the one just confirmed, once', () => {
+  const item = { slotId: 7, status: 'accepted', date: '2026-11-15', time: '10:00', positionName: 'Sound', teamName: 'Tech', serviceTitle: 'Sunday service' };
+  const ask = { ...item, slotId: 8, status: 'pending', date: '2026-11-22' };
+  const view = { loading: false, today: '2026-11-13', data: { items: [item, ask], nextServing: item }, openRosters: new Set() };
   const moment = sched.render({ user: { id: 2, name: 'Mary', role: 'member' } }, { ...view, celebrate: 7 });
-  assert.match(moment, /class="card serve-card is-celebrating" data-slot="7"/);
-  assert.match(moment, /<p class="serve-done"><span class="done-burst"><span class="icon" data-icon="check" aria-hidden="true"><\/span><\/span> You're confirmed\. Thank you!<\/p>/);
-  assert.doesNotMatch(moment, /data-action="decline-ask"/, 'the strip takes the buttons\' place');
+  assert.match(moment, /class="hero hero-next is-celebrating" aria-label="Next time you serve" data-slot="7"/);
+  assert.match(moment, /<p class="hero-done"><span class="done-burst"><span class="icon" data-icon="check" aria-hidden="true"><\/span><\/span> You're confirmed\. Thank you!<\/p>/);
   const after = sched.render({ user: { id: 2, name: 'Mary', role: 'member' } }, view);
-  assert.doesNotMatch(after, /is-celebrating|serve-done/);
-  assert.match(textOf(after), /I can't make it after all/);
+  assert.doesNotMatch(after, /is-celebrating|hero-done/);
+  assert.match(after, /class="hero hero-next" aria-label="Next time you serve" data-slot="8"/, 'then the next ask takes the hero');
+  assert.match(textOf(after), /Coming up .*Sound · Tech, Sun 15 Nov .*Confirmed Details for Sun 15 Nov/, 'and the confirmed one moves down to Coming up');
 });
 
 test('My schedule marks the accepted card, buzzes once, and clears the moment after that paint', () => {
   const src = readFileSync(new URL('../web/views/my-schedule.js', import.meta.url), 'utf8');
-  assert.match(src, /if \(verb === 'accept'\) \{\s*view\.celebrate = id;\s*try \{ ctx\.win\?\.navigator\?\.vibrate\?\.\(12\); \}/);
+  assert.match(src, /if \(verb === 'accept'\) \{\s*view\.celebrate = id;\s*view\.keep = id;\s*try \{ ctx\.win\?\.navigator\?\.vibrate\?\.\(12\); \}/);
   assert.match(src, /await load\(\);\s*view\.celebrate = null;/);
 });
 

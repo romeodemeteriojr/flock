@@ -275,6 +275,9 @@ h2:focus-visible { outline: 3px solid var(--focus); }
   opacity: 0; transition: opacity var(--med) var(--ease);
 }
 .top.is-scrolled::before { opacity: 1; }
+/* At rest the bar is solid page colour, so a heading part-way under it never shows through. */
+.top { background: var(--bg); transition: background-color var(--med) var(--ease); }
+.top.is-scrolled { background: transparent; }
 .top:empty { display: none; }
 .topbar {
   max-width: var(--page-max); margin: 0 auto;
@@ -835,6 +838,45 @@ th, td { text-align: left; padding: var(--s-2) var(--s-3); border-bottom: 1px so
 .roster .chip { font-size: var(--fs-xs); white-space: normal; }
 .roster .team-title { margin: var(--s-3) 0 0; }
 .roster-row.is-mine { background: var(--accent-soft); color: var(--on-accent-soft); border-radius: var(--radius-sm); padding-inline: var(--s-2); }
+/* The hero carries the next thing and its answer buttons. */
+.hero-next .banner { margin-top: var(--s-3); }
+.hero-role { margin: var(--s-2) 0 0; font-size: var(--fs-lg); font-weight: 650; }
+.hero-sub { margin: 2px 0 0; font-size: var(--fs-sm); }
+.hero-with { display: flex; align-items: center; gap: var(--s-2); margin: var(--s-4) 0 0; font-size: var(--fs-sm); }
+.avatar-stack { display: inline-flex; flex: none; }
+.avatar-stack .avatar { box-shadow: 0 0 0 2px var(--hero-from); }
+.avatar-stack .avatar + .avatar { margin-left: -8px; }
+.hero-ask { margin: var(--s-5) 0 0; font-weight: 700; }
+.hero-actions { display: flex; gap: var(--s-3); margin-top: var(--s-3); }
+.hero-actions > .btn { flex: 1 1 0; white-space: nowrap; padding-inline: var(--s-3); }
+.btn-hero { border-color: transparent; color: var(--hero-to); background: var(--on-hero); box-shadow: var(--shadow-1); }
+.btn-hero:hover { color: var(--hero-to); background: var(--on-hero); border-color: transparent; filter: brightness(0.96); }
+.btn-hero-quiet { border-color: transparent; color: var(--on-hero); background: var(--hero-badge); box-shadow: none; }
+.btn-hero-quiet:hover { color: var(--on-hero); background: var(--hero-badge); border-color: transparent; filter: brightness(1.08); }
+.hero-status { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-3); margin-top: var(--s-5); }
+.hero-status .notice { flex: 1 1 100%; margin: 0; }
+.hero-chip { color: var(--hero-to); background: var(--on-hero); }
+.hero-link {
+  min-height: var(--control-size); margin-left: auto; padding: 0 var(--s-2);
+  border: 0; background: none; color: var(--on-hero);
+  font: inherit; font-size: var(--fs-sm); font-weight: 600; text-decoration: underline; text-underline-offset: 3px; cursor: pointer;
+}
+.hero .done-burst { color: var(--hero-to); background: var(--on-hero); }
+.hero-done { display: flex; align-items: center; gap: var(--s-3); margin: var(--s-5) 0 0; font-weight: 700; }
+/* The hero day's full roster sits in a card of its own, right under the hero. */
+.hero-roster { margin: calc(-1 * var(--s-3)) 0 var(--s-6); padding: var(--s-1) var(--s-4) var(--s-3); }
+.hero-roster .roster { margin-top: 0; }
+/* Compact rows for what comes after the hero. */
+.serve-card.is-compact { padding: var(--s-3) var(--s-4); }
+.serve-card.is-compact .serve-head { flex-wrap: nowrap; align-items: center; }
+.serve-card.is-compact .serve-title { font-size: var(--fs-md); margin: 0; }
+.serve-card.is-compact .serve-meta { color: var(--muted); font-size: var(--fs-sm); }
+.serve-card.is-compact .date-tile { width: 3.1rem; }
+.serve-card.is-compact .date-tile-day { font-size: 1.3rem; }
+.serve-card.is-compact .btn-row { margin-top: var(--s-3); }
+.serve-more { margin-top: var(--s-2); }
+.serve-details .roster { margin-top: var(--s-2); }
+.serve-details .btn-row, .serve-details .notice { margin-top: var(--s-3); }
 
 /* ---------- days off ---------- */
 .off-card { display: flex; align-items: center; gap: var(--s-3); flex-wrap: wrap; }

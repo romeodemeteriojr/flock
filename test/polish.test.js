@@ -601,7 +601,7 @@ test('gallery: loads only local assets and renders every component and page with
     'p-login', 'p-welcome', 'p-password', 'p-home', 'p-off', 'p-people', 'p-teams', 'p-services', 'p-schedule', 'p-gaps', 'p-404', 'live']) {
     assert.match(out, new RegExp(`id="g-${id}"`), id);
   }
-  for (const text of ["You&#39;re serving", 'Waiting for answer', 'Nobody yet', 'Copy all', 'Days I have off', 'Invite message']) assert.ok(out.includes(text), text);
+  for (const text of ['Can you serve?', 'Waiting for answer', 'Nobody yet', 'Copy all', 'Days I have off', 'Invite message']) assert.ok(out.includes(text), text);
   assert.doesNotMatch(out, /https?:|<script|style=/i);
   // Only made-up demo names.
   const d = demoData(TODAY);

@@ -1,7 +1,9 @@
-// My schedule (home page): the next time I serve, and my upcoming list, each
-// with the full roster of that day (opened with a show/hide button).
+// My schedule (home page). The hero carries the one thing that matters now:
+// the earliest ask to answer (with Yes / I can't right there), or else the
+// next time I serve. Below it, other asks, then what is coming up, one line
+// each, with the details (who else, the day's full roster) on tap.
 import { html } from '../lib/html.js';
-import { formatDate, formatTime, daysUntil, relativeDay, todayString } from '../lib/dates.js';
+import { formatDate, formatTime, relativeDay, todayString } from '../lib/dates.js';
 import { makeHost, isAlive } from '../lib/host.js';
 import { iconSlot } from '../lib/icons.js';
 import { toasts } from '../lib/toast.js';
@@ -11,22 +13,11 @@ import { showCard, dismissCard } from '../lib/push.js';
 import { turnOn } from './notifications.js';
 import { answerCount } from '../lib/counts.js';
 import { isIosSafari, laterChosen, chooseLater } from '../lib/install.js';
+import { avatar } from '../lib/avatar.js';
 
 export const title = 'My schedule';
 
 const NONE = "You're not scheduled yet. Your scheduler will let you know.";
-
-export function bannerText(next, today) {
-  if (!next) return NONE;
-  const n = daysUntil(next.date, today);
-  if (!(n >= 0)) return NONE;
-  if (n <= 7) {
-    const r = relativeDay(next.date, today);
-    const when = r[0].toLowerCase() + r.slice(1);
-    return `You're serving ${when} as ${next.positionName} at ${formatTime(next.time)}`;
-  }
-  return `Next time you serve: ${formatDate(next.date)}, ${next.positionName}`;
-}
 
 // '2026-11-08' -> { day: '8', month: 'Nov', dow: 'Sun' } for the date tile.
 function tile(date) {
@@ -54,42 +45,98 @@ function roster(item, view) {
   </div>`;
 }
 
-function card(item, view) {
-  const pending = item.status === 'pending';
-  const co = (item.coVolunteers ?? []).map((c) => `${c.name} (${c.positionName})`).join(', ');
-  const busy = view.busy ? 'disabled' : '';
-  let actions = '';
-  if (pending) {
-    actions = html`<div class="btn-row btn-row-split">
-      <button type="button" class="btn btn-primary" data-action="accept" data-id="${item.slotId}" ${busy}>Yes, I can</button>
-      <button type="button" class="btn btn-danger" data-action="decline" data-id="${item.slotId}" ${busy}>I can't</button>
-    </div>`;
-  } else if (view.celebrate === item.slotId) {
-    // Just said yes: a moment of thanks in place of the buttons, for this one paint.
-    actions = html`<p class="serve-done"><span class="done-burst">${iconSlot('check')}</span> You're confirmed. Thank you!</p>`;
-  } else if (view.confirmId === item.slotId) {
-    actions = html`<div class="notice notice-warn" role="alert">
+// Who else serves at that service, as the hero says it: "With Ana, Bo and Cy",
+// or "With Ana, Bo and 3 others". First names, unless two would be the same.
+export function withWords(coVolunteers = []) {
+  const full = coVolunteers.map((c) => String(c?.name ?? '').trim()).filter(Boolean);
+  const firsts = full.map((n) => n.split(/\s+/)[0]);
+  const first = new Set(firsts).size === firsts.length ? firsts : full;
+  if (!first.length) return '';
+  if (first.length === 1) return `With ${first[0]}`;
+  if (first.length <= 3) return `With ${first.slice(0, -1).join(', ')} and ${first.at(-1)}`;
+  return `With ${first[0]}, ${first[1]} and ${first.length - 2} others`;
+}
+
+/**
+ * The item the hero carries: the one just confirmed (kept there until the page
+ * next loads, so it does not jump away under a finger), else the earliest ask
+ * still to answer, else the next time serving, else nothing.
+ */
+export function heroItem(data, keep = null) {
+  const items = data?.items ?? [];
+  return items.find((i) => i.slotId === keep)
+    ?? items.find((i) => i.status === 'pending')
+    ?? data?.nextServing ?? items[0] ?? null;
+}
+
+const SURE = (item, busy) => html`<div class="notice notice-warn" role="alert">
       ${iconSlot('warning', 'notice-icon')}<div class="notice-body"><p>Are you sure you can't serve on ${formatDate(item.date)}?</p>
       <div class="btn-row">
         <button type="button" class="btn btn-danger" data-action="decline-sure" data-id="${item.slotId}" ${busy}>Yes, I can't make it</button>
         <button type="button" class="btn" data-action="keep" data-id="${item.slotId}" ${busy}>No, keep me on</button>
       </div></div>
     </div>`;
+
+// The next thing, big: when, what, who with, and the answer buttons right there.
+function hero(item, view, today) {
+  const pending = item.status === 'pending';
+  const busy = view.busy ? 'disabled' : '';
+  const rel = relativeDay(item.date, today);
+  const celebrating = view.celebrate === item.slotId && !pending;
+  const co = item.coVolunteers ?? [];
+  let answer;
+  if (pending) {
+    answer = html`<p class="hero-ask" id="hero-ask">Can you serve?</p>
+    <div class="hero-actions" role="group" aria-labelledby="hero-ask"><button type="button" class="btn btn-lg btn-hero" data-action="accept" data-id="${item.slotId}" ${busy}>${iconSlot('check')} Yes, I can</button><button type="button" class="btn btn-lg btn-hero-quiet" data-action="decline" data-id="${item.slotId}" ${busy}>I can't</button></div>`;
+  } else if (celebrating) {
+    answer = html`<p class="hero-done"><span class="done-burst">${iconSlot('check')}</span> You're confirmed. Thank you!</p>`;
+  } else if (view.confirmId === item.slotId) {
+    answer = html`<div class="hero-status">${SURE(item, busy)}</div>`;
+  } else {
+    answer = html`<div class="hero-status"><span class="chip hero-chip">${iconSlot('check', 'chip-icon')}Confirmed</span><button type="button" class="hero-link" data-action="decline-ask" data-id="${item.slotId}" ${busy}>I can't make it after all</button></div>`;
+  }
+  return html`<section class="hero hero-next${celebrating ? ' is-celebrating' : ''}" aria-label="Next time you serve" data-slot="${item.slotId}">
+    <span class="hero-eyebrow">${iconSlot(pending ? 'clock' : 'sparkle', 'icon-sm')} ${pending ? 'Please answer' : 'Next up'}${rel ? ` · ${rel}` : ''}</span>
+    <p class="banner" data-banner>${formatDate(item.date)} at <span class="num">${formatTime(item.time)}</span></p>
+    <p class="hero-role"><strong>${item.positionName}</strong> · ${item.teamName}</p>
+    ${item.serviceTitle ? html`<p class="hero-sub">${item.serviceTitle}</p>` : ''}
+    ${co.length ? html`<p class="hero-with"><span class="avatar-stack">${co.slice(0, 3).map((c) => avatar(c.name, 'sm'))}</span> <span>${withWords(co)}</span></p>` : ''}
+    ${answer}
+  </section>`;
+}
+
+// What comes after the hero: one line per time, the answer buttons for asks,
+// and Details (who else, the full roster, "I can't make it after all") on tap.
+function card(item, view) {
+  const pending = item.status === 'pending';
+  const co = (item.coVolunteers ?? []).map((c) => `${c.name} (${c.positionName})`).join(', ');
+  const busy = view.busy ? 'disabled' : '';
+  const open = !!view.openCards?.has(item.slotId);
+  let actions = '';
+  if (pending) {
+    actions = html`<div class="btn-row btn-row-split">
+      <button type="button" class="btn btn-primary" data-action="accept" data-id="${item.slotId}" ${busy}>Yes, I can</button>
+      <button type="button" class="btn btn-danger" data-action="decline" data-id="${item.slotId}" ${busy}>I can't</button>
+    </div>`;
+  } else if (view.confirmId === item.slotId) {
+    actions = SURE(item, busy);
   } else {
     actions = html`<div class="btn-row"><button type="button" class="btn btn-quiet" data-action="decline-ask" data-id="${item.slotId}" ${busy}>I can't make it after all</button></div>`;
   }
-  return html`<li class="card serve-card${pending ? ' is-pending' : ''}${view.celebrate === item.slotId && !pending ? ' is-celebrating' : ''}" data-slot="${item.slotId}">
+  const details = html`${co ? html`<p class="hint serve-with">${iconSlot('users', 'icon-sm')} Serving with: ${co}</p>` : ''}${roster(item, view)}`;
+  const hasDetails = !!co || !!view.data?.rosters?.[item.date]?.length || !pending;
+  return html`<li class="card serve-card is-compact${pending ? ' is-pending' : ''}" data-slot="${item.slotId}">
     <div class="serve-head">
       ${tile(item.date)}
       <div class="serve-text">
-        <h2 class="serve-title">${formatDate(item.date)} · <span class="num">${formatTime(item.time)}</span></h2>
-        <p class="serve-meta">${item.serviceTitle ? html`${item.serviceTitle}<br>` : ''}<strong>${item.positionName}</strong> · ${item.teamName}</p>
+        <h3 class="serve-title">${item.positionName} · ${item.teamName}<span class="visually-hidden">, ${formatDate(item.date)}</span></h3>
+        <p class="serve-meta">${item.serviceTitle ? html`${item.serviceTitle} · ` : ''}<span class="num">${formatTime(item.time)}</span></p>
       </div>
-      <span class="chip ${pending ? 'chip-wait' : 'chip-ok'}">${pending ? 'Please answer' : 'Confirmed'}</span>
+      ${pending ? '' : html`<span class="chip chip-ok">${iconSlot('check', 'chip-icon')}Confirmed</span>`}
     </div>
-    ${co ? html`<p class="hint serve-with">${iconSlot('users', 'icon-sm')} Serving with: ${co}</p>` : ''}
-    ${roster(item, view)}
-    ${actions}
+    ${pending ? actions : ''}
+    ${hasDetails ? disclosure({ action: 'card', id: item.slotId, open, label: html`Details<span class="visually-hidden"> for ${formatDate(item.date)}</span>`, cls: 'serve-more' }) : ''}
+    ${open ? html`<div class="serve-details" data-details="${item.slotId}">${details}${pending ? '' : actions}</div>` : ''}
   </li>`;
 }
 
@@ -122,7 +169,7 @@ function installCard(view) {
   </section>`;
 }
 
-// view: { loading, error, data, message, confirmId, busy, today, openRosters, showPush, showInstall, iosSteps }
+// view: { loading, error, data, message, confirmId, busy, today, openRosters, openCards, celebrate, keep, showPush, showInstall, iosSteps }
 export function render(state, view = { loading: true }) {
   const today = view.today ?? todayString();
   let body;
@@ -133,15 +180,21 @@ export function render(state, view = { loading: true }) {
     body = html`<div class="hero hero-loading">${skeleton('Loading…', 'rows', 2)}</div>${skeleton('Loading…', 'cards', 2)}`;
   } else {
     const items = view.data.items ?? [];
-    const next = view.data.nextServing ?? items[0] ?? null;
-    body = html`
-      <section class="hero${next ? '' : ' hero-quiet'}" aria-label="Next time you serve">
-        <span class="hero-eyebrow">${iconSlot(next ? 'sparkle' : 'calendar', 'icon-sm')} ${next ? 'Next up' : 'Nothing yet'}</span>
-        <p class="banner" data-banner>${bannerText(next, today)}</p>
+    const top = heroItem(view.data, view.celebrate ?? view.keep);
+    const rest = items.filter((i) => i.slotId !== top?.slotId); // never twice
+    const asks = rest.filter((i) => i.status === 'pending');
+    const later = rest.filter((i) => i.status !== 'pending');
+    const dayRoster = top ? roster(top, view) : '';
+    body = top
+      ? html`${hero(top, view, today)}
+        ${dayRoster ? html`<div class="card hero-roster">${dayRoster}</div>` : ''}
+        ${asks.length ? html`<h2 class="section-title">Also needs your answer</h2><ul class="cards">${asks.map((i) => card(i, view))}</ul>` : ''}
+        ${later.length ? html`<h2 class="section-title">Coming up</h2><ul class="cards">${later.map((i) => card(i, view))}</ul>` : ''}`
+      : html`<section class="hero hero-quiet" aria-label="Next time you serve">
+        <span class="hero-eyebrow">${iconSlot('calendar', 'icon-sm')} Nothing yet</span>
+        <p class="banner" data-banner>${NONE}</p>
       </section>
-      ${items.length
-        ? html`<h2 class="section-title">Coming up</h2><ul class="cards">${items.map((i) => card(i, view))}</ul>`
-        : emptyState('You have nothing coming up. When you are asked to serve, it will show here.', 'art-calendar')}`;
+      ${emptyState('You have nothing coming up. When you are asked to serve, it will show here.', 'art-calendar')}`;
   }
   return String(html`
     ${pageHead(title)}
@@ -154,7 +207,7 @@ export function render(state, view = { loading: true }) {
 
 export function mount(main, ctx) {
   const root = makeHost(main);
-  const view = { loading: true, today: ctx.today ?? todayString(), openRosters: new Set() };
+  const view = { loading: true, today: ctx.today ?? todayString(), openRosters: new Set(), openCards: new Set() };
   const paint = () => { if (isAlive(root, main)) root.innerHTML = render(ctx.state, view); };
 
   async function load() {
@@ -178,8 +231,10 @@ export function mount(main, ctx) {
     try {
       await ctx.api.post(`/api/me/slots/${id}/${verb}`);
       view.message = done;
+      view.keep = null;
       if (verb === 'accept') {
         view.celebrate = id;
+        view.keep = id;
         try { ctx.win?.navigator?.vibrate?.(12); } catch { /* no buzz: fine */ }
       }
     } catch (err) {
@@ -216,6 +271,7 @@ export function mount(main, ctx) {
     }
     if (action === 'retry') { view.loading = true; paint(); return load(); }
     if (action === 'roster') { if (!view.openRosters.delete(id)) view.openRosters.add(id); paint(); refocus(root, action, id); return; }
+    if (action === 'card') { if (!view.openCards.delete(id)) view.openCards.add(id); paint(); refocus(root, action, id); return; }
     if (action === 'accept') return answer(id, 'accept', 'Thank you! You are confirmed.');
     if (action === 'decline') return answer(id, 'decline', "Thanks for letting us know. Your scheduler will find someone else.");
     if (action === 'decline-ask') { view.confirmId = id; view.message = null; paint(); return; }
