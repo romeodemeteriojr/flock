@@ -100,6 +100,14 @@ export function slotsRepo({ db, run }) {
 
     remove: (slotId) => run(() => changed(db.prepare('DELETE FROM slots WHERE id = ?').run(slotId))),
 
+    /** Slots of these positions on services dated `from` or later, by date. */
+    listForPositionsFrom: (positionIds, from) => run(() => {
+      if (!positionIds.length) return [];
+      return db.prepare(
+        `${SLOT_SELECT} WHERE s.position_id IN (${positionIds.map(() => '?').join(',')}) AND sv.date >= ? ${BY_DATE}`,
+      ).all(...positionIds, from).map(toSlot);
+    }),
+
     countForPersonOnService: (personId, serviceId) => run(() => num(db.prepare(
       'SELECT COUNT(*) AS n FROM slots WHERE person_id = ? AND service_id = ?',
     ).get(personId, serviceId).n)),

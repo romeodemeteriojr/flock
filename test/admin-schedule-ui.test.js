@@ -166,14 +166,61 @@ test('services: repeat asks for weeks, posts, and reports skipped dates', async 
   assert.match(root.innerHTML, /Added 2 more services\. Skipped Sun 22 Nov/);
 });
 
-test('services: edit patches date, time and title', async () => {
+test('services: edit starts from the service, with its positions and counts', async () => {
+  assert.deepEqual(services.draftOf(SERVICES[1]), { date: '2026-11-08', time: '09:00', title: 'Sunday service',
+    pos: { 20: { on: true, count: '1' }, 10: { on: true, count: '2' }, 11: { on: true, count: '1' } } });
+  const { root } = await svcSetup();
+  root.click('edit', 1);
+  const form = root.innerHTML.split('data-form="edit"')[1];
+  assert.match(form, /id="edit-1-pos-10" name="pos-10" type="checkbox" checked>/);
+  assert.match(form, /id="edit-1-count-10" name="count-10" type="number" min="1" max="20" value="2"/);
+  assert.match(form, /id="edit-1-pos-20" name="pos-20" type="checkbox" checked>/);
+});
+
+test('services: edit patches the fields and the positions', async () => {
   const { api, root } = await svcSetup();
   root.click('edit', 2);
   assert.match(root.innerHTML, /data-form="edit"/);
-  root.submit('edit', { date: '2026-11-16', time: '18:00', title: 'Evening' }, 2);
+  root.submit('edit', { date: '2026-11-16', time: '18:00', title: 'Evening', 'pos-20': true, 'count-20': '1', 'pos-10': true, 'count-10': '2' }, 2);
   await flush();
-  assert.equal(api.calls[0], 'PATCH /api/services/2 {"date":"2026-11-16","time":"18:00","title":"Evening"}');
+  assert.equal(api.calls[0], 'PATCH /api/services/2 {"date":"2026-11-16","time":"18:00","title":"Evening","slots":[{"positionId":10,"count":2},{"positionId":20,"count":1}]}');
   assert.match(root.innerHTML, /Service saved/);
+});
+
+test('services: edit that takes people off names them, then sends confirm=1', async () => {
+  const people = [{ name: 'Ann Lee', positionName: 'Mixer', date: '2026-11-08' }];
+  const { api, root } = await svcSetup({
+    'PATCH /api/services/1': new ApiError({ status: 409, code: 'has_people', message: '1 person is scheduled', data: { count: 1, people } }),
+    'PATCH /api/services/1?confirm=1': {},
+  });
+  root.click('edit', 1);
+  const fields = { date: '2026-11-08', time: '09:00', title: 'Sunday service', 'pos-10': true, 'count-10': '2', 'pos-11': true, 'count-11': '1' };
+  root.submit('edit', fields, 1);
+  await flush();
+  assert.match(root.innerHTML, /<strong>Ann Lee \(Mixer, Sun 8 Nov\)<\/strong> is on a position you took off\. They will be taken off and told\./);
+  assert.ok(!root.innerHTML.includes('Save changes'));
+  root.click('edit-back', 1);
+  assert.match(root.innerHTML, /Save changes/);
+  assert.match(root.innerHTML.split('data-form="edit"')[1], /name="pos-20" type="checkbox">/, 'what they typed stays');
+  root.submit('edit', fields, 1);
+  await flush();
+  root.click('edit-yes', 1);
+  await flush();
+  assert.equal(api.calls.at(-3), 'PATCH /api/services/1?confirm=1 {"date":"2026-11-08","time":"09:00","title":"Sunday service","slots":[{"positionId":10,"count":2},{"positionId":11,"count":1}]}');
+  assert.match(root.innerHTML, /Service saved/);
+});
+
+test('services: edit shows why a count cannot go down', async () => {
+  const { root } = await svcSetup({ 'PATCH /api/services/1': conflict('spots_filled', '2 people are on Drums. Take someone off on the Schedule page first to go down to 1.') });
+  root.click('edit', 1);
+  root.submit('edit', { date: '2026-11-08', time: '09:00', title: 'Sunday service', 'pos-10': true, 'count-10': '1' }, 1);
+  await flush();
+  assert.match(root.innerHTML, /2 people are on Drums\. Take someone off on the Schedule page first to go down to 1\./);
+});
+
+test('repeatNotice mentions deleted positions left out', () => {
+  assert.equal(services.repeatNotice({ created: [{}], skipped: [], skippedPositions: ['Harp', 'Oboe'] }),
+    'Added 1 more service. Left out Harp, Oboe: deleted on the Teams page.');
 });
 
 test('services: delete warns how many people, needs confirm, and sends confirm=1', async () => {

@@ -132,11 +132,11 @@ test('repeat', async () => {
 });
 
 test('range query and ordering', async () => {
-  const { app, call } = await boot();
+  const { app, db, call } = await boot();
   try {
     await call('POST', '/api/services', 'admin', { date: '2026-01-11', time: '11:00', slots: [{ positionId: 3 }, { positionId: 1 }, { positionId: 2 }] });
     await call('POST', '/api/services', 'admin', { date: '2026-01-11', time: '09:00' });
-    await call('POST', '/api/services', 'admin', { date: '2026-01-04' });
+    db.prepare("INSERT INTO services (date, time, title) VALUES ('2026-01-04', '09:00', 'Sunday')").run(); // already past
     await call('POST', '/api/services', 'admin', { date: '2026-03-01' });
     await call('POST', '/api/services', 'admin', { date: '2026-03-02' });
     let r = await call('GET', '/api/services', 'admin');

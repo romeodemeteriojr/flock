@@ -4,6 +4,7 @@
 import { html } from '../lib/html.js';
 import { iconSlot } from '../lib/icons.js';
 import { toasts } from '../lib/toast.js';
+import { takenOffText, peopleFrom } from '../lib/taken-off.js';
 import { skeleton, emptyState, pageHead, disclosure, refocus } from '../lib/ui.js';
 
 export const title = 'Teams';
@@ -38,6 +39,15 @@ function nameForm(formName, id, label, value, button) {
   </form>`;
 }
 
+// The delete question, then (after a has_people answer) who will be taken off.
+function deleteText(what, name, panel) {
+  if (panel.people) {
+    const who = takenOffText(panel.people) || panel.message;
+    return html`<strong>${who}</strong> ${panel.people.length === 1 ? 'is' : 'are'} scheduled on upcoming services. They will be taken off and told. Delete the ${what} <strong>${name}</strong>?`;
+  }
+  return html`Delete the ${what} <strong>${name}</strong>? It is taken off upcoming services. Past services still show it.`;
+}
+
 function confirmBox(text, yesAction, id, yesLabel) {
   return html`<div class="confirm confirm-danger" role="alertdialog" aria-label="Confirm">
     <p>${text}</p>
@@ -54,7 +64,7 @@ function positionRow(pos, m) {
   let extra = '';
   if (panel?.kind === 'rename-position') extra = nameForm('rename-position', pos.id, 'Position name', pos.name, 'Save name');
   if (panel?.kind === 'delete-position') {
-    extra = confirmBox(html`Delete the position <strong>${pos.name}</strong>? This cannot be undone.`, 'delete-position-yes', pos.id, 'Yes, delete it');
+    extra = confirmBox(deleteText('position', pos.name, panel), 'delete-position-yes', pos.id, 'Yes, delete it');
   }
   const label = html`<span class="position-main"><strong class="position-name">${pos.name}</strong>
     <span class="chip ${n ? 'chip-info' : 'chip-plain'}" data-count>${iconSlot('users', 'chip-icon')}${countWords(n)}</span></span>`;
@@ -74,7 +84,7 @@ function teamCard(t, m) {
   let extra = '';
   if (mine?.kind === 'rename-team') extra = nameForm('rename-team', t.id, 'Team name', t.name, 'Save name');
   if (mine?.kind === 'delete-team') {
-    extra = confirmBox(html`Delete the team <strong>${t.name}</strong>? This cannot be undone. A team that still has positions in use cannot be deleted.`, 'delete-team-yes', t.id, 'Yes, delete it');
+    extra = confirmBox(deleteText('team', t.name, mine), 'delete-team-yes', t.id, 'Yes, delete it');
   }
   if (mine?.kind === 'add-position') extra = nameForm('add-position', t.id, 'New position name', '', 'Add position');
   const label = html`${t.name}<span class="disclosure-sub">${positionsWord(t.positions.length)}</span>`;
@@ -146,6 +156,24 @@ export function createScreen({ api, root }) {
     paint();
   };
 
+  // Delete; when people are on upcoming services, ask again naming them,
+  // and only then send the confirmation they saw.
+  async function remove(kind, id, path, done) {
+    if (!asking(kind, id)) return;
+    const panel = m.panel;
+    try {
+      await api.del(`${path}${panel.people ? '?confirm=1' : ''}`);
+    } catch (err) {
+      const people = peopleFrom(err);
+      if (!people) throw err;
+      m.panel = { ...panel, people, message: err.message };
+      return;
+    }
+    m.panel = null;
+    await reload();
+    m.notice = done;
+  }
+
   const actions = {
     cancel: () => { m.panel = null; paint(); },
     'toggle-team': (id) => { if (m.open.delete(id)) m.panel = null; else m.open.add(id); paint(); refocus(root, 'toggle-team', id); },
@@ -155,39 +183,33 @@ export function createScreen({ api, root }) {
     'delete-team': ask('delete-team'),
     'rename-position': ask('rename-position'),
     'delete-position': ask('delete-position'),
-    'delete-team-yes': (id) => attempt(async () => {
-      if (!asking('delete-team', id)) return;
-      await api.del(`/api/teams/${Number(id)}`);
-      m.panel = null;
-      await reload();
-      m.notice = 'Team deleted.';
-    }),
-    'delete-position-yes': (id) => attempt(async () => {
-      if (!asking('delete-position', id)) return;
-      await api.del(`/api/positions/${Number(id)}`);
-      m.panel = null;
-      await reload();
-      m.notice = 'Position deleted.';
-    }),
+    'delete-team-yes': (id) => attempt(() => remove('delete-team', id, `/api/teams/${Number(id)}`, 'Team deleted.')),
+    'delete-position-yes': (id) => attempt(() => remove('delete-position', id, `/api/positions/${Number(id)}`, 'Position deleted.')),
   };
 
   const cleanName = (form) => String(form.elements.name.value ?? '').trim();
+  // done: the notice, or a function of the server's answer.
   const nameSaver = (kind, path, method, done) => (form) => attempt(async () => {
     const id = Number(form.dataset.id);
     const name = cleanName(form);
     if (!name) { m.error = 'Please type a name.'; return; }
-    await method(path(id), { name });
+    const r = await method(path(id), { name });
     if (kind) m.panel = null;
     await reload();
-    m.notice = done;
+    m.notice = typeof done === 'function' ? done(r) : done;
   });
   const forms = {
     'add-team': nameSaver(false, () => '/api/teams', async (p, b) => {
       const team = await api.post(p, b);
       if (team?.id) m.open.add(team.id); // open, ready for its first position
-    }, 'Team added.'),
+      return team;
+    }, (t) => (t?.revived
+      ? `Brought back ${t.name}. Its old positions are not back; add them again to bring them back.`
+      : 'Team added.')),
     'rename-team': nameSaver(true, (id) => `/api/teams/${id}`, (p, b) => api.patch(p, b), 'Team renamed.'),
-    'add-position': nameSaver(true, (id) => `/api/teams/${id}/positions`, (p, b) => api.post(p, b), 'Position added.'),
+    'add-position': nameSaver(true, (id) => `/api/teams/${id}/positions`, (p, b) => api.post(p, b), (pos) => (pos?.revived
+      ? `Brought back ${pos.name} (${countWords(pos.qualifiedCount ?? 0)}).`
+      : 'Position added.')),
     'rename-position': nameSaver(true, (id) => `/api/positions/${id}`, (p, b) => api.patch(p, b), 'Position renamed.'),
   };
 

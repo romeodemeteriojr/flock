@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+Adds a database migration (`0004_retire.sql`); it runs by itself on start. Make a backup first.
+
+- **Delete a position or team that has been used.** Deleting now takes it off upcoming services (Flock names anyone down for it first, then tells them) and hides it everywhere; past services still show it. Adding the same name again brings it back with its history and who can do it. A team comes back without its positions.
+- **Edit a service's positions.** Services → Edit now has the positions and how many of each. A number goes down only by empty spots; taking off a position with people in it asks first and tells them. People who stay are told about a new date or time.
+- **Past services are locked.** Services before today can't be added, edited, deleted or answered. Repeat skips deleted positions and says so.
+- **`TZ` setting.** Set it to your church's time zone so "today" is right; Flock warns at start when it isn't set.
+
 ## 0.9.0
 
 No API or database changes: it deploys over 0.8.0 as it is.

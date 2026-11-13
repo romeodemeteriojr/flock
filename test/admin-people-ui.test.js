@@ -402,18 +402,50 @@ test('teams: a team opens on tap; a position shows Edit name and Delete once tap
   assert.deepEqual(shown(), ['add-position 7', 'rename-team 7', 'delete-team 7']);
 });
 
-test('teams: delete needs confirmation and shows the API 409', async () => {
-  const { api, root } = await teamSetup({ 'DELETE /api/teams/1': apiErr(409, 'Remove or reassign its positions first') });
+test('teams: delete needs confirmation, then names who will be taken off and confirms', async () => {
+  let n = 0;
+  const people = [{ name: 'Sam Ortiz', positionName: 'Drums', date: '2026-02-01' }, { name: 'Lee <b>', positionName: 'Keys', date: '2026-02-08' }];
+  const { api, root } = await teamSetup({
+    'DELETE /api/teams/1': () => (n++ ? {} : new ApiError({ status: 409, code: 'has_people', message: '2 people are scheduled in it on upcoming services', data: { count: 2, people } })),
+    'DELETE /api/teams/1?confirm=1': { ok: true },
+  });
   root.click('delete-team-yes', 1);
   await flush();
   assert.equal(api.calls.length, 0);
   root.click('delete-team', 1);
-  assert.match(root.innerHTML, /Yes, delete it/);
+  assert.match(root.innerHTML, /Delete the team <strong>Band<\/strong>\? It is taken off upcoming services\. Past services still show it\./);
   assert.equal(api.calls.length, 0);
   root.click('delete-team-yes', 1);
   await flush();
   assert.deepEqual(api.calls, ['DELETE /api/teams/1']);
-  assert.match(root.innerHTML, /Remove or reassign its positions first\./);
+  assert.match(root.innerHTML, /<strong>Sam Ortiz \(Drums, Sun 1 Feb\) and Lee &lt;b&gt; \(Keys, Sun 8 Feb\)<\/strong> are scheduled on upcoming services\. They will be taken off and told\./);
+  root.click('delete-team-yes', 1);
+  await flush();
+  assert.deepEqual(api.calls, ['DELETE /api/teams/1', 'DELETE /api/teams/1?confirm=1', 'GET /api/teams']);
+  assert.match(root.innerHTML, /Team deleted\./);
+});
+
+test('teams: other delete errors are shown as they are', async () => {
+  const { root } = await teamSetup({ 'DELETE /api/teams/1': apiErr(409, 'Something else') });
+  root.click('delete-team', 1);
+  root.click('delete-team-yes', 1);
+  await flush();
+  assert.match(root.innerHTML, /Something else\./);
+});
+
+test('teams: adding a deleted name says it was brought back', async () => {
+  const { root } = await teamSetup({
+    'POST /api/teams': { id: 9, name: 'Choir', revived: true },
+    'POST /api/teams/1/positions': { id: 12, name: 'Bass', revived: true, qualifiedCount: 2 },
+  });
+  root.submit('add-team', { name: 'Choir' });
+  await flush();
+  assert.match(root.innerHTML, /Brought back Choir\. Its old positions are not back; add them again to bring them back\./);
+  root.click('toggle-team', 1);
+  root.click('add-position', 1);
+  root.submit('add-position', { name: 'Bass' }, 1);
+  await flush();
+  assert.match(root.innerHTML, /Brought back Bass \(2 people can do this\)\./);
 });
 
 test('teams: position delete also needs confirmation', async () => {

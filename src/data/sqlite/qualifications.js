@@ -7,10 +7,14 @@ export function qualificationsRepo({ db, run }) {
       const unique = [...new Set(positionIds)].sort((a, b) => a - b);
       return tx(db, () => {
         if (!db.prepare('SELECT 1 FROM people WHERE id = ?').get(personId)) throw new Error('That person does not exist');
-        const find = db.prepare('SELECT 1 FROM positions WHERE id = ?');
+        const find = db.prepare('SELECT 1 FROM positions WHERE id = ? AND retired_at IS NULL');
         const missing = unique.filter((p) => !find.get(p));
         if (missing.length) throw new Error(`Unknown position id: ${missing.join(', ')}`);
-        db.prepare('DELETE FROM person_positions WHERE person_id = ?').run(personId);
+        // Only active positions are replaced: rows for retired positions stay, so
+        // a position brought back later still knows who can do it.
+        db.prepare(
+          'DELETE FROM person_positions WHERE person_id = ? AND position_id IN (SELECT id FROM positions WHERE retired_at IS NULL)',
+        ).run(personId);
         const ins = db.prepare('INSERT INTO person_positions (person_id, position_id) VALUES (?, ?)');
         for (const p of unique) ins.run(personId, p);
         return unique;

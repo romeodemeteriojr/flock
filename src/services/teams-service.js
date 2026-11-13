@@ -5,22 +5,19 @@
 // src/container.js.
 import { ConflictError, NotFoundError, ValidationError } from '../errors.js';
 import { v, parse } from '../validate.js';
+import { todayStr } from '../dates.js';
 
 export const TEAM_DUP = 'A team with that name already exists';
-export const TEAM_IN_USE = 'Remove or reassign its positions first';
 export const POS_DUP = 'That team already has a position with that name';
-export const POS_IN_USE = 'This position is used by a service slot, so it cannot be deleted';
 
 const isDup = (e) => e?.name === 'DuplicateError';
-const isInUse = (e) => e?.name === 'InUseError';
 
-// Data-layer DuplicateError / InUseError -> ConflictError with the old plain message.
-async function translating(fn, { dup, inUse } = {}) {
+// Data-layer DuplicateError -> ConflictError with its plain message.
+async function translating(fn, { dup } = {}) {
   try {
     return await fn();
   } catch (e) {
-    if (dup && isDup(e)) throw new ConflictError(dup);
-    if (inUse && isInUse(e)) throw new ConflictError(inUse);
+    if (dup && isDup(e)) throw new ConflictError(e.message || dup);
     throw e;
   }
 }
@@ -48,6 +45,8 @@ function check(schema, value, message) {
 
 const teamJson = (t) => ({ id: t.id, name: t.name, sort: t.sort });
 const posJson = (p) => ({ id: p.id, teamId: p.teamId, name: p.name, sort: p.sort });
+const holds = (s) => s.personId !== null && (s.status === 'pending' || s.status === 'accepted');
+const who = (s) => ({ name: s.personName, positionName: s.positionName, date: s.serviceDate });
 
 /**
  * @param {object} deps  Injected by src/container.js (nothing is imported or global).
@@ -57,7 +56,26 @@ const posJson = (p) => ({ id: p.id, teamId: p.teamId, name: p.name, sort: p.sort
  * @returns {object}
  */
 export function createTeamsService(deps) {
-  const { data, clock } = deps;
+  const { data, clock, notifications } = deps;
+  const today = () => todayStr(clock.now());
+
+  // Retiring positions takes them off every upcoming service (today included).
+  // Open and declined slots just go; when someone holds one, `confirm` must be
+  // true, otherwise ConflictError code has_people (details: count, people).
+  // Returns the slots that were held, for notifications after the transaction.
+  async function clearUpcoming(d, positionIds, confirm) {
+    const slots = await d.slots.listForPositionsFrom(positionIds, today());
+    const held = slots.filter(holds);
+    if (held.length && !confirm) {
+      const n = held.length;
+      throw new ConflictError(`${n} ${n === 1 ? 'person is' : 'people are'} scheduled in it on upcoming services`, {
+        code: 'has_people', details: { count: n, people: held.map(who) },
+      });
+    }
+    for (const s of slots) await d.slots.remove(s.id);
+    return held;
+  }
+  const tellRemoved = (actor, held) => { for (const s of held) notifications.removed(actor, s); };
   const audit = (d, actor, action, detail) => d.audit.log({ at: clock.now(), actorId: actor?.id ?? null, action, detail });
 
   async function mustTeam(d, id) {
@@ -96,6 +114,13 @@ export function createTeamsService(deps) {
     async createTeam(actor, input = {}) {
       const name = check(nameSchema, input.name, NAME_ERR);
       return data.tx(async (d) => {
+        const retired = await d.teams.findRetiredByName(name);
+        if (retired) {
+          // Bring the old team back (same id). Its positions stay deleted.
+          const team = await d.teams.revive(retired.id, { name });
+          await audit(d, actor, 'team.revive', `team ${team.id} "${team.name}"`);
+          return { ...teamJson(team), revived: true };
+        }
         const team = await translating(() => d.teams.create({ name }), { dup: TEAM_DUP });
         await audit(d, actor, 'team.create', `team ${team.id} "${team.name}"`);
         return teamJson(team);
@@ -123,13 +148,23 @@ export function createTeamsService(deps) {
       });
     },
 
-    async deleteTeam(actor, id) {
-      return data.tx(async (d) => {
+    /**
+     * Delete (retire) a team and its positions: hidden everywhere, taken off
+     * upcoming services, still shown on past ones. Needs `confirm` when people
+     * are scheduled (ConflictError code has_people); they are told.
+     */
+    async deleteTeam(actor, id, { confirm = false } = {}) {
+      let held = [];
+      const result = await data.tx(async (d) => {
         const team = await mustTeam(d, id);
-        await translating(() => d.teams.remove(id), { inUse: TEAM_IN_USE });
-        await audit(d, actor, 'team.delete', `team ${team.id} "${team.name}"`);
+        held = await clearUpcoming(d, team.positions.map((p) => p.id), confirm);
+        await d.teams.retire(team.id, clock.now().toISOString());
+        const off = held.length ? ` (${held.length} people taken off)` : '';
+        await audit(d, actor, 'team.delete', `team ${team.id} "${team.name}"${off}`);
         return { ok: true };
       });
+      tellRemoved(actor, held);
+      return result;
     },
 
     /** Raw input; checks: unknown team (404), bad name (400), taken name (409). */
@@ -137,6 +172,14 @@ export function createTeamsService(deps) {
       return data.tx(async (d) => {
         const team = await mustTeam(d, teamId);
         const name = check(nameSchema, input.name, NAME_ERR);
+        const retired = await d.positions.findRetiredByName(team.id, name);
+        if (retired) {
+          // Bring the old position back (same id, history and qualifications).
+          const pos = await d.positions.revive(retired.id, { name });
+          const qualified = (await d.qualifications.listPeople(pos.id)).length;
+          await audit(d, actor, 'position.revive', `position ${pos.id} "${pos.name}" in team ${team.id}`);
+          return { ...posJson(pos), revived: true, qualifiedCount: qualified };
+        }
         const pos = await translating(() => d.positions.create(team.id, { name }), { dup: POS_DUP });
         await audit(d, actor, 'position.create', `position ${pos.id} "${pos.name}" in team ${team.id}`);
         return posJson(pos);
@@ -164,13 +207,23 @@ export function createTeamsService(deps) {
       });
     },
 
-    async deletePosition(actor, id) {
-      return data.tx(async (d) => {
+    /**
+     * Delete (retire) a position: hidden everywhere, taken off upcoming services,
+     * still shown on past ones. Needs `confirm` when people are scheduled in it
+     * (ConflictError code has_people); they are told.
+     */
+    async deletePosition(actor, id, { confirm = false } = {}) {
+      let held = [];
+      const result = await data.tx(async (d) => {
         const pos = await mustPosition(d, id);
-        await translating(() => d.positions.remove(id), { inUse: POS_IN_USE });
-        await audit(d, actor, 'position.delete', `position ${pos.id} "${pos.name}"`);
+        held = await clearUpcoming(d, [pos.id], confirm);
+        await d.positions.retire(pos.id, clock.now().toISOString());
+        const off = held.length ? ` (${held.length} people taken off)` : '';
+        await audit(d, actor, 'position.delete', `position ${pos.id} "${pos.name}"${off}`);
         return { ok: true };
       });
+      tellRemoved(actor, held);
+      return result;
     },
 
     /**

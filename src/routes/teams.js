@@ -2,10 +2,24 @@
 // Thin on purpose: the service checks the raw values itself, inside its
 // transaction, so the order of checks is exactly the old one (not found first,
 // then the name, a duplicate name, then sort).
-import { NotFoundError } from '../errors.js';
+import { NotFoundError, ConflictError } from '../errors.js';
 
 // Ids in the path: anything that is not digits is simply "not found" (as before).
 const toId = (raw) => (/^\d+$/.test(String(raw)) ? Number(raw) : null);
+
+const confirmed = (query) => query.confirm === '1';
+
+// has_people -> 409 with who would be taken off, so the page can ask first.
+async function withPeople(fn) {
+  try {
+    return { status: 200, json: await fn() };
+  } catch (e) {
+    if (e instanceof ConflictError && e.code === 'has_people') {
+      return { status: 409, json: { error: e.message, code: 'has_people', count: e.details.count, people: e.details.people } };
+    }
+    throw e;
+  }
+}
 
 function bodyOf(body) {
   return body !== null && typeof body === 'object' ? body : {};
@@ -37,7 +51,9 @@ export function register(router, ctx) {
     return ok(await teams().updateTeam(user, teamId(params), { name, sort }));
   }, { auth: 'admin' });
 
-  router.add('DELETE', '/api/teams/:id', async ({ params, user }) => ok(await teams().deleteTeam(user, teamId(params))), { auth: 'admin' });
+  router.add('DELETE', '/api/teams/:id', async ({ params, query, user }) => (
+    withPeople(() => teams().deleteTeam(user, teamId(params), { confirm: confirmed(query) }))
+  ), { auth: 'admin' });
 
   router.add('POST', '/api/teams/:id/positions', async ({ params, body, user }) => {
     return ok(await teams().createPosition(user, teamId(params), { name: bodyOf(body).name }), 201);
@@ -48,7 +64,9 @@ export function register(router, ctx) {
     return ok(await teams().updatePosition(user, positionId(params), { name, sort, teamId: newTeamId }));
   }, { auth: 'admin' });
 
-  router.add('DELETE', '/api/positions/:id', async ({ params, user }) => ok(await teams().deletePosition(user, positionId(params))), { auth: 'admin' });
+  router.add('DELETE', '/api/positions/:id', async ({ params, query, user }) => (
+    withPeople(() => teams().deletePosition(user, positionId(params), { confirm: confirmed(query) }))
+  ), { auth: 'admin' });
 
   router.add('PUT', '/api/people/:id/positions', async ({ params, body, user }) => {
     const personId = toId(params.id);

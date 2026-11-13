@@ -41,7 +41,7 @@ const CORE = CORE_DEPS;
 export const SERVICE_SPECS = Object.freeze({
   auth: { factory: createAuthService, needs: [...CORE, 'sso'] },
   people: { factory: createPeopleService, needs: [...CORE, 'auth'] },
-  teams: { factory: createTeamsService, needs: [...CORE] },
+  teams: { factory: createTeamsService, needs: [...CORE, 'notifications'] },
   calendar: { factory: createCalendarService, needs: [...CORE, 'teams', 'notifications'] },
   blockouts: { factory: createBlockoutsService, needs: [...CORE] },
   assignments: { factory: createAssignmentsService, needs: [...CORE, 'people', 'teams', 'calendar', 'blockouts', 'notifications'] },

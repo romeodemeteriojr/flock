@@ -123,10 +123,10 @@ test('calendar: repeat rolls back every copy on failure', async () => {
 });
 
 test('calendar: listServices defaults from the clock, inclusive ends, range limits', async () => {
-  const { svc, admin, pos } = await setup();
+  const { svc, admin, pos, data } = await setup();
   await svc.createService(admin, { date: '2026-01-11', time: '11:00', slots: [{ positionId: pos.sound }, { positionId: pos.drums }, { positionId: pos.piano }] });
   await svc.createService(admin, { date: '2026-01-11', time: '09:00' });
-  await svc.createService(admin, { date: '2026-01-04' });
+  await data.services.create({ date: '2026-01-04', title: 'Sunday' }); // already past: seeded directly
   await svc.createService(admin, { date: '2026-01-05' });
   await svc.createService(admin, { date: '2026-03-02' }); // today + 56 days
   await svc.createService(admin, { date: '2026-03-03' });
@@ -147,7 +147,7 @@ test('calendar: listServices "today" is the local date of the clock', async () =
   const { data, admin } = await setup();
   const clock = fixedClock(new Date(2026, 11, 31, 23, 59));
   const svc = createCalendarService({ data, clock, notifications: recordingNotifications() });
-  await svc.createService(admin, { date: '2026-12-30' });
+  await data.services.create({ date: '2026-12-30', title: 'Sunday' }); // already past: seeded directly
   await svc.createService(admin, { date: '2026-12-31' });
   assert.deepEqual((await svc.listServices()).map((s) => s.date), ['2026-12-31']);
   clock.advance(60_000);
@@ -257,4 +257,108 @@ test('calendar: removeSlot rolls back on failure', async () => {
   const svc = createCalendarService({ data: failingAudit(data), clock: fixedClock(new Date(NOW)), notifications: recordingNotifications() });
   await assert.rejects(svc.removeSlot(admin, a.slots[0].id), /audit is down/);
   assert.equal(count('slots'), 1);
+});
+
+// ---------------------------------------------------------------- editing a service's positions
+
+async function editSetup() {
+  const base = await setup();
+  const notifications = recordingNotifications();
+  const svc = createCalendarService({ data: base.data, clock: base.clock, notifications });
+  const sam = await base.data.people.create({ name: 'Sam Singer', email: 'sam@example.com', passwordHash: 'x', createdAt: NOW });
+  const hold = (slot, person, status = 'accepted') => base.data.slots.assign(slot.id, { personId: person.id, status, assignedAt: NOW });
+  const shape = async (id) => (await base.data.slots.listForService(id)).map((s) => `${s.positionName}:${s.personName ?? '-'}:${s.status}`);
+  return { ...base, svc, notifications, sam, hold, shape };
+}
+
+test('calendar: updateService slots raises, adds and lowers using empty spots first', async () => {
+  const { svc, admin, pat, sam, pos, hold, shape, data, notifications } = await editSetup();
+  const s = await svc.createService(admin, { date: '2026-02-01', slots: [{ positionId: pos.drums, count: 3 }] });
+  await hold(s.slots[0], pat);
+  await hold(s.slots[1], sam, 'declined');
+  await svc.updateService(admin, s.id, { slots: [{ positionId: pos.drums, count: 2 }, { positionId: pos.sound, count: 2 }] });
+  assert.deepEqual(await shape(s.id), ['Drums:Pat Person:accepted', 'Drums:Sam Singer:declined', 'Sound:-:open', 'Sound:-:open'], 'the open spot went first');
+  await svc.updateService(admin, s.id, { slots: [{ positionId: pos.drums, count: 1 }, { positionId: pos.sound, count: 2 }] });
+  assert.deepEqual(await shape(s.id), ['Drums:Pat Person:accepted', 'Sound:-:open', 'Sound:-:open'], 'then the declined one');
+  assert.deepEqual(notifications.events.filter((e) => e[0] !== 'moved'), [], 'nobody taken off');
+  const [entry] = await data.audit.list(1);
+  assert.equal(entry.action, 'service.update');
+  assert.match(entry.detail, /slots \+0 -1/);
+});
+
+test('calendar: updateService refuses to go below the people holding spots', async () => {
+  const { svc, admin, pat, sam, pos, hold, shape } = await editSetup();
+  const s = await svc.createService(admin, { date: '2026-02-01', slots: [{ positionId: pos.drums, count: 2 }] });
+  await hold(s.slots[0], pat);
+  await hold(s.slots[1], sam, 'pending');
+  await assert.rejects(svc.updateService(admin, s.id, { title: 'New', slots: [{ positionId: pos.drums, count: 1 }] }),
+    (e) => e instanceof ConflictError && e.code === 'spots_filled' && /2 people are on Drums/.test(e.message));
+  assert.deepEqual(await shape(s.id), ['Drums:Pat Person:accepted', 'Drums:Sam Singer:pending']);
+  assert.equal((await svc.getService(s.id)).title, 'Sunday service', 'nothing changed');
+});
+
+test('calendar: updateService dropping a position with people needs confirm; moved only to those who stay', async () => {
+  const { svc, admin, pat, sam, pos, hold, shape, notifications } = await editSetup();
+  const s = await svc.createService(admin, { date: '2026-02-01', slots: [{ positionId: pos.drums }, { positionId: pos.sound }] });
+  await hold(s.slots[0], pat);
+  await hold(s.slots[1], sam, 'pending');
+  const keep = [{ positionId: pos.drums, count: 1 }];
+  await assert.rejects(svc.updateService(admin, s.id, { date: '2026-02-08', slots: keep }),
+    (e) => e.code === 'has_people' && e.details.count === 1 && e.details.people[0].name === 'Sam Singer');
+  assert.equal((await svc.getService(s.id)).date, '2026-02-01');
+  await svc.updateService(admin, s.id, { date: '2026-02-08', slots: keep }, { confirm: true });
+  assert.deepEqual(await shape(s.id), ['Drums:Pat Person:accepted']);
+  assert.deepEqual(notifications.events.map((e) => e[0]), ['removed', 'moved']);
+  assert.equal(notifications.events[0][2].personName, 'Sam Singer');
+  assert.deepEqual(notifications.events[1][4].map((x) => x.personName), ['Pat Person']);
+});
+
+test('calendar: updateService slots are validated: deleted positions, duplicates, counts', async () => {
+  const { svc, admin, pos, data } = await editSetup();
+  const s = await svc.createService(admin, { date: '2026-02-01' });
+  await rejectsWith(svc.updateService(admin, s.id, { slots: [{ positionId: pos.drums }, { positionId: pos.drums }] }), ValidationError, 'Each position can be listed only once');
+  await rejectsWith(svc.updateService(admin, s.id, { slots: [{ positionId: pos.drums, count: 0 }] }), ValidationError);
+  await data.positions.retire(pos.piano, NOW);
+  await assert.rejects(svc.updateService(admin, s.id, { slots: [{ positionId: pos.piano }] }), ValidationError);
+  await svc.updateService(admin, s.id, { slots: [] });
+  assert.deepEqual((await svc.getService(s.id)).slots, []);
+});
+
+test('calendar: past services are locked; today is not; no new dates in the past', async () => {
+  const { svc, admin, pos, data, clock } = await editSetup();
+  clock.set('2026-01-03T12:00:00');
+  const old = await svc.createService(admin, { date: '2026-01-04', slots: [{ positionId: pos.drums }] });
+  clock.set(NOW);
+  const today = await svc.createService(admin, { date: '2026-01-05', slots: [{ positionId: pos.drums }] });
+  const past = (e) => e instanceof ConflictError && e.code === 'past';
+  await assert.rejects(svc.updateService(admin, old.id, { title: 'X' }), past);
+  await assert.rejects(svc.deleteService(admin, old.id), past);
+  await assert.rejects(svc.addSlots(admin, old.id, { positionId: pos.drums }), past);
+  await assert.rejects(svc.removeSlot(admin, old.slots[0].id), past);
+  assert.equal((await svc.updateService(admin, today.id, { title: 'Today' })).title, 'Today');
+  await rejectsWith(svc.updateService(admin, today.id, { date: '2026-01-04' }), ValidationError, "A service can't be set in the past");
+  await rejectsWith(svc.createService(admin, { date: '2026-01-04', time: '18:00' }), ValidationError, "A service can't be set in the past");
+  assert.equal((await data.slots.listForService(old.id)).length, 1);
+});
+
+test('calendar: repeat skips deleted positions and past dates', async () => {
+  const { svc, admin, pos, data, clock } = await editSetup();
+  clock.set('2025-12-20T12:00:00');
+  const src = await svc.createService(admin, { date: '2025-12-21', slots: [{ positionId: pos.drums }, { positionId: pos.piano }] });
+  clock.set(NOW);
+  await data.positions.retire(pos.piano, NOW);
+  const r = await svc.repeat(admin, { fromServiceId: src.id, weeks: 3 });
+  assert.deepEqual(r.skippedPositions, ['Piano']);
+  assert.deepEqual(r.skipped, ['2025-12-28', '2026-01-04']);
+  assert.deepEqual(r.created.map((s) => [s.date, s.slots.map((x) => x.positionName)]), [['2026-01-11', ['Drums']]]);
+});
+
+test('calendar: removeSlot asks only when someone holds the spot', async () => {
+  const { svc, admin, pat, sam, pos, hold } = await editSetup();
+  const s = await svc.createService(admin, { date: '2026-02-01', slots: [{ positionId: pos.drums, count: 2 }] });
+  await hold(s.slots[0], pat);
+  await hold(s.slots[1], sam, 'declined');
+  await svc.removeSlot(admin, s.slots[1].id);
+  await assert.rejects(svc.removeSlot(admin, s.slots[0].id), (e) => e instanceof ConflictError);
+  await svc.removeSlot(admin, s.slots[0].id, { confirm: true });
 });
