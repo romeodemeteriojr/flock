@@ -11,6 +11,10 @@ Flock is one small program and one database file. It uses no outside services
 and sends no emails or texts; if the church turns them on, it can send
 notifications to the phones of people who ask for them.
 
+<p align="center"><img src="docs/images/my-schedule.png" width="230" alt="My schedule: the next ask, with Yes and I can't"> <img src="docs/images/schedule.png" width="230" alt="Schedule: the next 8 weeks and who is confirmed"> <img src="docs/images/gaps.png" width="230" alt="Gaps: what still needs someone"></p>
+
+*Flock on a phone, with made-up people: a volunteer's schedule, the scheduler's plan, and the gaps still to fill.*
+
 ## Quick start
 
 You need [Node.js](https://nodejs.org) 22.16 or newer. In the Flock folder:

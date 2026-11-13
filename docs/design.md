@@ -14,6 +14,10 @@ Vietnamese, and Pacific names with macrons or an ʻokina. Names in other
 alphabets (Greek or Cyrillic, say) are shown in the phone's own font. No fonts
 or other assets are fetched from outside services.
 
+Light and dark, following the device:
+
+<p align="center"><img src="images/my-schedule.png" width="240" alt="My schedule, light"> <img src="images/my-schedule-dark.png" width="240" alt="My schedule, dark"></p>
+
 Every icon is drawn on the same grid, and each page has its own picture in the
 menu. Status is never shown by colour alone: every coloured tag also has a
 symbol and a word. Touch targets are at least 48px.
@@ -40,6 +44,8 @@ first.
 - Pages fade in, things you press give a little, and saying yes is thanked
   with a check.
 
+<p align="center"><img src="images/schedule.png" width="240" alt="Schedule on a phone, with the tab bar at the bottom"> <img src="images/schedule-dark.png" width="240" alt="Schedule on a phone, dark"></p>
+
 ## The installed app
 
 Flock can be added to the Home Screen (My schedule offers it, or tap your
@@ -64,6 +70,8 @@ and Schedule show what you picked in a pane beside the list instead of a sheet
 over it, and My schedule puts what is coming up beside the next thing.
 Tablets (720 to 1023 pixels) keep the phone layout with the menu along the
 top.
+
+<img src="images/desktop-people.png" width="720" alt="People on a computer">
 
 ## Changing it
 

@@ -15,6 +15,8 @@ which also logs them in. The link works once, for 7 days.
 Someone without an email (for example a child or a person who does not use
 email) can still be added and scheduled; they just cannot log in.
 
+<p align="center"><img src="images/people.png" width="240" alt="People: everyone, with who has joined"></p>
+
 Tap a person to open their sheet with everything you can do for them:
 
 - **Positions**: mark which positions they can do.
@@ -43,6 +45,9 @@ joined person's email, choose **Reset login** first, then edit it. Nobody,
 including the scheduler, can read another person's password.
 
 ## Logging in
+
+<p align="center"><img src="images/login.png" width="240" alt="The Flock log in page"></p>
+
 
 Volunteers open the Flock address in the browser on their phone, type their
 email and password, and they are in. They stay logged in on that phone until
@@ -87,6 +92,9 @@ on a device, turning them off, Reset login and deactivating stop them.
 
 Everyone sees:
 
+<p align="center"><img src="images/my-schedule.png" width="240" alt="My schedule"> <img src="images/days-off.png" width="240" alt="Days I can't serve"></p>
+
+
 - **My schedule** leads with what needs you now: the earliest ask still
   waiting for your answer, with **Yes, I can** and **I can't** right there, or
   else the next time you serve and who serves with you. Below it, **Also needs
@@ -103,6 +111,9 @@ Everyone sees:
   most every 2 weeks.
 
 Schedulers also see:
+
+<p align="center"><img src="images/schedule.png" width="240" alt="Schedule"> <img src="images/gaps.png" width="240" alt="Gaps"></p>
+
 
 - **People**: see [Adding people](#adding-people).
 - **Teams**: create teams and the positions in each team (for example Band:
@@ -135,3 +146,5 @@ Schedulers also see:
 
 On a computer (1024 pixels wide and up), People, Gaps and Schedule open what
 you pick in a pane beside the list.
+
+<img src="images/desktop-schedule.png" width="720" alt="Schedule on a computer, with the menu on the left and a pane on the right">
