@@ -64,6 +64,9 @@ function card(item, view) {
       <button type="button" class="btn btn-primary" data-action="accept" data-id="${item.slotId}" ${busy}>Yes, I can</button>
       <button type="button" class="btn btn-danger" data-action="decline" data-id="${item.slotId}" ${busy}>I can't</button>
     </div>`;
+  } else if (view.celebrate === item.slotId) {
+    // Just said yes: a moment of thanks in place of the buttons, for this one paint.
+    actions = html`<p class="serve-done"><span class="done-burst">${iconSlot('check')}</span> You're confirmed. Thank you!</p>`;
   } else if (view.confirmId === item.slotId) {
     actions = html`<div class="notice notice-warn" role="alert">
       ${iconSlot('warning', 'notice-icon')}<div class="notice-body"><p>Are you sure you can't serve on ${formatDate(item.date)}?</p>
@@ -75,7 +78,7 @@ function card(item, view) {
   } else {
     actions = html`<div class="btn-row"><button type="button" class="btn btn-quiet" data-action="decline-ask" data-id="${item.slotId}" ${busy}>I can't make it after all</button></div>`;
   }
-  return html`<li class="card serve-card${pending ? ' is-pending' : ''}" data-slot="${item.slotId}">
+  return html`<li class="card serve-card${pending ? ' is-pending' : ''}${view.celebrate === item.slotId && !pending ? ' is-celebrating' : ''}" data-slot="${item.slotId}">
     <div class="serve-head">
       ${tile(item.date)}
       <div class="serve-text">
@@ -175,11 +178,16 @@ export function mount(main, ctx) {
     try {
       await ctx.api.post(`/api/me/slots/${id}/${verb}`);
       view.message = done;
+      if (verb === 'accept') {
+        view.celebrate = id;
+        try { ctx.win?.navigator?.vibrate?.(12); } catch { /* no buzz: fine */ }
+      }
     } catch (err) {
       view.problem = err?.message || 'Something went wrong. Please try again.';
     }
     view.busy = false;
     await load();
+    view.celebrate = null; // the next paint shows the usual confirmed card
   }
 
   root.addEventListener('click', (e) => {

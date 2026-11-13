@@ -6,6 +6,7 @@ import { html } from '../lib/html.js';
 import { formatDate, formatTime, todayString } from '../lib/dates.js';
 import { createSlotPanel, copyText } from '../lib/slotpanel.js';
 import { createSheet } from '../lib/sheet.js';
+import { swipeToDismiss } from '../lib/swipe.js';
 import { flashCopied } from '../lib/copyflash.js';
 import { canShare, share } from '../lib/share.js';
 import { iconSlot } from '../lib/icons.js';
@@ -175,6 +176,8 @@ export function createScreen({ api, root, today = todayString(), win = globalThi
     sheet.before();
     root.innerHTML = renderScreen(m, panel.render());
     sheet.update();
+    const open = root.querySelector?.('[data-slot-panel]');
+    if (open) swipeToDismiss(open, { win, onDismiss: () => panel.close() });
   };
   const reload = async () => {
     const r = await api.get('/api/admin/gaps');

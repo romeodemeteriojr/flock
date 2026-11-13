@@ -14,6 +14,7 @@ import { navRoutes, pathOf, isAdmin } from '../routes.js';
 import { iconSlot } from '../lib/icons.js';
 import { avatar } from '../lib/avatar.js';
 import { badgeText } from '../lib/counts.js';
+import { swipeToDismiss } from '../lib/swipe.js';
 
 // One picture per page, each showing the thing itself: a crossed-out calendar
 // for days off, a calendar for the schedule, a missing puzzle piece for gaps.
@@ -94,6 +95,7 @@ export function mount(root, ctx) {
       if (el.dataset?.action === 'nav-more') setOpen(!nav.classList.contains('is-open'));
       else setOpen(false); // a link or the scrim
     });
+    swipeToDismiss(nav.querySelector('.nav-sub-wrap'), { win: ctx.win, onDismiss: () => { setOpen(false); more.focus?.(); } });
     nav.addEventListener('keydown', (e) => {
       if ((e.key === 'Escape' || e.key === 'Esc') && nav.classList.contains('is-open')) {
         setOpen(false);

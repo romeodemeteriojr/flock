@@ -7,6 +7,7 @@ import { html } from '../lib/html.js';
 import { formatDate, formatTime, todayString } from '../lib/dates.js';
 import { createSlotPanel, statusChip, statusOf, STATUS } from '../lib/slotpanel.js';
 import { createSheet } from '../lib/sheet.js';
+import { swipeToDismiss } from '../lib/swipe.js';
 import { iconSlot } from '../lib/icons.js';
 import { toasts } from '../lib/toast.js';
 import { skeleton, emptyState, pageHead, disclosure, refocus } from '../lib/ui.js';
@@ -177,7 +178,7 @@ export function renderScreen(m, panelHtml = '') {
 // ---------- screen controller ----------
 
 /** onChange(): something was assigned, removed or asked (the tab badges may be different now). */
-export function createScreen({ api, root, today = todayString(), onChange = () => {} }) {
+export function createScreen({ api, root, today = todayString(), onChange = () => {}, win = globalThis }) {
   const m = {
     services: [], teams: [], loading: true, error: '', notice: '', today, from: today, to: addDays(today, WEEKS * 7 - 1),
     open: new Set(), // the phone cards that are open
@@ -187,6 +188,8 @@ export function createScreen({ api, root, today = todayString(), onChange = () =
     sheet.before();
     root.innerHTML = renderScreen(m, panel.render());
     sheet.update();
+    const open = root.querySelector?.('[data-slot-panel]');
+    if (open) swipeToDismiss(open, { win, onDismiss: () => panel.close() });
   };
   const reload = async () => {
     const [t, s] = await Promise.all([api.get('/api/teams'), api.get(`/api/services?from=${m.from}&to=${m.to}`)]);
@@ -302,5 +305,5 @@ export function render(state) { // eslint-disable-line no-unused-vars
 export function mount(root, ctx) {
   const screen = root?.querySelector?.('[data-screen]');
   if (!screen) return undefined;
-  return createScreen({ api: ctx.api, root: screen, today: ctx.today ?? todayString(), onChange: () => ctx.refreshCounts?.().catch(() => {}) }).ready;
+  return createScreen({ api: ctx.api, root: screen, today: ctx.today ?? todayString(), onChange: () => ctx.refreshCounts?.().catch(() => {}), win: ctx.win ?? globalThis }).ready;
 }

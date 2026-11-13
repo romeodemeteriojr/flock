@@ -1,7 +1,7 @@
 // Starts the app in the browser: checks who is logged in, then shows the page
 // for the current #hash. Re-renders when the hash changes.
 import { createApi } from './api.js';
-import { resolve } from './routes.js';
+import { resolve, pathOf } from './routes.js';
 import * as nav from './views/nav.js';
 import * as account from './views/account.js';
 import * as offline from './views/offline.js';
@@ -9,6 +9,7 @@ import * as installSteps from './views/install-steps.js';
 import { createInstall, canInstall, isIosSafari } from './lib/install.js';
 import { createSheet } from './lib/sheet.js';
 import { watchScroll } from './lib/topbar.js';
+import { swipeToDismiss } from './lib/swipe.js';
 import { TOAST_REGION, createToaster } from './lib/toast.js';
 import { watchIcons } from './lib/icons.js';
 import { skeleton } from './lib/ui.js';
@@ -40,6 +41,9 @@ export function createApp({ root, win = globalThis.window, api = createApi() }) 
   watchIcons(root, win);
   const checkScroll = watchScroll(win, top, main);
   let pageTitle = '';
+  // A new page fades in (its heading rises a little); the same page painted again does not.
+  let shownPath = null;
+  main.addEventListener('animationend', (e) => { if (e.target === main) main.classList.remove('is-entering'); });
 
   // A message shown now stays through the next page change (pending.shown);
   // one saved for later (pending without shown) appears on the next page.
@@ -98,6 +102,8 @@ export function createApp({ root, win = globalThis.window, api = createApi() }) 
     layer.innerHTML = account.render(state, { canInstall: canInstall(installer, win) }) || installSteps.render(state);
     accountSheet.update();
     stepsSheet.update();
+    const sheet = layer.querySelector('.sheet');
+    if (sheet) swipeToDismiss(sheet, { win, onDismiss: () => (state.accountOpen ? closeAccount() : closeInstallSteps()) });
   }
   function openAccount() {
     if (!state.user || state.accountOpen) return;
@@ -215,6 +221,9 @@ export function createApp({ root, win = globalThis.window, api = createApi() }) 
       if (state.user && countsFor !== state.user.id) { countsFor = state.user.id; refreshCounts().catch(() => {}); }
       pageTitle = view.title ?? '';
       paintTop();
+      const path = pathOf(win.location.hash);
+      if (shownPath !== null && path !== shownPath) main.classList.add('is-entering');
+      shownPath = path;
       main.innerHTML = view.render(state);
       doc.title = view.title ? `${view.title} – Flock` : 'Flock';
       const heading = main.querySelector('h1');

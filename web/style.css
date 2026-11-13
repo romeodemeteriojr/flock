@@ -972,6 +972,8 @@ th, td { text-align: left; padding: var(--s-2) var(--s-3); border-bottom: 1px so
 /* The grab handle gets a tall invisible touch area. */
 .sheet-grab { position: relative; }
 .sheet-grab::after { content: ""; position: absolute; inset: -14px -80px -18px; }
+/* A drag that starts on the handle or the heading moves the sheet, not the page. */
+.sheet-grab, .sheet-head, .account-head, .nav-sub-title { touch-action: none; }
 
 /* ---------- menu rows: the account sheet, the More sheet, the person sheet ---------- */
 .menu { list-style: none; margin: 0; padding: 0; }
@@ -1031,6 +1033,30 @@ th, td { text-align: left; padding: var(--s-2) var(--s-3); border-bottom: 1px so
 }
 .howto-text { flex: 1; min-width: 0; }
 .howto-icon { flex: none; width: 1.75rem; height: 1.75rem; color: var(--accent-text); }
+
+/* ---------- motion and touch ---------- */
+/* Page change: the page fades in; only the heading block moves. Never put a
+   transform on .main (it would trap the fixed sheets and sticky bars inside it). */
+.main.is-entering { animation: fade-in var(--med) var(--ease); }
+.main.is-entering .page-head { animation: rise var(--med) var(--ease); }
+/* Pressed states for things that are tapped but are not .btn. */
+.menu-row:active, .disclosure:active, .gap-btn:active { background: var(--surface-3); }
+.serve-card:active, .sched-card:active { transform: scale(0.99); }
+/* The moment after "Yes, I can": a green strip with a check that pops and draws itself. */
+.done-burst {
+  display: inline-flex; align-items: center; justify-content: center; flex: none;
+  width: 2.75rem; height: 2.75rem; padding: 9px; border-radius: 50%;
+  color: var(--success-bg); background: var(--success);
+}
+.done-burst .icon { width: 100%; height: 100%; }
+.done-burst .icon-svg { stroke-width: 2.6; }
+.is-celebrating { border-color: var(--success); animation: celebrate 420ms var(--ease); }
+.is-celebrating .done-burst { animation: pop 360ms var(--ease); }
+.is-celebrating .done-burst path { stroke-dasharray: 24; stroke-dashoffset: 24; animation: draw 280ms 140ms var(--ease) forwards; }
+@keyframes celebrate { 0% { transform: scale(1); } 40% { transform: scale(1.02); } 100% { transform: scale(1); } }
+@keyframes pop { 0% { transform: scale(0.4); opacity: 0; } 70% { transform: scale(1.12); opacity: 1; } 100% { transform: scale(1); } }
+@keyframes draw { to { stroke-dashoffset: 0; } }
+.serve-done { display: flex; align-items: center; gap: var(--s-3); margin: var(--s-4) 0 0; padding: var(--s-3); border-radius: var(--radius-lg); color: var(--success); background: var(--success-bg); font-weight: 700; }
 .slot-panel h3 { margin-top: var(--s-5); }
 .candidates > li { padding: var(--s-3) 0; }
 .candidate { display: flex; align-items: center; gap: var(--s-3); flex-wrap: wrap; }
@@ -1155,7 +1181,12 @@ th, td { text-align: left; padding: var(--s-2) var(--s-3); border-bottom: 1px so
     scroll-behavior: auto !important;
   }
   .btn:active, .segment:active, .slot-btn:active, .icon-btn:active,
-  .nav-list a:active, .nav-more:active, .serve-card:hover { transform: none !important; }
+  .nav-list a:active, .nav-more:active, .serve-card:hover,
+  .serve-card:active, .sched-card:active, .avatar-btn:active { transform: none !important; }
+  /* The check is drawn at once; the strip and the toast still say it. */
+  .is-celebrating .done-burst path { stroke-dashoffset: 0; animation: none !important; }
+  /* Sheets do not follow a finger; swiping still closes them. */
+  .sheet, .nav.is-open .nav-sub-wrap { transform: none !important; }
   .skeleton-bar, .skeleton-dot { animation: none !important; background: var(--skeleton-a); }
 }
 

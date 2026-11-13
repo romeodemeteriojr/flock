@@ -16,6 +16,7 @@
 - **More is a bottom sheet** on phones, rising from behind the tab bar with bigger rows.
 - **Put Flock on your Home Screen.** On a phone that can install Flock and has not yet, My schedule shows a small card (after the notifications card, never both at once). On Android and in desktop Chrome or Edge, **Install** brings up the browser's own install box. On an iPhone, **Show me how** opens the three steps in Safari (Share, Add to Home Screen, Add). **Not now** hides it on that device; **Install Flock** stays in the account sheet.
 - **Share** invites and reminders straight to Messages, WhatsApp or email, on phones that have a share sheet: **Share** in the invite box (before **Copy message**), **Share all** and **Share** on each reminder in Gaps. What is shared is exactly what Copy copies. Copy is still there; where there is no share sheet nothing changes.
+- **Feels like an app.** Pages fade in when you move between them. Sheets (the slot panel, your account, More, the install steps) can be swiped down to close on a phone. Rows, cards and tabs show a press. After **Yes, I can**, the card shows a green "You're confirmed. Thank you!" with a check, and the phone gives a tiny buzz where it can. All movement is switched off when the phone asks for reduced motion.
 - **Shortcuts.** Press and hold the Flock icon on Android (and in desktop Chrome or Edge) for **My schedule** and **Days off**.
 
 ## 0.6.0
