@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.9.0
 
 No API or database changes: it deploys over 0.8.0 as it is.
 
