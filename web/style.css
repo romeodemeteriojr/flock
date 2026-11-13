@@ -1018,6 +1018,34 @@ th, td { text-align: left; padding: var(--s-2) var(--s-3); border-bottom: 1px so
 .sched-pos { font-weight: 700; }
 .sched-day { font-weight: 750; }
 
+/* Schedule first: how full it is, with autofill behind a button. */
+.fill-card { padding: var(--s-4) var(--s-5); }
+.fill-head { display: flex; align-items: baseline; gap: var(--s-2); margin: 0 0 var(--s-3); }
+.fill-num { font-size: var(--fs-2xl); font-weight: var(--weight-head); letter-spacing: -0.03em; line-height: 1; }
+.fill-words { color: var(--muted); font-weight: 600; }
+/* The whole-period bar is a real <progress>: its value is confirmed positions. */
+.fill-total {
+  -webkit-appearance: none; appearance: none; display: block;
+  width: 100%; height: 10px; border: 0; border-radius: var(--radius-pill);
+  overflow: hidden; background: var(--surface-3);
+}
+.fill-total::-webkit-progress-bar { background: var(--surface-3); }
+.fill-total::-webkit-progress-value { background: var(--success); border-radius: var(--radius-pill); }
+.fill-total::-moz-progress-bar { background: var(--success); border-radius: var(--radius-pill); }
+.fill-card .sched-counts { margin-top: var(--s-3); }
+.fill-card .btn-row { margin-top: var(--s-4); }
+/* Per service: one pip per position (no widths to set, so no inline styles). */
+.fill-pips { display: flex; gap: 3px; height: 8px; margin: var(--s-3) 0 0; }
+.fill-pip { flex: 1 1 0; border-radius: 3px; background: var(--surface-3); }
+.fill-pip.is-ok { background: var(--success); }
+.fill-pip.is-wait { background: var(--warning); }
+.fill-pip.is-bad { background: var(--danger); }
+.fill-pip.is-open { background: transparent; box-shadow: inset 0 0 0 1.5px var(--line-strong); }
+.sched-card .fill-line { display: flex; align-items: center; gap: var(--s-2); margin-top: var(--s-2); color: var(--muted); font-size: var(--fs-sm); font-weight: 600; }
+.sched-card .fill-line .chip { font-size: var(--fs-xs); }
+.sched-card.is-full .fill-line { color: var(--success); }
+.sched-date .fill-pips { min-width: 5rem; }
+
 /* ---------- gaps ---------- */
 .stats {
   list-style: none; margin: 0 0 var(--s-6); padding: 0;

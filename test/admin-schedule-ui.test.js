@@ -257,8 +257,10 @@ test('schedule: phone cards start closed with a count per status, open on tap, a
   const card = (id, next) => { const h = root.innerHTML; return h.slice(h.indexOf(`data-card="${id}"`), next ? h.indexOf(`data-card="${next}"`) : undefined); };
   assert.match(root.innerHTML, /data-action="toggle-service" data-id="1" aria-expanded="false"/);
   assert.match(root.innerHTML, /data-action="toggle-service" data-id="2" aria-expanded="false"/);
-  const counts = (h) => [...h.matchAll(/aria-hidden="true"><\/span>(\d+ \w+)<\/span>/g)].map((x) => x[1]);
-  assert.deepEqual(counts(card(1, 2)), ['1 open', '1 waiting', '1 confirmed', '1 declined']);
+  const counts = (h) => [...h.matchAll(/aria-hidden="true"><\/span>(\d+ [a-z ]+)<\/span>/g)].map((x) => x[1]);
+  // Problems only, in the order waiting, said no, open; confirmed is the line, with pips.
+  assert.deepEqual(counts(card(1, 2)), ['1 waiting', '1 said no', '1 open']);
+  assert.match(card(1, 2), /<span class="fill-pips" role="img" aria-label="1 of 4 confirmed, 1 waiting, 1 said no, 1 open"><span class="fill-pip is-ok"><\/span><span class="fill-pip is-wait"><\/span><span class="fill-pip is-bad"><\/span><span class="fill-pip is-open"><\/span><\/span><span class="fill-line">1 of 4 confirmed<\/span>/);
   assert.deepEqual(counts(card(2)), ['1 open']);
   assert.doesNotMatch(card(1, 2), /slot-list/, 'closed: no positions listed');
   assert.match(root.innerHTML, /sched-grid[\s\S]*data-action="slot-open" data-id="4"/, 'the wide-screen grid still shows every slot');
@@ -707,7 +709,10 @@ test('schedule: fill open positions previews, then asks, then reloads', async ()
   const { api, root } = await schedSetup({
     'POST /api/admin/autofill': (body) => (body.apply ? { ...PLAN, applied: true } : PLAN),
   });
-  assert.match(root.innerHTML, /Fill open positions/);
+  assert.match(root.innerHTML, /data-action="autofill-open" aria-haspopup="dialog">.*Fill open positions/);
+  assert.doesNotMatch(root.innerHTML, /data-form="autofill"/, 'the form is in a sheet, closed');
+  await root.click('autofill-open');
+  assert.match(root.innerHTML, /<section class="sheet" data-autofill role="dialog" aria-modal="true" aria-labelledby="autofill-title">/);
   assert.match(root.innerHTML, /name="weekOf" type="date" required value="2026-11-09"/);
   assert.match(root.innerHTML, /<option value="1" selected>1<\/option>/);
 
@@ -728,10 +733,12 @@ test('schedule: fill open positions previews, then asks, then reloads', async ()
   assert.ok(api.calls.includes('GET /api/teams') && api.calls.includes(SCHED_PATH), 'the schedule reloads');
   assert.match(root.innerHTML, /Asked 1 person\. They will see it in My schedule\./);
   assert.doesNotMatch(root.innerHTML, /data-autofill-result/);
+  assert.doesNotMatch(root.innerHTML, /data-autofill-sheet/, 'the sheet closes after asking');
 });
 
 test('schedule: fill open positions: bad date, cancel and a server error', async () => {
   const { api, root } = await schedSetup({ 'POST /api/admin/autofill': PLAN });
+  await root.click('autofill-open');
   await root.submit('autofill', { weekOf: '', weeks: '1' });
   assert.match(root.innerHTML, /Please pick a date\./);
   assert.equal(api.calls.length, 0);
@@ -739,12 +746,34 @@ test('schedule: fill open positions: bad date, cancel and a server error', async
   await root.submit('autofill', { weekOf: '2026-11-09', weeks: '1' });
   await flush();
   assert.match(root.innerHTML, /data-autofill-result/);
+  assert.match(root.innerHTML, /<div class="sheet-foot"><div class="btn-row btn-row-split">\s*<button type="button" class="btn btn-primary" data-action="autofill-apply"/);
   await root.click('autofill-cancel');
   assert.doesNotMatch(root.innerHTML, /data-autofill-result/);
+  assert.doesNotMatch(root.innerHTML, /data-autofill-sheet/, 'Cancel also closes the sheet');
   assert.equal(api.calls.filter((c) => c.includes('"apply":true')).length, 0, 'cancel asks nobody');
 
   const bad = await schedSetup({ 'POST /api/admin/autofill': new ApiError({ status: 400, message: 'Those weeks are already over' }) });
+  await bad.root.click('autofill-open');
   await bad.root.submit('autofill', { weekOf: '2026-11-02', weeks: '1' });
   await flush();
   assert.match(bad.root.innerHTML, /Those weeks are already over/);
+});
+
+test('schedule: the fill card counts every position, and a full service says so', () => {
+  const t = schedule.fillTotals(SERVICES);
+  assert.equal(t.total, t.open + t.pending + t.accepted + t.declined);
+  const m = { services: SERVICES, teams: TEAMS, loading: false, error: '', notice: '', today: '2026-11-08', from: '2026-11-08', to: '2027-01-02', open: new Set(), autofill: { weekOf: '2026-11-09', weeks: 1 } };
+  const h = schedule.renderScreen(m);
+  assert.match(h, new RegExp(`<p class="fill-head"><span class="fill-num num">${t.accepted}</span><span class="fill-words">of ${t.total} positions confirmed</span></p>`));
+  assert.match(h, new RegExp(`<progress class="fill-total" max="${t.total}" value="${t.accepted}">`));
+  assert.doesNotMatch(schedule.renderScreen({ ...m, services: [] }), /data-fill/, 'nothing to count: no card');
+  const full = [{ id: 9, date: '2026-11-22', time: '09:00', title: 'Sunday service', slots: [
+    { id: 90, positionId: 10, positionName: 'Drums', teamId: 1, teamName: 'Band', personId: 1, personName: 'Ann', status: 'accepted' },
+    { id: 91, positionId: 11, positionName: 'Keys', teamId: 1, teamName: 'Band', personId: 2, personName: 'Bo', status: 'accepted' }] }];
+  const fh = schedule.renderScreen({ ...m, services: full });
+  assert.match(fh, /class="card sched-card is-full" data-card="9"/);
+  assert.match(fh, /<span class="fill-line"><span class="icon icon-sm" data-icon="check" aria-hidden="true"><\/span> All 2 confirmed<\/span>/);
+  assert.equal(schedule.fillWords({ open: 1, pending: 2, accepted: 5, declined: 1 }), '5 of 9 confirmed, 2 waiting, 1 said no, 1 open');
+  const many = [{ ...full[0], slots: Array.from({ length: 25 }, (_, i) => ({ ...full[0].slots[0], id: 100 + i })) }];
+  assert.doesNotMatch(schedule.renderScreen({ ...m, services: many }), /fill-pips/, 'over 24 positions: the line alone');
 });

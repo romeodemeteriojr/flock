@@ -62,6 +62,38 @@ export function statusCounts(svc) {
   return n;
 }
 
+// Every position in the period, counted: { total, open, pending, accepted, declined }.
+export function fillTotals(services) {
+  const t = { total: 0, open: 0, pending: 0, accepted: 0, declined: 0 };
+  for (const svc of services ?? []) {
+    const n = statusCounts(svc);
+    for (const k of ['open', 'pending', 'accepted', 'declined']) { t[k] += n[k]; t.total += n[k]; }
+  }
+  return t;
+}
+
+// "9 of 12 confirmed, 2 waiting, 1 said no", for the pips' screen-reader name.
+export function fillWords(n) {
+  const total = n.open + n.pending + n.accepted + n.declined;
+  const parts = [`${n.accepted} of ${total} confirmed`];
+  if (n.pending) parts.push(`${n.pending} waiting`);
+  if (n.declined) parts.push(`${n.declined} said no`);
+  if (n.open) parts.push(`${n.open} open`);
+  return parts.join(', ');
+}
+
+// Past this many positions the pips get too thin to read: the line says it alone.
+export const MAX_PIPS = 24;
+
+// One pip per position, confirmed first, then waiting, said no, open. No widths to set.
+function pips(svc) {
+  const n = statusCounts(svc);
+  const total = n.open + n.pending + n.accepted + n.declined;
+  if (!total || total > MAX_PIPS) return '';
+  const run = (k, cls) => Array.from({ length: n[k] }, () => html`<span class="fill-pip ${cls}"></span>`);
+  return html`<span class="fill-pips" role="img" aria-label="${fillWords(n)}">${run('accepted', 'is-ok')}${run('pending', 'is-wait')}${run('declined', 'is-bad')}${run('open', 'is-open')}</span>`;
+}
+
 // The slot as the panel wants it (adds the service's date, time and title).
 export const panelSlot = (slot, svc) => ({ ...slot, date: svc.date, time: svc.time, title: svc.title });
 
@@ -91,7 +123,7 @@ function grid(s, today) {
         <tr>${s.columns.map((c) => c.positions.map((p) => html`<th scope="col" class="sched-pos">${p.name}</th>`))}</tr>
       </thead>
       <tbody>${s.rows.map((r) => html`<tr data-row="${r.service.id}"${r.service.date === today ? html` class="is-today"` : ''}>
-        <th scope="row" class="sched-date"><span class="sched-day num">${formatDate(r.service.date)}</span>${r.service.date === today ? todayContent : ''}<br><span class="num">${formatTime(r.service.time)}</span><br><span class="hint">${r.service.title}</span></th>
+        <th scope="row" class="sched-date"><span class="sched-day num">${formatDate(r.service.date)}</span>${r.service.date === today ? todayContent : ''}<br><span class="num">${formatTime(r.service.time)}</span><br><span class="hint">${r.service.title}</span>${pips(r.service)}</th>
         ${s.columns.map((c) => c.positions.map((p) => {
     const slots = r.cells.get(p.id) ?? [];
     return html`<td>${slots.length ? slots.map(slotButton) : html`<span class="hint not-needed">Not needed</span>`}</td>`;
@@ -101,13 +133,37 @@ function grid(s, today) {
   </div>`;
 }
 
-const COUNT_WORDS = Object.freeze({ open: 'open', pending: 'waiting', accepted: 'confirmed', declined: 'declined' });
+const COUNT_WORDS = Object.freeze({ open: 'open', pending: 'waiting', accepted: 'confirmed', declined: 'said no' });
+const PROBLEMS = ['pending', 'declined', 'open'];
 
-// A closed card still says how the service stands: "2 open, 1 waiting, 5 confirmed".
+// Chips for what still needs doing: "2 waiting", "1 said no", "1 open" (zeros left out).
+function problemChips(n) {
+  return PROBLEMS.filter((k) => n[k]).map((k) => html`<span class="chip ${STATUS[k].cls}">${iconSlot(STATUS[k].icon, 'chip-icon')}${n[k]} ${COUNT_WORDS[k]}</span>`);
+}
+
+// A closed card still says how the service stands: the pips, "5 of 9 confirmed"
+// (or "All 12 confirmed"), and a chip for each kind of problem.
 function counts(svc) {
   const n = statusCounts(svc);
-  const chips = Object.keys(n).filter((k) => n[k]).map((k) => html`<span class="chip ${STATUS[k].cls}">${iconSlot(STATUS[k].icon, 'chip-icon')}${n[k]} ${COUNT_WORDS[k]}</span>`);
-  return html`<span class="sched-counts">${chips.length ? chips : html`<span class="disclosure-sub">No positions on this date.</span>`}</span>`;
+  const total = n.open + n.pending + n.accepted + n.declined;
+  if (!total) return html`<span class="sched-counts"><span class="disclosure-sub">No positions on this date.</span></span>`;
+  const full = n.accepted === total;
+  return html`${pips(svc)}<span class="fill-line">${full ? html`${iconSlot('check', 'icon-sm')} All ${total} confirmed` : `${n.accepted} of ${total} confirmed`}</span>${full ? '' : html`<span class="sched-counts">${problemChips(n)}</span>`}`;
+}
+
+const isFull = (svc) => { const n = statusCounts(svc); const t = n.open + n.pending + n.accepted + n.declined; return t > 0 && n.accepted === t; };
+
+// The whole period at a glance: how many positions are confirmed, a bar, what
+// still needs doing, and the way to fill the open ones.
+function fillCard(services) {
+  const t = fillTotals(services);
+  if (!t.total) return '';
+  return html`<section class="card fill-card" aria-label="How full the schedule is" data-fill>
+    <p class="fill-head"><span class="fill-num num">${t.accepted}</span><span class="fill-words">of ${t.total} positions confirmed</span></p>
+    <progress class="fill-total" max="${t.total}" value="${t.accepted}">${t.accepted} of ${t.total}</progress>
+    ${t.accepted < t.total ? html`<p class="sched-counts">${problemChips(t)}</p>` : ''}
+    <div class="btn-row"><button type="button" class="btn btn-primary btn-block" data-action="autofill-open" aria-haspopup="dialog">${iconSlot('sparkle')} Fill open positions</button></div>
+  </section>`;
 }
 
 function cards(s, today, open) {
@@ -115,7 +171,7 @@ function cards(s, today, open) {
     const isOpen = open.has(r.service.id);
     const label = html`<span class="num">${formatDate(r.service.date)} at ${formatTime(r.service.time)}</span>${r.service.date === today ? todayContent : ''}
       <span class="disclosure-sub">${r.service.title}</span>${counts(r.service)}`;
-    return html`<li class="card sched-card${r.service.date === today ? ' is-today' : ''}" data-card="${r.service.id}">
+    return html`<li class="card sched-card${r.service.date === today ? ' is-today' : ''}${isFull(r.service) ? ' is-full' : ''}" data-card="${r.service.id}">
     <h2 class="sched-card-head">${disclosure({ action: 'toggle-service', id: r.service.id, open: isOpen, label })}</h2>
     ${isOpen ? s.columns.filter((c) => c.positions.some((p) => r.cells.has(p.id))).map((c) => html`<h3 class="team-title">${c.teamName}</h3>
       <ul class="list slot-list">${c.positions.filter((p) => r.cells.has(p.id)).map((p) => html`<li>
@@ -126,7 +182,10 @@ function cards(s, today, open) {
   })}</ul>`;
 }
 
-function autofillCard(a) {
+// "Fill open positions" in a bottom sheet (side panel on wide screens), opened
+// from the fill card. All wording as before; nothing changes until "Ask these people".
+function autofillSheet(a) {
+  if (!a.open) return '';
   const busy = a.busy ? 'disabled' : '';
   const r = a.result;
   let body = '';
@@ -140,25 +199,30 @@ function autofillCard(a) {
       <ul class="list">${r.unfilled.map((x) => html`<li data-autofill-open="${x.slotId}">
         <span class="num">${formatDate(x.date)} ${formatTime(x.time)}</span>: ${x.teamName} / ${x.positionName}. <span class="hint">${x.message}</span>
       </li>`)}</ul>` : ''}
-      <div class="btn-row">
-        ${r.assigned.length ? html`<button type="button" class="btn btn-primary" data-action="autofill-apply" ${busy}>Ask these people</button>` : ''}
-        <button type="button" class="btn" data-action="autofill-cancel" ${busy}>Cancel</button>
-      </div>
     </div>`;
   }
-  return html`<section class="card form-card" data-autofill>
-    <h2 class="card-title">Fill open positions</h2>
-    <p class="hint">Flock picks people who are set up for the position, are not away, and have not served more often than they said they can. Nothing changes until you choose "Ask these people".</p>
-    ${toasts([[a.error, 'error']])}
-    <form class="form form-inline" data-form="autofill" novalidate>
-      <div class="field"><label for="af-week">Week starting</label>
-        <input id="af-week" name="weekOf" type="date" required value="${a.weekOf}"></div>
-      <div class="field"><label for="af-weeks">Weeks</label>
-        <select id="af-weeks" name="weeks">${Array.from({ length: AUTOFILL_MAX_WEEKS }, (_, i) => i + 1).map((n) => html`<option value="${n}"${n === a.weeks ? html` selected` : ''}>${n}</option>`)}</select></div>
-      <button type="submit" class="btn btn-primary" ${busy}>Preview</button>
-    </form>
-    ${body}
-  </section>`;
+  return html`<div class="sheet-layer${a.entered ? '' : ' is-entering'}" data-autofill-sheet>
+  <div class="sheet-backdrop" data-action="autofill-close"></div>
+  <section class="sheet" data-autofill role="dialog" aria-modal="true" aria-labelledby="autofill-title">
+    <div class="sheet-grab" aria-hidden="true"></div>
+    <div class="sheet-head"><h2 id="autofill-title" tabindex="-1">Fill open positions</h2><button type="button" class="icon-btn" data-action="autofill-close" aria-label="Close">${iconSlot('x')}</button></div>
+    <div class="sheet-body">
+      <p class="hint">Flock picks people who are set up for the position, are not away, and have not served more often than they said they can. Nothing changes until you choose "Ask these people".</p>
+      ${toasts([[a.error, 'error']])}
+      <form class="form form-inline" data-form="autofill" novalidate>
+        <div class="field"><label for="af-week">Week starting</label>
+          <input id="af-week" name="weekOf" type="date" required value="${a.weekOf}"></div>
+        <div class="field"><label for="af-weeks">Weeks</label>
+          <select id="af-weeks" name="weeks">${Array.from({ length: AUTOFILL_MAX_WEEKS }, (_, i) => i + 1).map((n) => html`<option value="${n}"${n === a.weeks ? html` selected` : ''}>${n}</option>`)}</select></div>
+        <button type="submit" class="btn${r ? '' : ' btn-primary'}" ${busy}>Preview</button>
+      </form>
+      ${body}
+    </div>
+    ${r ? html`<div class="sheet-foot"><div class="btn-row btn-row-split">
+      ${r.assigned.length ? html`<button type="button" class="btn btn-primary" data-action="autofill-apply" ${busy}>Ask these people</button>` : ''}
+      <button type="button" class="btn" data-action="autofill-cancel" ${busy}>Cancel</button>
+    </div></div>` : ''}
+  </section></div>`;
 }
 
 export function renderScreen(m, panelHtml = '') {
@@ -168,8 +232,9 @@ export function renderScreen(m, panelHtml = '') {
     ${m.error ? html`<p class="form-error" role="alert">${m.error}</p>` : ''}
     ${toasts([[m.notice, 'ok']])}
     ${panelHtml}
+    ${autofillSheet(m.autofill ?? { weekOf: '', weeks: 1 })}
     <p class="hint sched-range">${iconSlot('calendar', 'icon-sm')} <span class="num">${formatDate(m.from)} to ${formatDate(m.to)}</span></p>
-    ${autofillCard(m.autofill ?? { weekOf: '', weeks: 1 })}
+    ${fillCard(m.services)}
     ${s.rows.length ? html`${grid(s, m.today)}${cards(s, m.today, m.open ?? new Set())}`
     : emptyState(`No services in the next ${WEEKS} weeks. Add them on the Services page.`, 'art-calendar')}
   `);
@@ -182,14 +247,19 @@ export function createScreen({ api, root, today = todayString(), onChange = () =
   const m = {
     services: [], teams: [], loading: true, error: '', notice: '', today, from: today, to: addDays(today, WEEKS * 7 - 1),
     open: new Set(), // the phone cards that are open
-    autofill: { weekOf: nextMonday(today), weeks: 1, input: null, result: null, busy: false, error: '' },
+    autofill: { open: false, entered: false, weekOf: nextMonday(today), weeks: 1, input: null, result: null, busy: false, error: '' },
   };
   const paint = () => {
     sheet.before();
+    fillSheet.before();
     root.innerHTML = renderScreen(m, panel.render());
+    m.autofill.entered = m.autofill.open; // slide in once, not on every repaint
     sheet.update();
+    fillSheet.update();
     const open = root.querySelector?.('[data-slot-panel]');
     if (open) swipeToDismiss(open, { win, onDismiss: () => panel.close() });
+    const af = root.querySelector?.('[data-autofill]');
+    if (af) swipeToDismiss(af, { win, onDismiss: () => closeAutofill() });
   };
   const reload = async () => {
     const [t, s] = await Promise.all([api.get('/api/teams'), api.get(`/api/services?from=${m.from}&to=${m.to}`)]);
@@ -208,6 +278,23 @@ export function createScreen({ api, root, today = todayString(), onChange = () =
   });
 
   const sheet = createSheet({ root, isOpen: () => !!panel.state, close: () => panel.close() });
+  const fillSheet = createSheet({
+    root, isOpen: () => m.autofill.open, close: () => closeAutofill(),
+    panel: '[data-autofill]', opener: () => '[data-action="autofill-open"]',
+  });
+  function openAutofill() {
+    m.autofill.open = true;
+    m.autofill.entered = false;
+    m.notice = '';
+    fillSheet.opened('autofill');
+    paint();
+  }
+  function closeAutofill() {
+    const a = m.autofill;
+    if (!a.open) return;
+    Object.assign(a, { open: false, result: null, input: null, error: '' });
+    paint();
+  }
 
   function findSlot(id) {
     for (const svc of m.services) {
@@ -252,6 +339,7 @@ export function createScreen({ api, root, today = todayString(), onChange = () =
       a.result = null;
       a.input = null;
       m.notice = n === 1 ? 'Asked 1 person. They will see it in My schedule.' : `Asked ${n} people. They will see it in My schedule.`;
+      a.open = false;
       await reload();
       onChange();
     } catch (err) {
@@ -274,7 +362,8 @@ export function createScreen({ api, root, today = todayString(), onChange = () =
     const action = el.dataset.action;
     const id = Number(el.dataset.id);
     if (action === 'autofill-apply') return applyPlan();
-    if (action === 'autofill-cancel') { m.autofill.result = null; m.autofill.input = null; paint(); return undefined; }
+    if (action === 'autofill-open') { openAutofill(); return undefined; }
+    if (action === 'autofill-cancel' || action === 'autofill-close') { closeAutofill(); return undefined; }
     if (action === 'toggle-service') { if (!m.open.delete(id)) m.open.add(id); paint(); refocus(root, action, id); return undefined; }
     if (action === 'slot-open') {
       const slot = findSlot(id);
@@ -297,7 +386,7 @@ export function createScreen({ api, root, today = todayString(), onChange = () =
 
 export function render(state) { // eslint-disable-line no-unused-vars
   return String(html`
-    ${pageHead(title, `The next ${WEEKS} weeks. Tap any position to fill it.`)}
+    ${pageHead(title, `The next ${WEEKS} weeks.`)}
     <div data-screen>${skeleton('Loading…', 'rows', 6)}</div>
   `);
 }
