@@ -216,7 +216,8 @@ export function createGapsService(deps) {
           const reasons = [];
           if (alsoOn.length) reasons.push(`Already serving as ${joinList(alsoOn)} at this service`);
           if (!qualified) reasons.push(`Not set up for ${slot.positionName}`);
-          reasons.push(h.past8 === 0 ? 'Has not served in 8 weeks' : `Served ${plural(h.past8, 'time')} in the last 8 weeks`);
+          // "Has never served" says it all; "not in 8 weeks" as well would repeat it.
+          if (h.lastServed || h.past8) reasons.push(h.past8 === 0 ? 'Has not served in 8 weeks' : `Served ${plural(h.past8, 'time')} in the last 8 weeks`);
           reasons.push(lastServedReason(h.lastServed, now));
           reasons.push(upcoming === 0 ? 'Nothing scheduled in the next 4 weeks' : `Scheduled ${plural(upcoming, 'time')} in the next 4 weeks`);
           candidates.push({

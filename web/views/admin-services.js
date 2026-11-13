@@ -5,13 +5,22 @@
 import { html } from '../lib/html.js';
 import { formatDate, formatTime, todayString } from '../lib/dates.js';
 import { iconSlot } from '../lib/icons.js';
-import { toasts } from '../lib/toast.js';
+import { toasts, createNoticeClock, dropProblem } from '../lib/toast.js';
 import { skeleton, emptyState, pageHead, disclosure, refocus } from '../lib/ui.js';
 import { takenOffText, peopleFrom } from '../lib/taken-off.js';
 
 export const title = 'Services';
 export const DEFAULT_TIME = '09:00';
 export const DEFAULT_TITLE = 'Sunday service';
+const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+/** "Saturday service" for a Saturday: the title a new service gets unless one is typed. */
+export function titleFor(date) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(date))) return DEFAULT_TITLE;
+  const day = new Date(`${date}T12:00:00Z`).getUTCDay();
+  return Number.isNaN(day) ? DEFAULT_TITLE : `${DAYS[day]} service`;
+}
+// A title Flock filled in from the day (so it may follow a new date), not one typed.
+const isDayTitle = (t) => DAYS.some((d) => t === `${d} service`);
 export const LIST_DAYS = 182; // how far ahead the upcoming list looks
 const MAX_COUNT = 20;
 const MAX_WEEKS = 26;
@@ -43,7 +52,7 @@ export function serviceBody(elements, teams) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return { error: 'Please pick a date.' };
   const time = val(elements, 'time') || DEFAULT_TIME;
   if (!/^\d{2}:\d{2}$/.test(time)) return { error: 'Please pick a time, like 9:00 am.' };
-  const titleText = val(elements, 'title') || DEFAULT_TITLE;
+  const titleText = val(elements, 'title') || titleFor(date);
   if (titleText.length > 100) return { error: 'The title is too long. Please keep it under 100 letters.' };
   const slots = [];
   for (const t of teams ?? []) {
@@ -122,23 +131,28 @@ export function sortServices(list) {
 // The positions and how many of each. prefix keeps element ids unique when
 // the edit form is open next to the add form; the names stay the same.
 function positionPicker(teams, d, prefix = '') {
-  return html`${teams.length ? teams.map((t) => html`<fieldset class="field fieldset" data-team="${t.id}">
+  // Teams with no positions have nothing to pick: one line about them, not one each.
+  const usable = teams.filter((t) => t.positions?.length);
+  const bare = teams.length - usable.length;
+  const bareNote = bare && usable.length ? html`<p class="hint" data-bare-teams>${bare === 1 ? '1 team has' : `${bare} teams have`} no positions yet, so ${bare === 1 ? 'it is' : 'they are'} not shown. Add positions on the Teams page.</p>` : '';
+  if (teams.length && !usable.length) return html`<p class="hint">No positions yet. Add positions on the Teams page first.</p>`;
+  return html`${usable.length ? usable.map((t) => html`<fieldset class="field fieldset" data-team="${t.id}">
       <legend><strong>${t.name}</strong></legend>
-      ${t.positions.length ? t.positions.map((p) => html`<div class="field pos-pick">
+      ${t.positions.map((p) => html`<div class="field pos-pick">
         <label class="check" for="${prefix}pos-${p.id}"><input id="${prefix}pos-${p.id}" name="pos-${p.id}" type="checkbox"${d.pos[p.id]?.on ? html` checked` : ''}> ${p.name}</label>
         <label class="count-label" for="${prefix}count-${p.id}">How many ${p.name}</label>
         <input id="${prefix}count-${p.id}" name="count-${p.id}" type="number" min="1" max="${MAX_COUNT}" value="${d.pos[p.id]?.count ?? '1'}" inputmode="numeric">
-      </div>`) : html`<p class="hint">No positions in this team yet.</p>`}
-    </fieldset>`) : html`<p class="hint">No teams yet. Add teams and positions on the Teams page first.</p>`}`;
+      </div>`)}
+    </fieldset>`) : html`<p class="hint">No teams yet. Add teams and positions on the Teams page first.</p>`}${bareNote}`;
 }
 
 function createForm(teams, today, draft) {
-  const d = draft ?? { date: today, time: DEFAULT_TIME, title: DEFAULT_TITLE, pos: {} };
+  const d = draft ?? { date: today, time: DEFAULT_TIME, title: titleFor(today), pos: {} };
   return html`<form class="form card form-card form-wide" data-form="create" novalidate>
     <h2 class="card-title">Add a service</h2>
     <div class="field-pair">
     <div class="field"><label for="svc-date">Date</label>
-      <input id="svc-date" name="date" type="date" required value="${d.date}"></div>
+      <input id="svc-date" name="date" type="date" required min="${today}" value="${d.date}"></div>
     <div class="field"><label for="svc-time">Time</label>
       <input id="svc-time" name="time" type="time" required value="${d.time}"></div>
     </div>
@@ -218,8 +232,7 @@ function serviceCard(svc, m) {
 export function renderScreen(m) {
   if (m.loading) return String(skeleton('Loading…', 'cards', 2));
   return String(html`
-    ${m.error ? html`<p class="form-error" role="alert">${m.error}</p>` : ''}
-    ${toasts([[m.notice, 'ok']])}
+    ${toasts([[m.notice, 'ok'], [m.error, 'error']])}
     ${createForm(m.teams, m.today, m.draft)}
     <h2 class="section-title">Upcoming services</h2>
     ${m.services.length ? html`<ul class="list card-list" data-services>${m.services.map((s) => serviceCard(s, m))}</ul>`
@@ -233,7 +246,12 @@ export function createScreen({ api, root, today = todayString() }) {
   // selected: the service whose buttons show.
   const m = { teams: [], services: [], loading: true, panel: null, error: '', notice: '', today, draft: null, selected: null };
   let busy = false;
-  const paint = () => { root.innerHTML = renderScreen(m); };
+  const notices = createNoticeClock();
+  const paint = () => {
+    m.notice = notices.keep(m.notice);
+    root.innerHTML = renderScreen(m);
+    notices.resume(root);
+  };
   const reload = async () => {
     const [t, s] = await Promise.all([
       api.get('/api/teams'),
@@ -355,6 +373,18 @@ export function createScreen({ api, root, today = todayString() }) {
     }),
   };
 
+  // A problem goes away once the person starts fixing it.
+  // A new date brings its day's title, unless a title was typed.
+  root.addEventListener('change', (e) => {
+    if (e.target?.id !== 'svc-date') return;
+    const title = root.querySelector?.('#svc-title');
+    if (title && (!title.value || isDayTitle(title.value))) title.value = titleFor(e.target.value);
+  });
+  root.addEventListener('input', () => {
+    if (!m.error) return;
+    m.error = '';
+    dropProblem(root);
+  });
   root.addEventListener('click', (e) => {
     const el = e.target?.closest?.('[data-action]');
     const fn = el && actions[el.dataset.action];

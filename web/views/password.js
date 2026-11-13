@@ -47,9 +47,16 @@ export function render(state, opts = {}) {
 export function mount(root, ctx) {
   const form = root.querySelector('form[data-form="password"]');
   if (!form) return;
-  const again = (error) => {
+  // After a problem, what was typed goes back in (as .value, never into the
+  // HTML); only a mismatched "type it again" is cleared.
+  const again = (error, keep = {}) => {
     root.innerHTML = render(ctx.state, { error });
     mount(root, ctx);
+    const next = root.querySelector('form[data-form="password"]');
+    if (!next) return;
+    for (const [k, v] of Object.entries(keep)) if (next.elements?.[k]) next.elements[k].value = v;
+    const empty = ['oldPassword', 'newPassword', 'confirm'].find((k) => next.elements?.[k] && !next.elements[k].value);
+    next.elements?.[empty ?? 'newPassword']?.focus?.();
   };
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -57,7 +64,7 @@ export function mount(root, ctx) {
     const newPassword = form.elements.newPassword.value;
     const confirm = form.elements.confirm.value;
     const problem = checkPasswords(oldPassword, newPassword, confirm);
-    if (problem) { again(problem); return; }
+    if (problem) { again(problem, newPassword === confirm ? { oldPassword, newPassword, confirm } : { oldPassword, newPassword }); return; }
     const btn = form.querySelector('button[type="submit"]');
     btn.disabled = true;
     btn.textContent = 'Saving…';
@@ -67,7 +74,7 @@ export function mount(root, ctx) {
       ctx.showMessage('Your new password is saved.');
     } catch (err) {
       if (err.status === 401) return; // the app sends them to log in
-      again(err.message);
+      again(err.message, { oldPassword, newPassword, confirm });
     }
   });
 }

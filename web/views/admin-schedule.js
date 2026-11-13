@@ -9,7 +9,7 @@ import { createSlotPanel, statusChip, statusOf, STATUS } from '../lib/slotpanel.
 import { createSheet, host, watchHost } from '../lib/sheet.js';
 import { swipeToDismiss } from '../lib/swipe.js';
 import { iconSlot } from '../lib/icons.js';
-import { toasts } from '../lib/toast.js';
+import { toasts, createNoticeClock, dropProblem } from '../lib/toast.js';
 import { skeleton, emptyState, pageHead, disclosure, refocus } from '../lib/ui.js';
 import { addDays, sortServices } from './admin-services.js';
 
@@ -238,8 +238,7 @@ export function renderScreen(m, panelHtml = '', paneHtml = '') {
     ${s.rows.length ? html`${grid(s, m.today, m.current)}${cards(s, m.today, m.open ?? new Set())}`
     : emptyState(`No services in the next ${WEEKS} weeks. Add them on the Services page.`, 'art-calendar')}`;
   return String(html`
-    ${m.error ? html`<p class="form-error" role="alert">${m.error}</p>` : ''}
-    ${toasts([[m.notice, 'ok']])}
+    ${toasts([[m.notice, 'ok'], [m.error, 'error']])}
     ${panelHtml}
     ${autofillSheet(m.autofill ?? { weekOf: '', weeks: 1 })}
     ${m.wide ? html`<div class="split split-wide"><div>${main}</div><aside class="card pane" aria-label="Position">${paneHtml ? raw(String(paneHtml)) : html`<p class="pane-empty">${iconSlot('calendar', 'icon-lg')}Choose a position.</p>`}</aside></div>` : main}
@@ -255,11 +254,14 @@ export function createScreen({ api, root, today = todayString(), onChange = () =
     open: new Set(), // the phone cards that are open
     autofill: { open: false, entered: false, weekOf: nextMonday(today), weeks: 1, input: null, result: null, busy: false, error: '' },
   };
+  const notices = createNoticeClock();
   const paint = () => {
     sheet.before();
     fillSheet.before();
     m.current = panel.state?.slot?.id ?? null;
+    m.notice = notices.keep(m.notice);
     root.innerHTML = m.wide ? renderScreen(m, '', panel.render({ pane: true })) : renderScreen(m, panel.render());
+    notices.resume(root);
     m.autofill.entered = m.autofill.open; // slide in once, not on every repaint
     sheet.update();
     fillSheet.update();
@@ -362,6 +364,25 @@ export function createScreen({ api, root, today = todayString(), onChange = () =
     paint();
   }
 
+  // A problem goes away once the person starts fixing it.
+  root.addEventListener('input', () => {
+    if (!m.error) return;
+    m.error = '';
+    dropProblem(root);
+  });
+  // A preview is for the weeks it was made for. Change the dates and it goes,
+  // so "Ask these people" can't send a plan for weeks no longer on screen.
+  root.addEventListener('change', (e) => {
+    const a = m.autofill;
+    const form = e.target?.closest?.('form[data-form="autofill"]');
+    if (!form || !a.result || !a.input) return;
+    const weekOf = String(form.elements?.weekOf?.value ?? '').trim();
+    const weeks = Number(form.elements?.weeks?.value ?? a.weeks);
+    if (weekOf === a.input.weekOf && weeks === a.input.weeks) return;
+    Object.assign(a, { result: null, input: null, weekOf, weeks });
+    paint();
+    if (e.target?.id) root.querySelector?.(`#${e.target.id}`)?.focus?.();
+  });
   root.addEventListener('submit', (e) => {
     const form = e.target?.closest?.('form[data-form]');
     if (!form || form.dataset.form !== 'autofill') return undefined;

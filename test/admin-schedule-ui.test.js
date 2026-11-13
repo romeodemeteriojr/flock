@@ -53,7 +53,7 @@ async function schedSetup(extra = {}) {
   return { api, root, s };
 }
 const CANDS = { candidates: [
-  { personId: 30, name: 'Sam Ortiz', qualified: true, reasons: ['Has not served in 8 weeks', 'Has never served'] },
+  { personId: 30, name: 'Sam Ortiz', qualified: true, reasons: ['Has not served in 8 weeks', 'Last served 9 weeks ago'] },
   { personId: 31, name: 'Old Joe', qualified: true, reasons: ['Served 2 times in the last 8 weeks'] },
 ] };
 
@@ -118,7 +118,7 @@ test('services: list sorted by date, grouped positions, people count; empty stat
   assert.match(h, /Sun 8 Nov at 9:00 am/);
   assert.match(h, /Band: Drums x2, Keys\. Sound: Mixer/);
   assert.match(h, /3 people are scheduled on this date/); // like the server: anyone in a slot
-  assert.match(h, /value="Sunday service"/);
+  assert.match(h, /value="Wednesday service"/, "the title follows the day (4 Nov 2026 is a Wednesday)");
   assert.match(h, /value="09:00"/);
   assert.ok(h.indexOf('Drums') < h.indexOf('Mixer'));
   const empty = await svcSetup({ [SVC_PATH]: [] });
@@ -146,7 +146,7 @@ test('services: a form error keeps what the scheduler typed', async () => {
   assert.equal(api.calls.length, 0);
   const h = root.innerHTML;
   assert.match(h, /How many Drums\? Please type a number from 1 to 20/);
-  assert.match(h, /name="date" type="date" required value="2026-11-22"/);
+  assert.match(h, /name="date" type="date" required min="2026-11-04" value="2026-11-22"/);
   assert.match(h, /value="Easter"/);
   assert.match(h, /name="pos-10" type="checkbox" checked>/);
   assert.match(h, /name="count-10" type="number" min="1" max="20" value="99"/);
@@ -961,4 +961,76 @@ test('services: the delete warning counts people, once each however many positio
   assert.equal(services.scheduledCount({ slots: svc.slots.slice(0, 2) }), 1);
   assert.equal(services.peopleWords(1), '1 person is scheduled on this date');
   assert.equal(services.scheduledCount({}), 0);
+});
+
+test('slot panel: swapping out someone still waiting asks first, and says they will be told', async () => {
+  const { api, root } = await schedSetup({ 'GET /api/admin/suggest?slotId=2': CANDS, 'PUT /api/slots/2/assign': { slot: {} } });
+  await root.click('slot-open', 2);
+  await flush();
+  await root.click('slot-assign', 30);
+  await flush();
+  assert.ok(!api.calls.some((c) => c.startsWith('PUT')), 'nothing sent yet');
+  assert.match(root.innerHTML, /Bo Diaz was asked and hasn(&#39;|')t answered yet\. Put Sam Ortiz on instead\? Bo Diaz will be taken off and told\./);
+  await root.click('slot-swap-no');
+  assert.doesNotMatch(root.innerHTML, /data-swap=/, 'No, go back closes the question');
+  await root.click('slot-assign', 30);
+  await root.click('slot-assign', 30); // "Yes, swap in Sam Ortiz"
+  await flush();
+  assert.equal(api.calls.filter((c) => c.startsWith('PUT')).length, 1);
+  assert.ok(api.calls.includes('PUT /api/slots/2/assign {"personId":30,"force":false}'));
+});
+
+test('slot panel: an open, declined or confirmed slot does not get the swap question', async () => {
+  for (const id of [4, 3, 1]) {
+    const { api, root } = await schedSetup({ [`GET /api/admin/suggest?slotId=${id}`]: CANDS, [`PUT /api/slots/${id}/assign`]: { slot: {} } });
+    await root.click('slot-open', id);
+    await flush();
+    await root.click('slot-assign', 30);
+    await flush();
+    assert.doesNotMatch(root.innerHTML, /data-swap=/, `slot ${id}`);
+    assert.ok(api.calls.includes(`PUT /api/slots/${id}/assign {"personId":30,"force":false}`), `slot ${id}`);
+  }
+});
+
+test('fill open positions: changing the weeks after a preview drops the old preview', async () => {
+  const { api, root } = await schedSetup({ 'POST /api/admin/autofill': PLAN });
+  await root.click('autofill-open');
+  await root.submit('autofill', { weekOf: '2026-11-09', weeks: '1' });
+  await flush();
+  assert.match(root.innerHTML, /data-autofill-result/);
+  const form = (weekOf, weeks) => ({ id: 'af-weeks', closest: (sel) => (sel === 'form[data-form="autofill"]' ? { elements: { weekOf: { value: weekOf }, weeks: { value: weeks } } } : null) });
+  root.fire('change', form('2026-11-09', '1'));
+  assert.match(root.innerHTML, /data-autofill-result/, 'same weeks: the preview stays');
+  root.fire('change', form('2026-11-09', '4'));
+  assert.doesNotMatch(root.innerHTML, /data-autofill-result/, 'other weeks: the old preview goes');
+  assert.doesNotMatch(root.innerHTML, /data-action="autofill-apply"/, 'nothing to ask until a new preview');
+  assert.match(root.innerHTML, /<option value="4" selected>4<\/option>/, 'the new choice is kept');
+  api.calls.length = 0;
+  await root.click('autofill-apply');
+  assert.deepEqual(api.calls, [], 'an old plan is never sent');
+});
+
+test('add service: the title follows the day until one is typed; no past dates offered', async () => {
+  assert.equal(services.titleFor('2026-11-07'), 'Saturday service');
+  assert.equal(services.titleFor('2026-11-08'), 'Sunday service');
+  assert.equal(services.titleFor('bad'), 'Sunday service');
+  const { root } = await svcSetup();
+  assert.match(root.innerHTML, /id="svc-date" name="date" type="date" required min="2026-11-04"/);
+  const title = { value: 'Wednesday service' };
+  root.querySelector = (sel) => (sel === '#svc-title' ? title : null);
+  root.fire('change', { id: 'svc-date', value: '2026-11-07', closest: () => null });
+  assert.equal(title.value, 'Saturday service');
+  title.value = 'Youth night';
+  root.fire('change', { id: 'svc-date', value: '2026-11-08', closest: () => null });
+  assert.equal(title.value, 'Youth night', 'a typed title is kept');
+  assert.equal(services.serviceBody({ date: { value: '2026-11-07' }, time: { value: '18:00' }, title: { value: '' } }, []).body.title, 'Saturday service');
+});
+
+test('add service: teams with no positions are one line, not one box each', async () => {
+  const teams = [...TEAMS, { id: 90, name: 'Empty A', positions: [] }, { id: 91, name: 'Empty B', positions: [] }];
+  const { root } = await svcSetup({ 'GET /api/teams': teams });
+  assert.doesNotMatch(root.innerHTML, /Empty A|Empty B|No positions in this team yet/);
+  assert.match(root.innerHTML, /2 teams have no positions yet, so they are not shown\./);
+  const only = await svcSetup({ 'GET /api/teams': [{ id: 90, name: 'Empty A', positions: [] }] });
+  assert.match(only.root.innerHTML, /No positions yet\. Add positions on the Teams page first\./);
 });

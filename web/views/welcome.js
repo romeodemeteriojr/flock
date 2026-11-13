@@ -44,16 +44,20 @@ export async function mount(root, ctx) {
     return;
   }
 
-  const paint = (error = '') => {
+  // keep: what was typed, put back after a problem so nobody types it all again
+  // (set as .value, never into the HTML). focus: the field to fix.
+  const paint = (error = '', keep = {}, focus = '') => {
     if (!current()) return; // A slow check must not overwrite the next page or invite.
     root.innerHTML = render(ctx.state, { info, error });
     const form = root.querySelector('form[data-form="welcome"]');
     if (!form) return;
+    for (const [k, v] of Object.entries(keep)) if (form.elements?.[k]) form.elements[k].value = v;
+    if (focus) form.elements?.[focus]?.focus?.();
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       const password = form.elements.password.value;
       if (password !== form.elements.confirm.value) {
-        paint('The two passwords are not the same.');
+        paint('The two passwords are not the same.', { password }, 'confirm');
         return;
       }
       const button = form.querySelector('button[type="submit"]');
@@ -64,7 +68,7 @@ export async function mount(root, ctx) {
         ctx.setUser(r.person);
         ctx.navigate('#/');
       } catch (err) {
-        paint(err.message);
+        paint(err.message, { password, confirm: form.elements.confirm.value }, 'password');
       }
     });
   };

@@ -464,8 +464,16 @@ test('UAT 9 to 11: volunteer sees My schedule, says yes and no, adds and removes
   await phone.click('roster', first);
   assert.equal(phone.has(`[data-roster="${first}"]`), false);
 
-  // I can't: asks nothing more, tells the scheduler will find someone.
-  await phone.click('decline', second);
+  // I can't: asks first (one stray tap must not say no), and Go back keeps the ask.
+  await phone.click('decline-ask', second);
+  said(phone, /Are you sure you can't serve on/);
+  assert.equal(countCalls(phone, 'POST', new RegExp(`/api/me/slots/${second}/decline`)), 0, 'nothing is sent yet');
+  await phone.clickButton('No, go back');
+  notSaid(phone, /Are you sure/);
+  assert.ok(phone.buttons().some((b) => b.label === "I can't"), 'the ask is back');
+  await phone.click('decline-ask', second);
+  await phone.clickButton("Yes, I can't make it");
+  assert.equal(countCalls(phone, 'POST', new RegExp(`/api/me/slots/${second}/decline`)), 1);
   assert.ok(phone.toasts().some((x) => /Your scheduler will find someone else/.test(x)), phone.text());
   assert.equal(phone.has(`[data-slot="${second}"]`), false, 'a declined request leaves my list');
   assert.equal(badge(), asksAtStart > 2 ? String(asksAtStart - 2) : null, 'and down again (no badge at 0)');
@@ -517,7 +525,7 @@ test('UAT 9 to 11: volunteer sees My schedule, says yes and no, adds and removes
   said(phone, /Saved\. You are off/);
   said(phone, /Family trip/);
   await phone.submit('blockout', { from: busyDay, to: busyDay, reason: '' });
-  said(phone, /You are already scheduled on .* Please tell your scheduler\./);
+  said(phone, /You are already scheduled on .*I can(&#39;|')t serve then/s);
   wellBuilt(phone, 'days off with a warning');
 
   // Remove them again.

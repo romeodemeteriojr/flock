@@ -79,13 +79,15 @@ const cantAfterAll = (item) => (several(item) ? `I can't do ${item.positionName}
 
 // With other positions at the same service, the words name this one: saying no
 // to Sound leaves Vocals as it is.
+// One tap is easy to make by mistake, and a "no" tells the scheduler at once,
+// so "I can't" always asks first: for an ask, and after saying yes.
 const SURE = (item, busy) => html`<div class="notice notice-warn" role="alert">
       ${iconSlot('warning', 'notice-icon')}<div class="notice-body"><p>${several(item)
         ? `Are you sure you can't do ${item.positionName} on ${formatDate(item.date)}?`
         : `Are you sure you can't serve on ${formatDate(item.date)}?`}</p>
       <div class="btn-row">
         <button type="button" class="btn btn-danger" data-action="decline-sure" data-id="${item.slotId}" ${busy}>${several(item) ? `Yes, I can't do ${item.positionName}` : "Yes, I can't make it"}</button>
-        <button type="button" class="btn" data-action="keep" data-id="${item.slotId}" ${busy}>No, keep me on</button>
+        <button type="button" class="btn" data-action="keep" data-id="${item.slotId}" ${busy}>${item.status === 'pending' ? 'No, go back' : 'No, keep me on'}</button>
       </div></div>
     </div>`;
 
@@ -97,9 +99,11 @@ function hero(item, view, today) {
   const celebrating = view.celebrate === item.slotId && !pending;
   const co = item.coVolunteers ?? [];
   let answer;
-  if (pending) {
+  if (pending && view.confirmId === item.slotId) {
+    answer = html`<div class="hero-status">${SURE(item, busy)}</div>`;
+  } else if (pending) {
     answer = html`<p class="hero-ask" id="hero-ask">Can you serve?</p>
-    <div class="hero-actions" role="group" aria-labelledby="hero-ask"><button type="button" class="btn btn-lg btn-hero" data-action="accept" data-id="${item.slotId}" ${busy}>${iconSlot('check')} Yes, I can</button><button type="button" class="btn btn-lg btn-hero-quiet" data-action="decline" data-id="${item.slotId}" ${busy}>I can't</button></div>`;
+    <div class="hero-actions" role="group" aria-labelledby="hero-ask"><button type="button" class="btn btn-lg btn-hero" data-action="accept" data-id="${item.slotId}" ${busy}>${iconSlot('check')} Yes, I can</button><button type="button" class="btn btn-lg btn-hero-quiet" data-action="decline-ask" data-id="${item.slotId}" ${busy}>I can't</button></div>`;
   } else if (celebrating) {
     answer = html`<p class="hero-done"><span class="done-burst">${iconSlot('check')}</span> You're confirmed. Thank you!</p>`;
   } else if (view.confirmId === item.slotId) {
@@ -126,10 +130,12 @@ function card(item, view) {
   const busy = view.busy ? 'disabled' : '';
   const open = !!view.openCards?.has(item.slotId);
   let actions = '';
-  if (pending) {
+  if (pending && view.confirmId === item.slotId) {
+    actions = SURE(item, busy);
+  } else if (pending) {
     actions = html`<div class="btn-row btn-row-split">
       <button type="button" class="btn btn-primary" data-action="accept" data-id="${item.slotId}" ${busy}>Yes, I can</button>
-      <button type="button" class="btn btn-danger" data-action="decline" data-id="${item.slotId}" ${busy}>I can't</button>
+      <button type="button" class="btn btn-danger" data-action="decline-ask" data-id="${item.slotId}" ${busy}>I can't</button>
     </div>`;
   } else if (view.confirmId === item.slotId) {
     actions = SURE(item, busy);

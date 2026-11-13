@@ -173,6 +173,8 @@ body {
   background: var(--bg);
   -webkit-font-smoothing: antialiased;
   -webkit-tap-highlight-color: transparent;
+  /* Names are typed by people: a very long word wraps instead of pushing the page sideways. */
+  overflow-wrap: break-word;
 }
 /* Lock page scroll while a real sheet is open (not the gallery's static demos). */
 body:has(.sheet-layer:not(.gallery-frame .sheet-layer)) { overflow: hidden; }
@@ -433,6 +435,9 @@ h2:focus-visible { outline: 3px solid var(--focus); }
 .message-ok { color: var(--success); background: var(--success-bg); }
 .message-ok::before { content: "Done: "; }
 
+/* Scrolled-to things stop below the sticky top bar. */
+html { scroll-padding-top: calc(52px + var(--s-3) + env(safe-area-inset-top, 0px)); }
+
 /* ---------- toasts ---------- */
 .toast-region, .toast-stack {
   position: fixed; z-index: 45; /* over the tab bar, under an open sheet */
@@ -442,6 +447,8 @@ h2:focus-visible { outline: 3px solid var(--focus); }
   pointer-events: none;
 }
 .toast-region { bottom: auto; top: calc(52px + var(--s-3) + env(safe-area-inset-top, 0px)); }
+/* With a sheet open, a view's toasts sit over it at the top, clear of its buttons. */
+body:has(.sheet-layer:not(.gallery-frame .sheet-layer)) .toast-stack { z-index: 55; bottom: auto; top: calc(var(--s-3) + env(safe-area-inset-top, 0px)); }
 .toast {
   pointer-events: auto;
   display: flex; align-items: center; gap: var(--s-3);
@@ -526,13 +533,15 @@ input[type="checkbox"], input[type="radio"] { width: 1.4rem; height: 1.4rem; acc
 }
 .check:hover { background: var(--surface-2); }
 .fieldset {
+  min-width: 0; /* a fieldset is as wide as its longest word unless told otherwise */
   border: 1px solid var(--line); border-radius: var(--radius-lg);
   padding: var(--s-3) var(--s-4) var(--s-1); margin: 0 0 var(--s-4);
 }
-.fieldset legend { padding: 0 var(--s-2); font-weight: 700; }
-.pos-pick { display: grid; grid-template-columns: 1fr 7rem; gap: var(--s-1) var(--s-3); align-items: end; margin-bottom: var(--s-3); }
+.fieldset legend { padding: 0 var(--s-2); font-weight: 700; max-width: 100%; overflow-wrap: anywhere; }
+.pos-pick { display: grid; grid-template-columns: minmax(0, 1fr) 7rem; gap: var(--s-1) var(--s-3); align-items: end; margin-bottom: var(--s-3); }
 .pos-pick .check { grid-row: span 2; align-self: center; }
-.count-label { font-size: var(--fs-xs); color: var(--muted); margin: 0; }
+.count-label { font-size: var(--fs-xs); color: var(--muted); margin: 0; overflow-wrap: anywhere; }
+.pos-pick .check { min-width: 0; overflow-wrap: anywhere; }
 .input-icon { position: relative; }
 .input-icon .icon { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--muted); pointer-events: none; }
 .input-icon input { padding-left: 2.8rem; }
@@ -1026,6 +1035,8 @@ th, td { text-align: left; padding: var(--s-2) var(--s-3); border-bottom: 1px so
 .slot-btn:active { transform: scale(0.98); }
 .slot-btn.is-open { border-style: dashed; border-color: var(--line-strong); background: var(--surface-2); box-shadow: none; }
 .slot-who { font-weight: 650; }
+/* A long name or position wraps inside the button instead of widening it. */
+.slot-btn > * { max-width: 100%; overflow-wrap: anywhere; }
 .gap-btn { position: relative; padding-right: var(--s-10); }
 .gap-chevron { position: absolute; right: var(--s-3); top: 50%; transform: translateY(-50%); color: var(--muted); }
 .not-needed { font-style: italic; }
@@ -1183,7 +1194,7 @@ th, td { text-align: left; padding: var(--s-2) var(--s-3); border-bottom: 1px so
   display: inline-flex; flex: none; width: 2.25rem; height: 2.25rem; padding: 7px;
   border-radius: 10px; color: var(--on-accent-soft); background: var(--accent-soft);
 }
-.menu-text { flex: 1; min-width: 0; }
+.menu-text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .menu-sub { display: block; color: var(--muted); font-size: var(--fs-sm); font-weight: 500; }
 .menu-end { display: inline-flex; align-items: center; gap: var(--s-1); flex: none; color: var(--muted); font-size: var(--fs-sm); font-weight: 500; }
 .menu-row.is-danger { color: var(--danger); }
@@ -1195,7 +1206,7 @@ th, td { text-align: left; padding: var(--s-2) var(--s-3); border-bottom: 1px so
 .account-name { margin: 0; font-size: var(--fs-lg); font-weight: 700; letter-spacing: -0.015em; }
 .account-sub { margin: 2px 0 0; color: var(--muted); font-size: var(--fs-sm); overflow-wrap: anywhere; }
 .account-name:focus-visible { outline-offset: 0; }
-.account-text { flex: 1; min-width: 0; }
+.account-text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .sheet-menu { padding: 0 var(--s-2) var(--s-3); overflow-y: auto; }
 .account-sheet .sheet-menu { padding-bottom: max(var(--s-4), env(safe-area-inset-bottom)); }
 

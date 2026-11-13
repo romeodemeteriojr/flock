@@ -202,7 +202,7 @@ test('suggest: ranking by load, then longest since last served (never first), th
   const by = Object.fromEntries(candidates.map((c) => [c.name, c]));
   assert.deepEqual(by['Zed Never'], {
     personId: never.id, name: 'Zed Never', servedLast8Weeks: 0, lastServed: null, qualified: true, alsoOn: [],
-    reasons: ['Has not served in 8 weeks', 'Has never served', 'Nothing scheduled in the next 4 weeks'],
+    reasons: ['Has never served', 'Nothing scheduled in the next 4 weeks'],
   });
   assert.deepEqual(by['Cal Recent'].reasons, ['Served 1 time in the last 8 weeks', 'Last served 3 weeks ago', 'Nothing scheduled in the next 4 weeks']);
   assert.equal(by['Cal Recent'].lastServed, '2024-12-15');
@@ -233,7 +233,7 @@ test('suggest: window edges (8 weeks back, 4 weeks ahead) and recent days wordin
   const by = Object.fromEntries(candidates.map((c) => [c.name, c]));
   assert.equal(by['Eve Edge'].servedLast8Weeks, 1);
   assert.equal(by['Oli Out'].servedLast8Weeks, 0);
-  assert.equal(by['Abe Ahead'].reasons[2], 'Nothing scheduled in the next 4 weeks');
+  assert.equal(by['Abe Ahead'].reasons.at(-1), 'Nothing scheduled in the next 4 weeks');
   assert.equal(by['Dan Days'].reasons[1], 'Last served 4 days ago');
   // Abe (never served, load 0) first; Oli (load 0, served long ago) next; then Eve and Dan with load 1, longest first.
   assert.deepEqual(candidates.map((c) => c.name), ['Abe Ahead', 'Oli Out', 'Eve Edge', 'Dan Days']);
