@@ -16,6 +16,7 @@ import { skeleton } from './lib/ui.js';
 import * as push from './lib/push.js';
 import { registerWorker, applyUpdate, watchUpdates } from './lib/worker.js';
 import { loadCounts, setAppBadge } from './lib/counts.js';
+import { watchLimits } from './lib/limit.js';
 
 const GENERIC = 'Something went wrong. Please reload the page and try again.';
 
@@ -288,6 +289,7 @@ export function createApp({ root, win = globalThis.window, api = createApi() }) 
 
   async function start() {
     watchUpdates(win);
+    if (doc?.addEventListener) watchLimits(doc);
     registerWorker(win).catch(() => { /* no worker: Flock works, just not offline */ });
     win.addEventListener('hashchange', onHashChange);
     win.addEventListener('unhandledrejection', (e) => { e.preventDefault(); handleError(e.reason); });

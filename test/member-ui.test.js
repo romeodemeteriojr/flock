@@ -68,7 +68,7 @@ test('schedule: the hero asks with Yes / I can\'t; others follow as compact card
   assert.match(heroHtml, /<p class="hero-role"><strong>Sound<\/strong> · Tech<\/p>/);
   assert.match(heroHtml, /<p class="hero-ask" id="hero-ask">Can you serve\?<\/p>/);
   assert.match(heroHtml, /role="group" aria-labelledby="hero-ask"><button type="button" class="btn btn-lg btn-hero" data-action="accept" data-id="1"/);
-  assert.match(heroHtml, /class="btn btn-lg btn-hero-quiet" data-action="decline" data-id="1"/);
+  assert.match(heroHtml, /class="btn btn-lg btn-hero-quiet" data-action="decline-ask" data-id="1"/);
   assert.match(h, /<h2 class="section-title">Also needs your answer<\/h2>[\s\S]*data-slot="4"[\s\S]*data-action="accept" data-id="4"/);
   assert.match(h, /<h2 class="section-title">Coming up<\/h2>[\s\S]*data-slot="2"/);
   assert.equal((h.match(/data-slot="1"/g) || []).length, 1, 'the hero item is not repeated');
@@ -182,6 +182,23 @@ test('schedule: confirmed decline needs a confirm step', async () => {
   assert.equal(api.calls[1], 'POST /api/me/slots/1/decline {}');
 });
 
+test('schedule: saying no to an ask also needs a confirm step, in the hero and in a card', async () => {
+  const { root, api } = await setup(sched, { 'GET /api/me/schedule': data([item(), item({ slotId: 4, date: '2026-11-22' })]) });
+  for (const id of [1, 4]) {
+    await root.click('decline-ask', id);
+    assert.equal(api.calls.length, 1, 'one tap sends nothing');
+    assert.match(root.innerHTML, /Are you sure you can(&#39;|')t serve on/);
+    assert.match(root.innerHTML, /data-action="keep" data-id="\d+"[^>]*>No, go back</);
+    assert.doesNotMatch(root.innerHTML, new RegExp(`data-action="accept" data-id="${id}"`), 'the confirm takes the buttons\' place');
+    await root.click('keep', id);
+    assert.doesNotMatch(root.innerHTML, /Are you sure/);
+    assert.match(root.innerHTML, new RegExp(`data-action="accept" data-id="${id}"`), 'the ask is back');
+  }
+  await root.click('decline-ask', 4);
+  await root.click('decline-sure', 4);
+  assert.equal(api.calls[1], 'POST /api/me/slots/4/decline {}');
+});
+
 test('schedule: empty, error and failed answer states', async () => {
   let { root } = await setup(sched, { 'GET /api/me/schedule': data([]) });
   assert.match(root.innerHTML, /not scheduled yet/);
@@ -278,7 +295,7 @@ test('days off: conflict notice, list, remove, errors', async () => {
   assert.match(root.innerHTML, /&lt;i&gt;Trip&lt;\/i&gt;/);
   assert.match(root.innerHTML, />Remove</);
   await root.submit('blockout', { from: '2026-11-08', to: '2026-11-08', reason: '' });
-  assert.match(root.innerHTML, /You are already scheduled on Sun 8 Nov as Sound\. Please tell your scheduler\./);
+  assert.match(root.innerHTML, /You are already scheduled on Sun 8 Nov as Sound\./);
   await root.click('remove', 7);
   assert.equal(api.calls.includes('DELETE /api/me/blockouts/7'), true);
   assert.match(root.innerHTML, /Removed/);
@@ -467,7 +484,33 @@ test('days off: clashes at one service are one line, "as Sound and Vocals"; othe
     'POST /api/me/blockouts': { blockout: {}, conflicts },
   });
   await root.submit('blockout', { from: '2026-11-08', to: '2026-11-15', reason: '' });
-  assert.match(root.innerHTML, /You are already scheduled on Sun 8 Nov as Sound and Vocals\. Please tell your scheduler\./);
+  assert.match(root.innerHTML, /You are already scheduled on Sun 8 Nov as Sound and Vocals\./);
   assert.match(root.innerHTML, /You are already scheduled on Sun 8 Nov as Keys\./);
   assert.equal((root.innerHTML.match(/You are already scheduled/g) ?? []).length, 3);
+});
+
+test('days off: a clash with a day you serve offers "I can\'t serve then", asked twice', async () => {
+  const conflicts = [
+    { slotId: 1, date: '2026-11-08', time: '09:00', serviceTitle: 'Sunday service', positionName: 'Sound', teamName: 'Tech', status: 'accepted' },
+    { slotId: 2, date: '2026-11-08', time: '09:00', serviceTitle: 'Sunday service', positionName: 'Vocals', teamName: 'Band', status: 'pending' },
+  ];
+  const { root, api } = await setup(off, {
+    'GET /api/me/blockouts': { blockouts: [] },
+    'POST /api/me/blockouts': { blockout: {}, conflicts },
+    'POST /api/me/slots/1/decline': {},
+    'POST /api/me/slots/2/decline': {},
+  });
+  await root.submit('blockout', { from: '2026-11-08', to: '2026-11-08', reason: '' });
+  assert.match(root.innerHTML, /data-action="cant-ask" data-ids="1,2"/, 'one button for the service');
+  await root.fire('click', { dataset: { action: 'cant-ask', ids: '1,2' } });
+  assert.match(root.innerHTML, /Tell your scheduler you can(&#39;|')t serve on Sun 8 Nov\?/);
+  assert.ok(!api.calls.some((c) => c.includes('/decline')), 'nothing sent on the first tap');
+  await root.fire('click', { dataset: { action: 'cant-no' } });
+  assert.doesNotMatch(root.innerHTML, /data-action="cant-sure"/);
+  await root.fire('click', { dataset: { action: 'cant-ask', ids: '1,2' } });
+  await root.fire('click', { dataset: { action: 'cant-sure', ids: '1,2' } });
+  await new Promise((r) => setImmediate(r));
+  assert.deepEqual(api.calls.filter((c) => c.includes('/decline')), ['POST /api/me/slots/1/decline {}', 'POST /api/me/slots/2/decline {}']);
+  assert.match(root.innerHTML, /Your scheduler will find someone else\./);
+  assert.doesNotMatch(root.innerHTML, /data-conflicts/, 'the clash is gone');
 });

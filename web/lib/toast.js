@@ -88,3 +88,39 @@ export function createToaster(region, { win = globalThis, okMs = OK_MS, errorMs 
 
   return { show, clear, items };
 }
+
+/**
+ * Keeps a view's success toast from coming back on every repaint. A view sets
+ * its notice once, then repaints often (innerHTML), which would restart the CSS
+ * fade each time. Before rendering, keep(notice) gives the notice to show, or ''
+ * once it has faded; after rendering, resume(root) carries the fade on from
+ * where it was instead of starting it again.
+ */
+export function createNoticeClock({ now = () => Date.now(), okMs = OK_MS } = {}) {
+  let text = '';
+  let at = 0;
+  return {
+    keep(notice) {
+      if (!notice) { text = ''; return ''; }
+      if (notice !== text) { text = notice; at = now(); }
+      return now() - at >= okMs + 500 ? '' : notice;
+    },
+    resume(root) {
+      if (!text) return;
+      const age = now() - at;
+      if (age < 50) return;
+      for (const el of root.querySelectorAll?.('.toast-stack .toast-ok') ?? []) {
+        if (el.style) el.style.animationDelay = `-${age}ms, ${okMs - age}ms`;
+      }
+    },
+  };
+}
+
+/** Takes a view's problem toast away (the person is fixing it). */
+export function dropProblem(root) {
+  for (const el of root.querySelectorAll?.('.toast-stack .toast-error') ?? []) {
+    const stack = el.parentNode;
+    el.remove?.();
+    if (stack && !stack.children?.length) stack.remove?.();
+  }
+}

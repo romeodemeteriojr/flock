@@ -110,7 +110,21 @@ function availabilityCard(a, busy) {
 }
 
 export function conflictLine(c) {
-  return `You are already scheduled on ${formatDate(c.date)} as ${c.positionName}. Please tell your scheduler.`;
+  return `You are already scheduled on ${formatDate(c.date)} as ${c.positionName}.`;
+}
+
+// Each clash gets its own "I can't serve then", asked twice like on My schedule:
+// saying no tells the schedulers at once.
+function conflictItem(c, view) {
+  const busy = view.busy ? 'disabled' : '';
+  const ids = c.slotIds.join(',');
+  const ask = view.cantKey === ids
+    ? html`<div class="confirm confirm-danger" role="alertdialog" aria-label="Confirm">
+        <p>Tell your scheduler you can't serve on ${formatDate(c.date)}?</p>
+        <div class="btn-row"><button type="button" class="btn btn-danger" data-action="cant-sure" data-ids="${ids}" ${busy}>Yes, I can't make it</button>
+        <button type="button" class="btn" data-action="cant-no" ${busy}>No, keep me on</button></div></div>`
+    : html`<div class="btn-row"><button type="button" class="btn btn-quiet" data-action="cant-ask" data-ids="${ids}" ${busy}>I can't serve then</button></div>`;
+  return html`<li data-conflict="${ids}">${conflictLine(c)}${ask}</li>`;
 }
 
 const andList = (parts) => (parts.length <= 1 ? parts.join('') : `${parts.slice(0, -1).join(', ')} and ${parts.at(-1)}`);
@@ -121,8 +135,9 @@ export function groupConflicts(conflicts = []) {
   const by = new Map();
   for (const c of conflicts) {
     const key = `${c.date}|${c.time ?? ''}|${c.serviceTitle ?? ''}`;
-    if (!by.has(key)) by.set(key, { ...c, names: [] });
+    if (!by.has(key)) by.set(key, { ...c, names: [], slotIds: [] });
     by.get(key).names.push(c.positionName);
+    by.get(key).slotIds.push(c.slotId);
   }
   return [...by.values()].map(({ names, ...c }) => ({ ...c, positionName: andList(names) }));
 }
@@ -158,7 +173,7 @@ export function render(state, view = { loading: true }) {
     ${pageHead(title, 'Tap the days you are away, so nobody asks you then.')}
     ${toasts([[view.message, 'ok', 'data-note'], [view.problem, 'error', 'data-problem']])}
     ${conflicts.length ? html`<div class="notice notice-warn" role="alert" data-conflicts>
-      ${iconSlot('warning', 'notice-icon')}<div class="notice-body"><ul>${groupConflicts(conflicts).map((c) => html`<li>${conflictLine(c)}</li>`)}</ul></div>
+      ${iconSlot('warning', 'notice-icon')}<div class="notice-body"><ul>${groupConflicts(conflicts).map((c) => conflictItem(c, view))}</ul></div>
     </div>` : ''}
     <form class="form form-wide" data-form="blockout" novalidate>
       ${calendar(viewWithMonth, today)}
@@ -264,6 +279,24 @@ export function mount(main, ctx) {
     await load();
   }
 
+  async function cant(ids) {
+    view.busy = true;
+    view.message = null;
+    view.problem = null;
+    paint();
+    const done = [];
+    try {
+      for (const id of ids) { await ctx.api.post(`/api/me/slots/${id}/decline`); done.push(id); }
+      view.message = "Thanks for letting us know. Your scheduler will find someone else.";
+    } catch (err) {
+      view.problem = err?.message || GENERIC;
+    }
+    view.conflicts = (view.conflicts ?? []).filter((c) => !done.includes(c.slotId));
+    view.cantKey = null;
+    view.busy = false;
+    await load();
+  }
+
   async function remove(id) {
     view.busy = true;
     view.message = null;
@@ -305,6 +338,9 @@ export function mount(main, ctx) {
       return undefined;
     }
     if (el.dataset.action === 'remove') return remove(Number(el.dataset.id));
+    if (el.dataset.action === 'cant-ask') { view.cantKey = el.dataset.ids; paint(); return undefined; }
+    if (el.dataset.action === 'cant-no') { view.cantKey = null; paint(); return undefined; }
+    if (el.dataset.action === 'cant-sure') return cant(String(el.dataset.ids).split(',').map(Number).filter(Boolean));
     if (el.dataset.action === 'retry') { view.loading = true; paint(); return load(); }
   });
   root.addEventListener('submit', (e) => {

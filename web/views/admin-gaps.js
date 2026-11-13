@@ -11,7 +11,7 @@ import { flashCopied } from '../lib/copyflash.js';
 import { canShare, share } from '../lib/share.js';
 import { iconSlot } from '../lib/icons.js';
 import { avatar } from '../lib/avatar.js';
-import { toasts } from '../lib/toast.js';
+import { toasts, createNoticeClock, dropProblem } from '../lib/toast.js';
 import { skeleton, emptyState, pageHead } from '../lib/ui.js';
 
 export const title = 'Gaps';
@@ -178,8 +178,7 @@ export function renderScreen(m, panelHtml = '', paneHtml = '') {
     ? html`<div class="split"><div>${gapsTab(m)}</div><aside class="card pane" aria-label="Position">${paneHtml ? raw(String(paneHtml)) : html`<p class="pane-empty">${iconSlot('puzzle', 'icon-lg')}Choose a position.</p>`}</aside></div>`
     : gapsTab(m);
   return String(html`
-    ${m.error ? html`<p class="form-error" role="alert">${m.error}</p>` : ''}
-    ${toasts([[m.notice, 'ok']])}
+    ${toasts([[m.notice, 'ok'], [m.error, 'error']])}
     ${panelHtml}
     ${tabs(m)}
     ${body}
@@ -197,10 +196,13 @@ export function createScreen({ api, root, today = todayString(), win = globalThi
   };
   const hold = { timer: null, key: null };
   let reminderSeq = 0;
+  const notices = createNoticeClock();
   const paint = () => {
     sheet.before();
     m.current = panel.state?.slot?.id ?? null;
+    m.notice = notices.keep(m.notice);
     root.innerHTML = m.wide ? renderScreen(m, '', panel.render({ pane: true })) : renderScreen(m, panel.render());
+    notices.resume(root);
     sheet.update();
     const open = root.querySelector?.('[data-slot-panel]');
     if (open) swipeToDismiss(open, { win, onDismiss: () => panel.close() });
@@ -286,6 +288,12 @@ export function createScreen({ api, root, today = todayString(), win = globalThi
     if (ok) flashCopied(win, root, target, label, hold, key);
   }
 
+  // A problem goes away once the person starts fixing it.
+  root.addEventListener('input', () => {
+    if (!m.error) return;
+    m.error = '';
+    dropProblem(root);
+  });
   root.addEventListener('click', (e) => {
     const el = e.target?.closest?.('[data-action]');
     if (!el) return undefined;

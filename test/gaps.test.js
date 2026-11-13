@@ -70,7 +70,7 @@ test('GET /api/admin/suggest: shape, includeUnqualified and validation errors', 
     assert.deepEqual(r.json, {
       candidates: [{
         personId: otherId, name: 'Olive Other', servedLast8Weeks: 0, lastServed: null, qualified: true, alsoOn: [],
-        reasons: ['Has not served in 8 weeks', 'Has never served', 'Nothing scheduled in the next 4 weeks'],
+        reasons: ['Has never served', 'Nothing scheduled in the next 4 weeks'],
       }],
     });
     for (const flag of ['true', '1']) {

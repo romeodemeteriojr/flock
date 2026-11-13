@@ -3,7 +3,7 @@
 // position shows its buttons once tapped. Deleting asks "Are you sure?" first.
 import { html } from '../lib/html.js';
 import { iconSlot } from '../lib/icons.js';
-import { toasts } from '../lib/toast.js';
+import { toasts, createNoticeClock, dropProblem } from '../lib/toast.js';
 import { takenOffText, peopleFrom } from '../lib/taken-off.js';
 import { skeleton, emptyState, pageHead, disclosure, refocus } from '../lib/ui.js';
 
@@ -104,8 +104,7 @@ function teamCard(t, m) {
 export function renderScreen(m) {
   if (m.loading) return String(skeleton('Loading…', 'cards', 2));
   return String(html`
-    ${m.error ? html`<p class="form-error" role="alert">${m.error}</p>` : ''}
-    ${toasts([[m.notice, 'ok']])}
+    ${toasts([[m.notice, 'ok'], [m.error, 'error']])}
     <form class="form card form-card" data-form="add-team" novalidate>
       <h2 class="card-title">Add team</h2>
       <div class="field">
@@ -124,7 +123,12 @@ export function createScreen({ api, root }) {
   // open: the teams that are open; selected: the position whose buttons show.
   const m = { teams: [], loading: true, panel: null, error: '', notice: '', open: new Set(), selected: null };
   let busy = false;
-  const paint = () => { root.innerHTML = renderScreen(m); };
+  const notices = createNoticeClock();
+  const paint = () => {
+    m.notice = notices.keep(m.notice);
+    root.innerHTML = renderScreen(m);
+    notices.resume(root);
+  };
   const reload = async () => {
     const t = await api.get('/api/teams');
     m.teams = Array.isArray(t) ? t : [];
@@ -213,6 +217,12 @@ export function createScreen({ api, root }) {
     'rename-position': nameSaver(true, (id) => `/api/positions/${id}`, (p, b) => api.patch(p, b), 'Position renamed.'),
   };
 
+  // A problem goes away once the person starts fixing it.
+  root.addEventListener('input', () => {
+    if (!m.error) return;
+    m.error = '';
+    dropProblem(root);
+  });
   root.addEventListener('click', (e) => {
     const el = e.target?.closest?.('[data-action]');
     const fn = el && actions[el.dataset.action];

@@ -99,7 +99,7 @@ export function createSlotPanel({ api, paint, changed = () => {} }) {
   }
 
   function open(slot) {
-    p = { slot, loading: true, candidates: [], showAll: false, conflict: null, removeAsk: false, error: '', busy: false, seq: 0 };
+    p = { slot, loading: true, candidates: [], showAll: false, conflict: null, removeAsk: false, swapAsk: null, error: '', busy: false, seq: 0 };
     paint();
     return loadSuggestions();
   }
@@ -157,7 +157,16 @@ export function createSlotPanel({ api, paint, changed = () => {} }) {
 
   const actions = {
     'slot-close': () => close(),
-    'slot-assign': (id) => assign(id, false),
+    // Someone waiting for their answer would be taken off (and told): ask first.
+    // A confirmed person is guarded by the server's "accepted" conflict instead.
+    'slot-assign': (id) => {
+      if (!p || p.busy) return;
+      const held = p.slot.personId != null && p.slot.status === 'pending' && p.slot.personId !== id;
+      if (held && p.swapAsk !== id) { p.swapAsk = id; p.removeAsk = false; p.conflict = null; paint(); return; }
+      p.swapAsk = null;
+      return assign(id, false);
+    },
+    'slot-swap-no': () => { if (p) { p.swapAsk = null; paint(); } },
     'slot-force': () => {
       const c = p?.conflict;
       if (!c || !c.force || p.busy) return; // never for inactive or past
@@ -171,7 +180,7 @@ export function createSlotPanel({ api, paint, changed = () => {} }) {
       paint();
       return loadSuggestions();
     },
-    'slot-remove-ask': () => { if (p) { p.removeAsk = true; p.conflict = null; paint(); } },
+    'slot-remove-ask': () => { if (p) { p.removeAsk = true; p.swapAsk = null; p.conflict = null; paint(); } },
     'slot-remove-no': () => { if (p) { p.removeAsk = false; paint(); } },
     'slot-remove-yes': () => remove(),
   };
@@ -198,6 +207,16 @@ export function createSlotPanel({ api, paint, changed = () => {} }) {
           <button type="button" class="btn" data-action="slot-conflict-back">No, go back</button>`
     : html`<button type="button" class="btn" data-action="slot-conflict-back">OK</button>`}
         </div></div></div>`;
+    }
+    let swap = '';
+    if (p.swapAsk != null) {
+      const who = nameOf(p.swapAsk) || 'this person';
+      swap = html`<div class="confirm confirm-danger" role="alertdialog" aria-label="Confirm" data-swap="${p.swapAsk}">
+          <p>${slot.personName} was asked and hasn't answered yet. Put ${who} on instead? ${slot.personName} will be taken off and told.</p>
+          <div class="btn-row">
+            <button type="button" class="btn btn-danger" data-action="slot-assign" data-id="${p.swapAsk}">Yes, swap in ${who}</button>
+            <button type="button" class="btn" data-action="slot-swap-no">No, go back</button>
+          </div></div>`;
     }
     // Who is in it now (or nobody yet), with Remove; its are-you-sure takes the button's place.
     const chip = slot.statusLabel ? html`<span class="chip chip-plain">${slot.statusLabel}</span>` : statusChip(status);
@@ -241,6 +260,7 @@ export function createSlotPanel({ api, paint, changed = () => {} }) {
       <div class="sheet-body">
       ${current}
       ${p.error ? html`<p class="form-error" role="alert">${p.error}</p>` : ''}
+      ${swap}
       ${conflict}
       <h3>Who could do this</h3>
       <div class="segmented" role="group" aria-label="Who to show">

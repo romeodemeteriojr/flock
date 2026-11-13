@@ -8,7 +8,7 @@ import { html, raw } from '../lib/html.js';
 import { iconSlot } from '../lib/icons.js';
 import { flashCopied } from '../lib/copyflash.js';
 import { avatar } from '../lib/avatar.js';
-import { toasts } from '../lib/toast.js';
+import { toasts, createNoticeClock, dropProblem } from '../lib/toast.js';
 import { inviteMessage } from '../lib/invite.js';
 import { copyText } from '../lib/slotpanel.js';
 import { canShare, share } from '../lib/share.js';
@@ -265,8 +265,7 @@ export function renderScreen(m) {
   if (m.loading) return String(skeleton('Loading…', 'list', 4));
   const open = m.selected !== null && m.selected !== undefined ? m.people.find((p) => p.id === m.selected) : null;
   return String(html`
-    ${m.error ? html`<p class="form-error" role="alert">${m.error}</p>` : ''}
-    ${toasts([[m.notice, 'ok']])}
+    ${toasts([[m.notice, 'ok'], [m.error, 'error']])}
     ${m.invite ? inviteBox(m.invite, m.canShare) : ''}
     <div class="people-tools">
       <div class="field search-field">
@@ -298,15 +297,23 @@ export function createScreen({ api, root, ctx = {}, win = globalThis }) {
   const me = () => ctx.state?.user?.id ?? null;
   let busy = false;
 
+  const notices = createNoticeClock();
+  let invitePainted = null;
   const paint = () => {
     personSheet.before();
     addSheetFocus.before();
+    m.notice = notices.keep(m.notice);
     root.innerHTML = renderScreen(m);
+    notices.resume(root);
     m.entered = m.selected !== null || m.adding;
     personSheet.update();
     addSheetFocus.update();
     const open = root.querySelector?.('[data-person-panel], [data-add-panel]');
     if (open) swipeToDismiss(open, { win, onDismiss: () => (m.adding ? actions['add-cancel']() : actions['person-close']()) });
+    // A new invite box opens at the top of the page: bring it into view (after
+    // the closing sheet has handed focus back, which scrolls too).
+    if (m.invite && m.invite !== invitePainted) root.querySelector?.('#invite-box')?.scrollIntoView?.({ block: 'start', behavior: 'smooth' });
+    invitePainted = m.invite;
   };
   const personSheet = createSheet({
     root, isOpen: () => m.selected !== null && !m.adding, close: () => actions['person-close'](), modal: () => !m.wide,
@@ -486,6 +493,12 @@ export function createScreen({ api, root, ctx = {}, win = globalThis }) {
     }),
   };
 
+  // A problem goes away once the person starts fixing it.
+  root.addEventListener('input', () => {
+    if (!m.error) return;
+    m.error = '';
+    dropProblem(root);
+  });
   root.addEventListener('click', (e) => {
     const el = e.target?.closest?.('[data-action]');
     if (!el || el.tagName === 'INPUT') return;
