@@ -66,10 +66,10 @@ test('GET /api/admin/suggest: shape, includeUnqualified and validation errors', 
   try {
     const r = await get(`/api/admin/suggest?slotId=${open}`, adminCookie);
     assert.equal(r.status, 200);
-    // Max is already on this service; Olive is qualified; Ada is not set up for Drums.
+    // Max already holds the other Drums slot here (same position: never twice); Olive is qualified; Ada is not set up for Drums.
     assert.deepEqual(r.json, {
       candidates: [{
-        personId: otherId, name: 'Olive Other', servedLast8Weeks: 0, lastServed: null, qualified: true,
+        personId: otherId, name: 'Olive Other', servedLast8Weeks: 0, lastServed: null, qualified: true, alsoOn: [],
         reasons: ['Has not served in 8 weeks', 'Has never served', 'Nothing scheduled in the next 4 weeks'],
       }],
     });

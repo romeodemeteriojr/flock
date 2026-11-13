@@ -316,3 +316,24 @@ test('service: a slot changed by hand between preview and apply is respected', a
   assert.deepEqual(done.assigned, []);
   assert.equal((await data.slots.findById(s1.id)).personId, other.id);
 });
+
+// ---------- several positions on one service (decision 0010) ----------
+
+test('plan: two positions at one service count as serving once for fairness', () => {
+  // Pat did Drums and Keys at the service of 22 Dec: one service. Quinn served once since, on 29 Dec.
+  // Counted per slot Pat would have load 2 and lose; counted per service both have load 1 and Pat, longest ago, wins.
+  const svc22 = 2024122200;
+  const history = [held('2024-12-22', 1, 'accepted', DRUMS, { serviceId: svc22 }), held('2024-12-22', 1, 'accepted', KEYS, { serviceId: svc22 }), held('2024-12-29', 2)];
+  const people = [person(1, 'Pat', [DRUMS, KEYS]), person(2, 'Quinn', [DRUMS, KEYS])];
+  const r = plan({ slots: [slot('2025-01-12')], history, people, availability: new Map([[1, 1], [2, 1]]) });
+  assert.deepEqual(who(r), [['2025-01-12', 'Drums', 'Pat']]);
+});
+
+test('plan: never puts someone on a second position of a service, even when nobody else is free', () => {
+  const sid = 2025011200;
+  const mine = held('2025-01-12', 1, 'pending', DRUMS, { serviceId: sid });
+  const open = slot('2025-01-12', KEYS, { serviceId: sid });
+  const r = plan({ slots: [mine, open], history: [mine], people: [person(1, 'Pat', [DRUMS, KEYS])], availability: new Map([[1, 1]]) });
+  assert.deepEqual(r.assigned, []);
+  assert.deepEqual(r.unfilled.map((u) => [u.positionName, u.reason]), [['Keys', 'nobody_free']]);
+});

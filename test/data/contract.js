@@ -519,14 +519,16 @@ export function runContract(name, makeData) {
         assert.equal(await data.services.remove(s.id), false);
       });
 
-      test('assignedCount counts slots with a person', async () => {
+      test('assignedCount counts the people in its slots, each once', async () => {
         await fresh();
         const w = await world();
         const s = await data.services.create({ date: '2025-01-05', time: '09:00', title: 'Sun' });
-        const [a, , c] = await data.slots.createMany(s.id, [w.drums.id, w.keys.id, w.sound.id]);
+        const [a, b, c] = await data.slots.createMany(s.id, [w.drums.id, w.keys.id, w.sound.id]);
         assert.equal(await data.services.assignedCount(s.id), 0);
         await data.slots.assign(a.id, { personId: w.ann.id, assignedAt: T });
         await data.slots.assign(c.id, { personId: w.bob.id, status: 'accepted', assignedAt: T });
+        assert.equal(await data.services.assignedCount(s.id), 2);
+        await data.slots.assign(b.id, { personId: w.ann.id, assignedAt: T }); // Ann in two slots
         assert.equal(await data.services.assignedCount(s.id), 2);
       });
     });

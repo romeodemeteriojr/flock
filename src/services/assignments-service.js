@@ -10,6 +10,8 @@ import { isValidDate, addDays, todayStr } from '../dates.js';
 export const SCHEDULE_DAYS = 84;
 /** Statuses that mean "this person holds the slot". */
 const HOLDING = ['pending', 'accepted'];
+/** The most positions one person may hold on one service (decision 0010). Never overridable. */
+export const MAX_POSITIONS_PER_SERVICE = 3;
 
 const isInt = (v) => Number.isSafeInteger(v);
 const holds = (s) => s.personId !== null && HOLDING.includes(s.status);
@@ -69,6 +71,21 @@ const mySlotView = (s) => ({
 });
 
 /**
+ * The two limits on one person's positions at one service (decision 0010).
+ * `others`: the slots they hold there now (pending or accepted), the slot in
+ * question left out. Throws a ConflictError that no `force` overrides.
+ */
+function positionLimits(others, slot, isWords, hasWords) {
+  if (others.some((s) => s.positionId === slot.positionId)) {
+    throw new ConflictError(`${isWords} already on ${slot.positionName} at this service`, { code: 'same_position' });
+  }
+  if (others.length >= MAX_POSITIONS_PER_SERVICE) {
+    throw new ConflictError(`${hasWords} ${MAX_POSITIONS_PER_SERVICE} positions at this service, the most one person can have`,
+      { code: 'too_many_positions' });
+  }
+}
+
+/**
  * @param {object} deps  Injected by src/container.js (nothing is imported or global).
  * @param {import("../data/index.js").Data} deps.data  The data layer.
  * @param {{now: () => Date}} deps.clock
@@ -96,9 +113,12 @@ export function createAssignmentsService(deps) {
   return {
     /**
      * Put a person in a slot (status pending). Rules, each a ConflictError with a code:
-     * past (never overridable), inactive (never overridable), and, unless `force`
-     * is true, accepted (someone else already accepted this slot), not_qualified,
-     * blocked, double_booked.
+     * past, inactive, same_position (they already hold another slot of this
+     * position on the service) and too_many_positions (they already hold
+     * MAX_POSITIONS_PER_SERVICE other slots on it), none of them overridable;
+     * and, unless `force` is true, accepted (someone else already accepted this
+     * slot), not_qualified, blocked. Holding other positions on the same
+     * service is fine up to the limit (decision 0010).
      * The person is notified, and anyone they replaced, unless `notify` is false
      * (autofill sends one notification per person for the whole batch).
      * @param {{id: number}} actor
@@ -118,6 +138,10 @@ export function createAssignmentsService(deps) {
         if (!person.active) {
           throw new ConflictError(`${person.name} is no longer active`, { code: 'inactive' });
         }
+        // Hard limits first (never overridable), so a forced retry cannot hit them afterwards.
+        const others = (await d.slots.listForService(slot.serviceId))
+          .filter((s) => s.id !== slot.id && s.personId === person.id && HOLDING.includes(s.status));
+        positionLimits(others, slot, `${person.name} is`, `${person.name} already has`);
         const overridden = [];
         const check = (failed, code, message) => {
           if (!failed) return;
@@ -130,10 +154,6 @@ export function createAssignmentsService(deps) {
           `${person.name} is not set up for ${slot.positionName}`);
         check(await blockouts.isBlocked(person.id, slot.serviceDate), 'blocked',
           `${person.name} is blocked out on ${slot.serviceDate}`);
-        const others = (await d.slots.listForService(slot.serviceId))
-          .filter((s) => s.id !== slot.id && s.personId === person.id && HOLDING.includes(s.status));
-        check(others.length > 0, 'double_booked',
-          `${person.name} is already scheduled on this service`);
         before = slot;
         const updated = await d.slots.assign(slot.id, { personId: person.id, status: 'pending', assignedAt: clock.now().toISOString() });
         const previous = slot.personName ? `, replacing ${slot.personName} (${slot.status})` : '';
@@ -193,6 +213,8 @@ export function createAssignmentsService(deps) {
           positionName: s.positionName,
           teamName: s.teamName,
           status: s.status,
+          // My other positions at the same service, in roster order.
+          alsoOn: mine.filter((o) => o.serviceId === s.serviceId && o.id !== s.id).map((o) => o.positionName),
           coVolunteers: (byDate.get(s.serviceDate) ?? [])
             .filter((o) => o.serviceId === s.serviceId && holds(o) && o.personId !== personId)
             .map((o) => ({ name: o.personName, positionName: o.positionName })),
@@ -207,7 +229,9 @@ export function createAssignmentsService(deps) {
     /**
      * The slot's own person accepts or declines. pending -> accepted/declined,
      * accepted -> declined, declined -> accepted (only while the slot is still
-     * theirs). Answering with the current status changes nothing.
+     * theirs). Answering with the current status changes nothing. Taking back
+     * a decline is refused (same_position, too_many_positions) when the
+     * person now holds that position, or the most positions, on the service.
      */
     async respond(personId, slotId, action) {
       if (action !== 'accept' && action !== 'decline') throw new ValidationError('Answer must be accept or decline');
@@ -219,6 +243,12 @@ export function createAssignmentsService(deps) {
         notPast(slot, 'That service is in the past');
         if (slot.status === status) return mySlotView(slot);
         if (!['pending', 'accepted', 'declined'].includes(slot.status)) throw new NotFoundError('Slot not found');
+        if (status === 'accepted' && slot.status === 'declined') {
+          // Taking back a "no" holds the slot again, so the limits apply as on assign.
+          const others = (await d.slots.listForService(slot.serviceId))
+            .filter((s) => s.id !== slot.id && s.personId === personId && HOLDING.includes(s.status));
+          positionLimits(others, slot, 'You are', 'You already have');
+        }
         const updated = await d.slots.respond(slot.id, { status, respondedAt: clock.now().toISOString() });
         await audit(d, personId, `slot.${action}`, `${where(slot)}: ${slot.personName} ${slot.status} -> ${status}`);
         if (status === 'declined') saidNo = slot;

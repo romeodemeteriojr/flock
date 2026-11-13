@@ -278,7 +278,7 @@ export function createCalendarService(deps) {
         mustBeUpcoming(svc);
         const count = await d.services.assignedCount(svc.id);
         if (count > 0 && !confirm) {
-          throw new ConflictError(`${count} people are scheduled on this date`, { code: 'has_people', details: { count } });
+          throw new ConflictError(`${count === 1 ? '1 person is' : `${count} people are`} scheduled on this date`, { code: 'has_people', details: { count } });
         }
         gone = { svc, slots: await d.slots.listForService(svc.id) };
         await d.services.remove(svc.id);

@@ -400,3 +400,74 @@ test('days off calendar: past days and months before this one cannot be picked, 
   await root.fire('click', { dataset: { action: 'day', date: 'nope' } });
   assert.match(root.innerHTML, /Tap a day to start\./);
 });
+
+// ---------- several positions on one service (decision 0010) ----------
+
+test('schedule: each position is its own card; alsoOn says the others, escaped', async () => {
+  const items = [
+    item({ slotId: 1, positionName: 'Sound', alsoOn: ['Vocals <b>'] }),
+    item({ slotId: 2, positionName: 'Vocals <b>', teamName: 'Band', alsoOn: ['Sound'] }),
+    item({ slotId: 3, date: '2026-11-15', positionName: 'Sound', alsoOn: [] }),
+  ];
+  const { root } = await setup(sched, { 'GET /api/me/schedule': data(items) });
+  const h = root.innerHTML;
+  assert.match(h, /<p class="hero-sub" data-also>Also on Vocals &lt;b&gt;<\/p>/);
+  assert.match(h, /<p class="serve-meta" data-also>Also on Sound<\/p>/);
+  assert.equal((h.match(/data-also/g) ?? []).length, 2, 'nothing for the card with no other position');
+  assert.doesNotMatch(h, /<b>/);
+  assert.equal(sched.alsoWords({ alsoOn: ['A', 'B'] }), 'Also on A and B');
+  assert.equal(sched.alsoWords({ alsoOn: ['A', 'B', 'C'] }), 'Also on A, B and C');
+  assert.equal(sched.alsoWords({}), '');
+  assert.equal(sched.alsoWords({ alsoOn: [] }), '');
+});
+
+test('schedule: with other positions that day, saying no names the position, so the others plainly stay', async () => {
+  const items = [item({ slotId: 1, status: 'accepted', positionName: 'Sound', alsoOn: ['Vocals'] })];
+  const { root, api } = await setup(sched, { 'GET /api/me/schedule': data(items) });
+  const text = (r) => r.innerHTML.replaceAll('&#39;', "'");
+  assert.match(text(root), /I can't do Sound after all/);
+  assert.doesNotMatch(text(root), /I can't make it after all/);
+  await root.click('decline-ask', 1);
+  assert.match(text(root), /Are you sure you can't do Sound on Sun 8 Nov\?/);
+  assert.match(text(root), /Yes, I can't do Sound</);
+  await root.click('decline-sure', 1);
+  assert.equal(api.calls[1], 'POST /api/me/slots/1/decline {}');
+  // One position only: the words stay as they were.
+  const one = await setup(sched, { 'GET /api/me/schedule': data([item({ slotId: 1, status: 'accepted' })]) });
+  await one.root.click('decline-ask', 1);
+  assert.match(text(one.root), /Are you sure you can't serve on Sun 8 Nov\?/);
+  assert.match(text(one.root), /Yes, I can't make it</);
+});
+
+test('schedule: taking back a no at the limit shows the server words', async () => {
+  const items = [item({ slotId: 1, status: 'pending', alsoOn: ['A', 'B', 'C'] })];
+  const err = Object.assign(new Error('You already have 3 positions at this service, the most one person can have'), { status: 409, code: 'too_many_positions' });
+  const { root } = await setup(sched, { 'GET /api/me/schedule': data(items), 'POST /api/me/slots/1/accept': err });
+  await root.click('accept', 1);
+  assert.match(root.innerHTML, /You already have 3 positions at this service, the most one person can have/);
+});
+
+test('days off: clashes at one service are one line, "as Sound and Vocals"; other services stay apart', async () => {
+  const c = (o) => ({ slotId: 1, date: '2026-11-08', time: '09:00', serviceTitle: 'Sunday service', positionName: 'Sound', teamName: 'Tech', status: 'pending', ...o });
+  const conflicts = [
+    c({ slotId: 1 }),
+    c({ slotId: 2, positionName: 'Vocals', teamName: 'Band' }),
+    c({ slotId: 3, time: '18:00', positionName: 'Keys' }),
+    c({ slotId: 4, date: '2026-11-15', positionName: 'Sound' }),
+  ];
+  assert.deepEqual(off.groupConflicts(conflicts).map((g) => [g.date, g.time, g.positionName]), [
+    ['2026-11-08', '09:00', 'Sound and Vocals'],
+    ['2026-11-08', '18:00', 'Keys'],
+    ['2026-11-15', '09:00', 'Sound'],
+  ]);
+  assert.deepEqual(off.groupConflicts([]), []);
+  assert.equal(off.groupConflicts([c({}), c({ positionName: 'B' }), c({ positionName: 'C' })])[0].positionName, 'Sound, B and C');
+  const { root } = await setup(off, {
+    'GET /api/me/blockouts': { blockouts: [] },
+    'POST /api/me/blockouts': { blockout: {}, conflicts },
+  });
+  await root.submit('blockout', { from: '2026-11-08', to: '2026-11-15', reason: '' });
+  assert.match(root.innerHTML, /You are already scheduled on Sun 8 Nov as Sound and Vocals\. Please tell your scheduler\./);
+  assert.match(root.innerHTML, /You are already scheduled on Sun 8 Nov as Keys\./);
+  assert.equal((root.innerHTML.match(/You are already scheduled/g) ?? []).length, 3);
+});

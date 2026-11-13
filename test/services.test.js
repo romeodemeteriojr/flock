@@ -182,10 +182,15 @@ test('delete with and without confirm', async () => {
     assert.equal(r.status, 200);
     assert.equal(db.prepare('SELECT COUNT(*) n FROM slots').get().n, 0);
     const b = (await call('POST', '/api/services', 'admin', { date: '2026-03-08', slots: [{ positionId: 1, count: 2 }] })).json;
+    // One person in both slots counts once (decision 0010).
     db.prepare("UPDATE slots SET person_id = ?, status = 'pending' WHERE id IN (?, ?)").run(s.memberId, b.slots[0].id, b.slots[1].id);
     r = await call('DELETE', `/api/services/${b.id}`, 'admin');
     assert.equal(r.status, 409);
     assert.equal(r.json.code, 'has_people');
+    assert.equal(r.json.count, 1);
+    assert.equal(r.json.error, '1 person is scheduled on this date');
+    db.prepare("UPDATE slots SET person_id = ?, status = 'pending' WHERE id = ?").run(s.adminId, b.slots[1].id);
+    r = await call('DELETE', `/api/services/${b.id}`, 'admin');
     assert.equal(r.json.count, 2);
     assert.equal(r.json.error, '2 people are scheduled on this date');
     assert.equal(db.prepare('SELECT COUNT(*) n FROM services').get().n, 1);

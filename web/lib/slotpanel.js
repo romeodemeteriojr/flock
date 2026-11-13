@@ -42,8 +42,9 @@ export function statusChip(status, { compact = false } = {}) {
 
 // ---------- 409 explanations ----------
 
-// Codes the scheduler may override after confirming. inactive and past never are.
-export const OVERRIDABLE = Object.freeze(['blocked', 'not_qualified', 'double_booked', 'accepted']);
+// Codes the scheduler may override after confirming. inactive, past,
+// same_position and too_many_positions never are (decision 0010).
+export const OVERRIDABLE = Object.freeze(['blocked', 'not_qualified', 'accepted']);
 
 export function conflictMessage(code, name, positionName) {
   const who = name || 'This person';
@@ -52,7 +53,10 @@ export function conflictMessage(code, name, positionName) {
     case 'not_qualified': return positionName
       ? `${who} is not trained for ${positionName}. Assign anyway?`
       : `${who} is not trained for this. Assign anyway?`;
-    case 'double_booked': return `${who} is already serving at this service. Assign anyway?`;
+    case 'same_position': return positionName
+      ? `${who} is already on ${positionName} at this service.`
+      : `${who} is already in this position at this service.`;
+    case 'too_many_positions': return `${who} already has 3 positions at this service, the most one person can have.`;
     case 'accepted': return `Someone else has already said yes to this. Put ${who} in instead?`;
     case 'inactive': return `${who} is no longer active, so they can't be scheduled.`;
     case 'past': return "That service has already happened, so it can't be changed.";
@@ -212,11 +216,12 @@ export function createSlotPanel({ api, paint, changed = () => {} }) {
     else if (!p.candidates.length) {
       list = emptyState(p.showAll ? 'Nobody is free for this.' : 'Nobody trained for this is free. Try showing people not trained for this.', 'art-people');
     } else {
-      // The list comes sorted by who has served least; the first one trained for it is the best match.
-      const best = p.candidates.find((c) => c.qualified !== false)?.personId;
+      // The list comes sorted by who has served least; the first one trained for it
+      // and not already serving at this service is the best match.
+      const best = p.candidates.find((c) => c.qualified !== false && !c.alsoOn?.length)?.personId;
       list = html`<ol class="list candidates" data-candidates>${p.candidates.map((c) => html`<li class="candidate" data-candidate="${c.personId}">
         <div class="candidate-main">${avatar(c.name)}<div class="candidate-text">
-        <p class="candidate-name"><strong>${c.name}</strong>${c.personId === best ? html` <span class="chip chip-info">${iconSlot('sparkle', 'chip-icon')}Best match</span>` : ''}${c.qualified === false ? html` <span class="chip chip-plain">Not trained</span>` : ''}</p>
+        <p class="candidate-name"><strong>${c.name}</strong>${c.personId === best ? html` <span class="chip chip-info">${iconSlot('sparkle', 'chip-icon')}Best match</span>` : ''}${c.qualified === false ? html` <span class="chip chip-plain">Not trained</span>` : ''}${c.alsoOn?.length ? html` <span class="chip chip-plain" data-also>Already serving</span>` : ''}</p>
         <ul class="hint reasons">${(c.reasons ?? []).map((r) => html`<li>${r}</li>`)}</ul></div></div>
         <div class="btn-row candidate-actions"><button type="button" class="btn${c.personId === best ? ' btn-primary' : ''}" data-action="slot-assign" data-id="${c.personId}">Assign</button></div>
       </li>`)}</ol>`;

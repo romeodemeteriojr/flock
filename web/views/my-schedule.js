@@ -70,10 +70,21 @@ export function heroItem(data, keep = null) {
     ?? data?.nextServing ?? items[0] ?? null;
 }
 
+// "Also on Vocals": my other positions at the same service (decision 0010).
+export const alsoWords = (item) => (item?.alsoOn?.length
+  ? `Also on ${item.alsoOn.length === 1 ? item.alsoOn[0] : `${item.alsoOn.slice(0, -1).join(', ')} and ${item.alsoOn.at(-1)}`}`
+  : '');
+const several = (item) => !!item?.alsoOn?.length;
+const cantAfterAll = (item) => (several(item) ? `I can't do ${item.positionName} after all` : "I can't make it after all");
+
+// With other positions at the same service, the words name this one: saying no
+// to Sound leaves Vocals as it is.
 const SURE = (item, busy) => html`<div class="notice notice-warn" role="alert">
-      ${iconSlot('warning', 'notice-icon')}<div class="notice-body"><p>Are you sure you can't serve on ${formatDate(item.date)}?</p>
+      ${iconSlot('warning', 'notice-icon')}<div class="notice-body"><p>${several(item)
+        ? `Are you sure you can't do ${item.positionName} on ${formatDate(item.date)}?`
+        : `Are you sure you can't serve on ${formatDate(item.date)}?`}</p>
       <div class="btn-row">
-        <button type="button" class="btn btn-danger" data-action="decline-sure" data-id="${item.slotId}" ${busy}>Yes, I can't make it</button>
+        <button type="button" class="btn btn-danger" data-action="decline-sure" data-id="${item.slotId}" ${busy}>${several(item) ? `Yes, I can't do ${item.positionName}` : "Yes, I can't make it"}</button>
         <button type="button" class="btn" data-action="keep" data-id="${item.slotId}" ${busy}>No, keep me on</button>
       </div></div>
     </div>`;
@@ -94,12 +105,13 @@ function hero(item, view, today) {
   } else if (view.confirmId === item.slotId) {
     answer = html`<div class="hero-status">${SURE(item, busy)}</div>`;
   } else {
-    answer = html`<div class="hero-status"><span class="chip hero-chip">${iconSlot('check', 'chip-icon')}Confirmed</span><button type="button" class="hero-link" data-action="decline-ask" data-id="${item.slotId}" ${busy}>I can't make it after all</button></div>`;
+    answer = html`<div class="hero-status"><span class="chip hero-chip">${iconSlot('check', 'chip-icon')}Confirmed</span><button type="button" class="hero-link" data-action="decline-ask" data-id="${item.slotId}" ${busy}>${cantAfterAll(item)}</button></div>`;
   }
   return html`<section class="hero hero-next${celebrating ? ' is-celebrating' : ''}" aria-label="Next time you serve" data-slot="${item.slotId}">
     <span class="hero-eyebrow">${iconSlot(pending ? 'clock' : 'sparkle', 'icon-sm')} ${pending ? 'Please answer' : 'Next up'}${rel ? ` · ${rel}` : ''}</span>
     <p class="banner" data-banner>${formatDate(item.date)} at <span class="num">${formatTime(item.time)}</span></p>
     <p class="hero-role"><strong>${item.positionName}</strong> · ${item.teamName}</p>
+    ${several(item) ? html`<p class="hero-sub" data-also>${alsoWords(item)}</p>` : ''}
     ${item.serviceTitle ? html`<p class="hero-sub">${item.serviceTitle}</p>` : ''}
     ${co.length ? html`<p class="hero-with"><span class="avatar-stack">${co.slice(0, 3).map((c) => avatar(c.name, 'sm'))}</span> <span>${withWords(co)}</span></p>` : ''}
     ${answer}
@@ -122,7 +134,7 @@ function card(item, view) {
   } else if (view.confirmId === item.slotId) {
     actions = SURE(item, busy);
   } else {
-    actions = html`<div class="btn-row"><button type="button" class="btn btn-quiet" data-action="decline-ask" data-id="${item.slotId}" ${busy}>I can't make it after all</button></div>`;
+    actions = html`<div class="btn-row"><button type="button" class="btn btn-quiet" data-action="decline-ask" data-id="${item.slotId}" ${busy}>${cantAfterAll(item)}</button></div>`;
   }
   const details = html`${co ? html`<p class="hint serve-with">${iconSlot('users', 'icon-sm')} Serving with: ${co}</p>` : ''}${roster(item, view)}`;
   const hasDetails = !!co || !!view.data?.rosters?.[item.date]?.length || !pending;
@@ -132,6 +144,7 @@ function card(item, view) {
       <div class="serve-text">
         <h3 class="serve-title">${item.positionName} · ${item.teamName}<span class="visually-hidden">, ${formatDate(item.date)}</span></h3>
         <p class="serve-meta">${item.serviceTitle ? html`${item.serviceTitle} · ` : ''}<span class="num">${formatTime(item.time)}</span></p>
+        ${several(item) ? html`<p class="serve-meta" data-also>${alsoWords(item)}</p>` : ''}
       </div>
       ${pending ? '' : html`<span class="chip chip-ok">${iconSlot('check', 'chip-icon')}Confirmed</span>`}
     </div>

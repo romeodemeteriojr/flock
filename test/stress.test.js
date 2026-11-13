@@ -40,10 +40,17 @@ const auditCount = (db, action, like = '%') => Number(db.prepare(
 ).get(action, like).n);
 
 // Somebody holding two slots on one service (pending or accepted) is a double booking.
+// Broken limits (decision 0010): someone holding more than 3 positions on one
+// service, or two slots of the same position on it.
 function doubleBookings(db) {
-  return db.prepare(`SELECT service_id, person_id, COUNT(*) AS n FROM slots
-    WHERE person_id IS NOT NULL AND status IN ('pending','accepted')
-    GROUP BY service_id, person_id HAVING n > 1`).all();
+  return [
+    ...db.prepare(`SELECT service_id, person_id, COUNT(*) AS n FROM slots
+      WHERE person_id IS NOT NULL AND status IN ('pending','accepted')
+      GROUP BY service_id, person_id HAVING n > 3`).all(),
+    ...db.prepare(`SELECT service_id, person_id, position_id, COUNT(*) AS n FROM slots
+      WHERE person_id IS NOT NULL AND status IN ('pending','accepted')
+      GROUP BY service_id, person_id, position_id HAVING n > 1`).all(),
+  ];
 }
 
 function healthy(db) {
@@ -159,25 +166,27 @@ test('stress: one member sends accept and decline for the same slot at once; the
   } finally { await ctx.done(); }
 });
 
-test('stress: two schedulers race to put the SAME person on one service: exactly one wins, no double booking', async () => {
+test('stress: five schedulers race to put the SAME person in 5 positions of one service: exactly 3 win, never more', async () => {
   const ctx = await boot();
   try {
     const { church, client, db } = ctx;
-    const [a, b] = await Promise.all([loggedIn(client, 'sched1'), loggedIn(client, 'sched2')]);
+    const scheds = await Promise.all([1, 2, 3, 4, 5].map((i) => loggedIn(client, `sched${i}`)));
     let wins = 0;
-    for (let round = 0; round < 8; round++) {
-      const svc = church.services[round % 4];
+    for (let round = 0; round < 4; round++) {
+      const svc = church.services[round];
       const personId = church.memberIds[40 + round];
-      const [s1, s2] = [svc.slots[(round * 2) % 8], svc.slots[(round * 2 + 1) % 8]];
-      const [r1, r2] = await Promise.all([
-        a.put(`/api/slots/${s1.id}/assign`, { personId }),
-        b.put(`/api/slots/${s2.id}/assign`, { personId }),
-      ]);
-      const statuses = [r1.status, r2.status].sort();
-      assert.deepEqual(statuses, [200, 409], `round ${round}: one assignment, one refusal`);
-      const loser = r1.status === 409 ? r1 : r2;
-      assert.equal(loser.json.code, 'double_booked');
-      wins++;
+      // Five different positions of the service (each slot is its own position).
+      const slots = svc.slots.slice(0, 5);
+      const res = await Promise.all(slots.map((s, i) => scheds[i].put(`/api/slots/${s.id}/assign`, { personId, force: true })));
+      const ok = res.filter((r) => r.status === 200);
+      const refused = res.filter((r) => r.status === 409);
+      assert.equal(ok.length, 3, `round ${round}: three assignments`);
+      assert.equal(refused.length, 2, `round ${round}: two refusals`);
+      for (const r of refused) assert.equal(r.json.code, 'too_many_positions');
+      const held = db.prepare("SELECT COUNT(*) AS n FROM slots WHERE service_id = ? AND person_id = ? AND status IN ('pending','accepted')")
+        .get(svc.id, personId).n;
+      assert.equal(held, 3, `round ${round}: the database holds exactly 3`);
+      wins += ok.length;
     }
     assert.equal(auditCount(db, 'slot.assign'), wins, 'only the winning assignments are in the audit log');
     no500(client);

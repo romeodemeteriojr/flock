@@ -25,8 +25,10 @@ export function addDays(date, n) {
   return `${p(t.getUTCFullYear(), 4)}-${p(t.getUTCMonth() + 1)}-${p(t.getUTCDate())}`;
 }
 
-// Counted like the server does for the delete warning: any slot with a person in it.
-export const scheduledCount = (svc) => (svc?.slots ?? []).filter((s) => s.personId !== null && s.personId !== undefined).length;
+// Counted like the server does for the delete warning: everyone in a slot, once
+// each, however many positions they have there.
+export const scheduledCount = (svc) => new Set((svc?.slots ?? [])
+  .filter((s) => s.personId !== null && s.personId !== undefined).map((s) => s.personId)).size;
 
 export function peopleWords(n) {
   return n === 1 ? '1 person is scheduled on this date' : `${n} people are scheduled on this date`;

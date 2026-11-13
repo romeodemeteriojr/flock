@@ -113,6 +113,20 @@ export function conflictLine(c) {
   return `You are already scheduled on ${formatDate(c.date)} as ${c.positionName}. Please tell your scheduler.`;
 }
 
+const andList = (parts) => (parts.length <= 1 ? parts.join('') : `${parts.slice(0, -1).join(', ')} and ${parts.at(-1)}`);
+
+// One line per service, not per position: "as Sound and Vocals" (decision 0010).
+// Keeps the server's order (date, time, team, position).
+export function groupConflicts(conflicts = []) {
+  const by = new Map();
+  for (const c of conflicts) {
+    const key = `${c.date}|${c.time ?? ''}|${c.serviceTitle ?? ''}`;
+    if (!by.has(key)) by.set(key, { ...c, names: [] });
+    by.get(key).names.push(c.positionName);
+  }
+  return [...by.values()].map(({ names, ...c }) => ({ ...c, positionName: andList(names) }));
+}
+
 // view: { loading, error, list, message, problem, conflicts, busy, today, form }
 export function render(state, view = { loading: true }) {
   const today = view.today ?? todayString();
@@ -144,7 +158,7 @@ export function render(state, view = { loading: true }) {
     ${pageHead(title, 'Tap the days you are away, so nobody asks you then.')}
     ${toasts([[view.message, 'ok', 'data-note'], [view.problem, 'error', 'data-problem']])}
     ${conflicts.length ? html`<div class="notice notice-warn" role="alert" data-conflicts>
-      ${iconSlot('warning', 'notice-icon')}<div class="notice-body"><ul>${conflicts.map((c) => html`<li>${conflictLine(c)}</li>`)}</ul></div>
+      ${iconSlot('warning', 'notice-icon')}<div class="notice-body"><ul>${groupConflicts(conflicts).map((c) => html`<li>${conflictLine(c)}</li>`)}</ul></div>
     </div>` : ''}
     <form class="form form-wide" data-form="blockout" novalidate>
       ${calendar(viewWithMonth, today)}

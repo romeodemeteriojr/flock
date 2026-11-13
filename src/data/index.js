@@ -187,7 +187,7 @@ export { DuplicateError, InUseError } from './errors.js';
  * @property {(id: number, patch: {date?: string, time?: string, title?: string}) => Promise<Service|null>} update
  *   DuplicateError when the new date and time clash with another service.
  * @property {(id: number) => Promise<boolean>} remove  Also deletes its slots.
- * @property {(id: number) => Promise<number>} assignedCount  Slots of the service that have a person.
+ * @property {(id: number) => Promise<number>} assignedCount  People in the service's slots, each counted once however many slots they have.
  */
 
 /**
