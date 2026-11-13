@@ -1,5 +1,25 @@
 # Changelog
 
+## Unreleased
+
+No database changes.
+
+### One person, up to 3 positions on one service
+
+A scheduler can now put the same person in **up to 3 positions on one service**, for example Vocals and Keys. (Decision 0010.)
+
+- **On Schedule**, someone already serving at that service is listed for the other positions, marked **Already serving** with "Already serving as Vocals at this service". They come after everyone who is not serving there, so **Best match** still goes to someone fresh. The 2nd and 3rd position need no "Assign anyway?".
+- **A 4th position is refused**, and so is a second slot of the same position (one person cannot be two Door greeters). The message says why, with only **OK**: neither can be forced.
+- Only positions the person holds count (waiting for an answer, or confirmed). One they said no to does not.
+- The limit is per service: a 9:00 and an 11:00 service on the same morning are two services, as before.
+- **Fill open positions** still puts each person on at most one position per service.
+- **Volunteers** answer each position on its own. A card with other positions at the same service says **Also on Vocals**, and saying no names the position ("Are you sure you can't do Sound on ...?") so it is clear the others stay. Taking back a "no" is refused if it would make 4 positions, or a second of the same one.
+- **Notifications, reminders and days off** put positions at one service together: "Asked to serve: Sound and Vocals, Sun 15 Nov 9:00".
+- **Deleting a service** counts people once each: "1 person is scheduled on this date" for one person in two positions.
+- "Served 2 times in the last 8 weeks", the order of who could do a position, and Fill's fairness count services, not positions: two positions on one Sunday is serving once.
+
+API: the 409 code `double_booked` is gone. New 409 codes `same_position` and `too_many_positions` (on assign, and on accept when taking back a "no"); neither can be forced. `GET /api/admin/suggest` candidates and `GET /api/me/schedule` items have `alsoOn`, the person's other positions at that service.
+
 ## 0.10.0
 
 Adds a database migration (`0004_retire.sql`); it runs by itself on start. Make a backup first.

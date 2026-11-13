@@ -201,7 +201,7 @@ test('suggest: ranking by load, then longest since last served (never first), th
   assert.deepEqual(candidates.map((c) => c.name), ['amy Never', 'Zed Never', 'Dee Long', 'Cal Recent', 'Bea Busy']);
   const by = Object.fromEntries(candidates.map((c) => [c.name, c]));
   assert.deepEqual(by['Zed Never'], {
-    personId: never.id, name: 'Zed Never', servedLast8Weeks: 0, lastServed: null, qualified: true,
+    personId: never.id, name: 'Zed Never', servedLast8Weeks: 0, lastServed: null, qualified: true, alsoOn: [],
     reasons: ['Has not served in 8 weeks', 'Has never served', 'Nothing scheduled in the next 4 weeks'],
   });
   assert.deepEqual(by['Cal Recent'].reasons, ['Served 1 time in the last 8 weeks', 'Last served 3 weeks ago', 'Nothing scheduled in the next 4 weeks']);
@@ -239,7 +239,7 @@ test('suggest: window edges (8 weeks back, 4 weeks ahead) and recent days wordin
   assert.deepEqual(candidates.map((c) => c.name), ['Abe Ahead', 'Oli Out', 'Eve Edge', 'Dan Days']);
 });
 
-test('suggest: excludes inactive, unqualified, blocked, already on the service and the person who declined', async () => {
+test('suggest: excludes inactive, unqualified, blocked and the person who declined; someone on the service in another position is listed', async () => {
   const { svc, person, deactivate, drums, sound, service, put, block } = await setup();
   const fine = await person('Fay Fine', 'fay', { positions: [drums.id] });
   const gone = await person('Gus Gone', 'gus', { positions: [drums.id] });
@@ -256,14 +256,18 @@ test('suggest: excludes inactive, unqualified, blocked, already on the service a
   await put(soundSlot2, otherDecl.id, { status: 'declined' }); // declined another slot: still a candidate
 
   const { candidates } = await svc.suggest({ slotId: target });
-  assert.deepEqual(candidates.map((c) => c.personId).sort(), [fine.id, otherDecl.id].sort());
+  assert.deepEqual(candidates.map((c) => c.personId).sort(), [fine.id, otherDecl.id, onIt.id].sort());
+  // Ona already does Sound there: listed last, saying so (decision 0010).
+  assert.equal(candidates.at(-1).personId, onIt.id);
+  assert.deepEqual(candidates.at(-1).alsoOn, ['Sound']);
+  assert.equal(candidates.at(-1).reasons[0], 'Already serving as Sound at this service');
 
   const all = await svc.suggest({ slotId: target, includeUnqualified: true });
   const u = all.candidates.find((c) => c.personId === unq.id);
   assert.equal(u.qualified, false);
   assert.equal(u.reasons[0], 'Not set up for Drums');
   assert.ok(all.candidates.filter((c) => c.personId !== unq.id).every((c) => c.qualified === true));
-  for (const p of [gone, blocked, onIt, decl]) assert.ok(!all.candidates.some((c) => c.personId === p.id), p.name);
+  for (const p of [gone, blocked, decl]) assert.ok(!all.candidates.some((c) => c.personId === p.id), p.name);
 });
 
 test('suggest: validation and not found', async () => {
@@ -338,4 +342,97 @@ test('reminders never send anything: no audit entries and no data changes', asyn
 test('shortDate formats like Sun 8 Nov', () => {
   assert.equal(shortDate('2026-11-08'), 'Sun 8 Nov');
   assert.equal(shortDate('2025-01-15'), 'Wed 15 Jan');
+});
+
+// ---------------- several positions on one service (decision 0010) ----------------
+
+test('suggest: never the person in the slot, nor someone holding the same position there, nor someone at the limit', async () => {
+  const { data, svc, person, drums, sound, band, service, put } = await setup();
+  const keys = await data.positions.create(band.id, { name: 'Keys' });
+  const bass = await data.positions.create(band.id, { name: 'Bass' });
+  const all = [drums.id, sound.id, keys.id, bass.id];
+  const q = { positions: all };
+  const inIt = await person('Ian InIt', 'ian', q);
+  const sameJob = await person('Sue Same', 'sue', q);
+  const full = await person('Fil Full', 'fil', q);
+  const two = await person('Tom Two', 'tom', q);
+  const free = await person('Fred Free', 'fred', q);
+  const { slots: [target, drums2, s1, k1, b1, s2, k2, b2] } = await service('2025-01-26',
+    [drums.id, drums.id, sound.id, keys.id, bass.id, sound.id, keys.id, bass.id]);
+  await put(target, inIt.id); // pending in the slot itself
+  await put(drums2, sameJob.id, { status: 'accepted' }); // the other Drums
+  for (const id of [s1, k1, b1]) await put(id, full.id); // three already
+  await put(s2, two.id, { status: 'accepted' });
+  await put(k2, two.id); // two: may take a third
+  void b2;
+
+  const { candidates } = await svc.suggest({ slotId: target });
+  assert.deepEqual(candidates.map((c) => c.name), ['Fred Free', 'Tom Two']);
+  const tom = candidates[1];
+  // In roster order: the Band team (Keys) before Tech (Sound).
+  assert.deepEqual(tom.alsoOn, ['Keys', 'Sound']);
+  assert.equal(tom.reasons[0], 'Already serving as Keys and Sound at this service');
+  assert.deepEqual(candidates[0].alsoOn, []);
+  // Everyone, trained or not: the same people are left out.
+  const everyone = await svc.suggest({ slotId: target, includeUnqualified: true });
+  for (const p of [inIt, sameJob, full]) assert.ok(!everyone.candidates.some((c) => c.personId === p.id), p.name);
+});
+
+test('suggest: a declined slot does not count toward the limit or the same position', async () => {
+  const { data, svc, person, drums, sound, band, service, put } = await setup();
+  const keys = await data.positions.create(band.id, { name: 'Keys' });
+  const bass = await data.positions.create(band.id, { name: 'Bass' });
+  const pat = await person('Pat Person', 'pat', { positions: [drums.id, sound.id, keys.id, bass.id] });
+  const { slots: [target, d2, s, k, b] } = await service('2025-01-26', [drums.id, drums.id, sound.id, keys.id, bass.id]);
+  await put(d2, pat.id, { status: 'declined' });
+  await put(s, pat.id);
+  await put(k, pat.id);
+  await put(b, pat.id, { status: 'declined' });
+  const { candidates } = await svc.suggest({ slotId: target });
+  assert.deepEqual(candidates.map((c) => [c.name, c.alsoOn]), [['Pat Person', ['Keys', 'Sound']]]);
+});
+
+test('suggest: two positions at one service counts as serving once, for the order and the words', async () => {
+  const { data, svc, person, drums, sound, band, service, put } = await setup();
+  const keys = await data.positions.create(band.id, { name: 'Keys' });
+  const q = { positions: [drums.id, sound.id, keys.id] };
+  const dbl = await person('Dot Double', 'dot', q); // one service, two positions, 2 weeks ago
+  const twice = await person('Tia Twice', 'tia', q); // two services, 3 and 2 weeks ago
+  const { slots: [a, b] } = await service('2024-12-22', [sound.id, keys.id]);
+  await put(a, dbl.id, { status: 'accepted', assignedOn: '2024-12-01' });
+  await put(b, dbl.id, { status: 'accepted', assignedOn: '2024-12-01' });
+  const { slots: [c] } = await service('2024-12-15', [sound.id], '11:00');
+  await put(c, twice.id, { status: 'accepted', assignedOn: '2024-12-01' });
+  const { slots: [d] } = await service('2024-12-22', [sound.id], '18:00');
+  await put(d, twice.id, { status: 'accepted', assignedOn: '2024-12-01' });
+  // Next 4 weeks: Dot in two positions of one service.
+  const { slots: [e, f] } = await service('2025-01-12', [sound.id, keys.id]);
+  await put(e, dbl.id);
+  await put(f, dbl.id);
+  const { slots: [target] } = await service('2025-01-26');
+  const { candidates } = await svc.suggest({ slotId: target });
+  const by = Object.fromEntries(candidates.map((c) => [c.name, c]));
+  assert.equal(by['Dot Double'].servedLast8Weeks, 1);
+  assert.equal(by['Dot Double'].reasons[0], 'Served 1 time in the last 8 weeks');
+  assert.equal(by['Dot Double'].reasons[2], 'Scheduled 1 time in the next 4 weeks');
+  assert.equal(by['Tia Twice'].servedLast8Weeks, 2);
+  // Load per service: Dot 2 (22 Dec + 12 Jan), Tia 2 (15 + 22 Dec); both last served 22 Dec; then by name.
+  // Counted per slot, Dot would have load 4 and come last.
+  assert.deepEqual(candidates.map((c) => c.name), ['Dot Double', 'Tia Twice']);
+});
+
+test('reminders: positions at the same service share one part of the message', async () => {
+  const { data, svc, person, drums, sound, band, service, put } = await setup();
+  const keys = await data.positions.create(band.id, { name: 'Keys' });
+  const sam = await person('Sam Sun', 'sam', { positions: [drums.id, sound.id, keys.id] });
+  const { slots: [d, s, k] } = await service('2025-01-12', [drums.id, sound.id, keys.id]);
+  await put(d, sam.id, { status: 'accepted' });
+  await put(s, sam.id);
+  void k;
+  const { slots: [ev] } = await service('2025-01-15', [keys.id], '19:00');
+  await put(ev, sam.id, { status: 'accepted' });
+  const [r] = await svc.reminders({ weekOf: '2025-01-12' });
+  assert.equal(r.message, 'Hi Sam, a reminder that you are serving as Drums and Sound on Sun 12 Jan at 09:00 and Keys on Wed 15 Jan at 19:00. '
+    + 'Please open Flock and accept or decline the ones you have not answered yet. Thank you!');
+  assert.deepEqual(r.items.map((i) => i.slotId), [d, s, ev], 'every position is still its own item');
 });

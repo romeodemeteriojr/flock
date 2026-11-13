@@ -48,6 +48,8 @@ const slotInfo = (s) => ({
 
 /**
  * Pure: decide who goes where. Nothing is read or written here.
+ * It never puts anyone on a service they are already on, or said no to: holding
+ * several positions on one service is the scheduler's own choice (decision 0010).
  * @param {object} input
  * @param {string} input.today  YYYY-MM-DD; slots before it are left alone
  * @param {string} input.start  the Monday of the first week
@@ -67,9 +69,12 @@ export function planAutofill({ today, start, weeks, slots, history, people, avai
 
   const held = new Map(); // personId -> dates of pending/accepted slots (existing and planned)
   const onService = new Set(); // `${serviceId}:${personId}`: already on it, or said no to it
+  const counted = new Set(); // one held date per service, however many positions (decision 0010)
   for (const s of history) {
     onService.add(`${s.serviceId}:${s.personId}`);
     if (!HOLDING.includes(s.status)) continue;
+    if (counted.has(`${s.serviceId}:${s.personId}`)) continue;
+    counted.add(`${s.serviceId}:${s.personId}`);
     if (!held.has(s.personId)) held.set(s.personId, []);
     held.get(s.personId).push(s.serviceDate);
   }

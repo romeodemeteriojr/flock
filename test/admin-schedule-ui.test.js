@@ -96,14 +96,17 @@ test('status chip compact: icon only, with the word as accessible name', () => {
   assert.match(full, />Confirmed</);
 });
 
-test('conflict messages are plain, and inactive/past are never overridable', () => {
+test('conflict messages are plain, and inactive/past and the position limits are never overridable', () => {
   assert.equal(conflictMessage('blocked', 'Sam'), 'Sam is away on that date. Assign anyway?');
   assert.equal(conflictMessage('not_qualified', 'Sam', 'Drums'), 'Sam is not trained for Drums. Assign anyway?');
-  assert.equal(conflictMessage('double_booked', 'Sam'), 'Sam is already serving at this service. Assign anyway?');
+  assert.equal(conflictMessage('same_position', 'Sam', 'Drums'), 'Sam is already on Drums at this service.');
+  assert.equal(conflictMessage('same_position', 'Sam'), 'Sam is already in this position at this service.');
+  assert.equal(conflictMessage('too_many_positions', 'Sam'), 'Sam already has 3 positions at this service, the most one person can have.');
   assert.match(conflictMessage('inactive', 'Sam'), /Sam is no longer active, so they can't be scheduled\./);
   assert.match(conflictMessage('past', 'Sam'), /already happened/);
-  assert.ok(!OVERRIDABLE.includes('inactive'));
-  assert.ok(!OVERRIDABLE.includes('past'));
+  for (const code of ['inactive', 'past', 'same_position', 'too_many_positions', 'double_booked']) assert.ok(!OVERRIDABLE.includes(code), code);
+  // A second position on a service is no longer a clash at all (decision 0010).
+  assert.equal(conflictMessage('double_booked', 'Sam'), '');
 });
 
 // ---------- services page ----------
@@ -413,7 +416,6 @@ test('slot panel: assign works, reloads and closes', async () => {
 for (const [code, text] of [
   ['blocked', 'Sam Ortiz is away on that date. Assign anyway?'],
   ['not_qualified', 'Sam Ortiz is not trained for Keys. Assign anyway?'],
-  ['double_booked', 'Sam Ortiz is already serving at this service. Assign anyway?'],
   ['accepted', 'Someone else has already said yes to this. Put Sam Ortiz in instead?'],
 ]) {
   test(`slot panel: 409 ${code} explains, and retries with force only after confirming`, async () => {
@@ -888,4 +890,75 @@ test('slot sheet: the position and when in the head, who is in it, short toggle 
   const r = root.innerHTML.slice(root.innerHTML.indexOf('data-slot-panel'));
   assert.doesNotMatch(r, /data-action="slot-remove-ask"/);
   assert.match(r, /data-action="slot-remove-yes"/);
+});
+
+// ---------- several positions on one service (decision 0010) ----------
+
+for (const [code, text] of [
+  ['same_position', 'Sam Ortiz is already on Keys at this service.'],
+  ['too_many_positions', 'Sam Ortiz already has 3 positions at this service, the most one person can have.'],
+]) {
+  test(`slot panel: 409 ${code} explains, offers only OK, and never retries with force`, async () => {
+    const bodies = [];
+    const { api, root } = await schedSetup({
+      'GET /api/admin/suggest?slotId=4': CANDS,
+      'PUT /api/slots/4/assign': (b) => { bodies.push(b); return conflict(code); },
+    });
+    await root.click('slot-open', 4);
+    await flush();
+    await root.click('slot-assign', 30);
+    await flush();
+    assert.ok(root.innerHTML.includes(text), root.innerHTML);
+    assert.doesNotMatch(root.innerHTML, /Yes, assign anyway/);
+    assert.match(root.innerHTML, new RegExp(`data-conflict="${code}"`));
+    assert.match(root.innerHTML, /data-action="slot-conflict-back">OK</);
+    await root.click('slot-force'); // a stale button press: nothing is sent
+    await flush();
+    assert.deepEqual(bodies, [{ personId: 30, force: false }]);
+    root.click('slot-conflict-back');
+    assert.doesNotMatch(root.innerHTML, /data-conflict=/);
+    assert.ok(root.innerHTML.includes('data-slot-panel'), 'the panel stays open to pick someone else');
+    assert.equal(api.calls.filter((c) => c.startsWith('PUT')).length, 1);
+  });
+}
+
+test('slot sheet: someone already serving at the service shows it, and is never the best match', async () => {
+  const both = { candidates: [
+    { personId: 31, name: 'Old Joe', qualified: true, alsoOn: ['Drums'], reasons: ['Already serving as Drums at this service', 'Has never served'] },
+    { personId: 30, name: 'Sam Ortiz', qualified: true, alsoOn: [], reasons: ['Has not served in 8 weeks'] },
+  ] };
+  const { root } = await schedSetup({ 'GET /api/admin/suggest?slotId=4': both });
+  await root.click('slot-open', 4);
+  await flush();
+  const h = root.innerHTML.slice(root.innerHTML.indexOf('data-slot-panel'));
+  const cands = [...h.matchAll(/data-candidate="(\d+)">[\s\S]*?<\/li>\s*(?=<li class="candidate"|<\/ol>)/g)].map((m) => m[0]);
+  assert.equal(cands.length, 2);
+  assert.match(cands[0], /Old Joe/);
+  assert.match(cands[0], /<span class="chip chip-plain" data-also>Already serving<\/span>/);
+  assert.match(cands[0], /<li>Already serving as Drums at this service<\/li>/);
+  assert.doesNotMatch(cands[0], /Best match/);
+  assert.match(cands[0], /class="btn" data-action="slot-assign"/);
+  assert.match(cands[1], /Best match/);
+  assert.doesNotMatch(cands[1], /data-also/);
+
+  // When everyone is already serving there, nobody is the best match.
+  const only = { candidates: [both.candidates[0]] };
+  const two = await schedSetup({ 'GET /api/admin/suggest?slotId=4': only });
+  await two.root.click('slot-open', 4);
+  await flush();
+  assert.doesNotMatch(two.root.innerHTML, /Best match/);
+  assert.match(two.root.innerHTML, /data-action="slot-assign" data-id="31"/);
+});
+
+test('services: the delete warning counts people, once each however many positions they hold', () => {
+  const svc = { slots: [
+    slot(1, 10, { personId: 7, personName: 'Ann Lee', status: 'pending' }),
+    slot(2, 11, { personId: 7, personName: 'Ann Lee', status: 'accepted' }),
+    slot(3, 20, { personId: 8, personName: 'Bo Ray', status: 'pending' }),
+    slot(4, 20),
+  ] };
+  assert.equal(services.scheduledCount(svc), 2);
+  assert.equal(services.scheduledCount({ slots: svc.slots.slice(0, 2) }), 1);
+  assert.equal(services.peopleWords(1), '1 person is scheduled on this date');
+  assert.equal(services.scheduledCount({}), 0);
 });

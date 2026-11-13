@@ -256,6 +256,36 @@ Use the laptop. Keep the terminal window open.
 
 - [ ] Pass   [ ] Fail   Notes: ______________________________
 
+### 7b. One person in several positions (Decision 0010)
+
+Use the **third demo Sunday** (10:00 am). In the demo, Demo Alice has said yes
+to **Welcome** there, and **Vocals**, **Keys** and **Door greeter** are empty.
+
+1. Open its **Vocals**. Under **Who could do this** you should see Demo Bob and
+   Demo Carol first, then **Demo Alice** last, with an **Already serving** tag
+   and the reason **Already serving as Welcome at this service**. **Best match**
+   is on Bob or Carol, never Alice.
+2. Click **Assign** next to Demo Alice. No "Assign anyway?" question: you should
+   see **Demo Alice is now on Vocals ... Waiting for their answer.**
+3. Open a **second browser tab** on Flock, go to Schedule, open the same
+   Sunday's **Door greeter** and choose **Everyone**. Demo Alice is listed
+   ("Already serving as Vocals and Welcome"). Leave this tab as it is.
+4. In the first tab, open **Keys**, choose **Everyone**, and click **Assign**
+   next to Demo Alice. You should see **Demo Alice is not trained for Keys.
+   Assign anyway?**. Click **Yes, assign anyway**. Alice now has 3 positions.
+5. In the second tab, click **Assign** next to Demo Alice. You should see
+   **Demo Alice already has 3 positions at this service, the most one person
+   can have.** with only an **OK** button (no "Assign anyway"). Click **OK**;
+   nothing changed. Reload: Door greeter is still **Nobody yet**, and with
+   **Everyone** Alice is no longer in its list.
+6. On **Services**, tap that Sunday and click **Delete**. The question counts
+   people, each once: **7 people are scheduled on this date** (not 9). Go back
+   without deleting.
+7. Open **Vocals** again and **Remove** Demo Alice, then do the same for
+   **Keys**, so the demo is as it was.
+
+- [ ] Pass   [ ] Fail   Notes: ______________________________
+
 ### 8. Gaps, suggestions and reminders
 
 1. Click **Gaps**. You should see two tabs, **Gaps** and **Reminders**, then
@@ -329,6 +359,23 @@ laptop.
 
 - [ ] Pass   [ ] Fail   Notes: ______________________________
 
+### 10b. Two positions on one service, on the phone (Decision 0010)
+
+1. On the laptop, open the **third Practice service**'s **Welcome**, choose
+   **Everyone**, click **Assign** next to Pat Example and then **Yes, assign
+   anyway** (Pat is not trained for Welcome). Pat is now on Door and Welcome
+   there.
+2. On the phone, reload My schedule. There are two cards for that date, one
+   for **Door** and one for **Welcome**. The Door one says **Also on Welcome**
+   and the Welcome one **Also on Door**.
+3. On the Welcome card tap **Yes, I can**. Its link (on the big card, or under
+   **Details**) now reads **I can't do Welcome after all**, not "I can't make it
+   after all". Tap it. The question reads **Are you sure you can't do Welcome on
+   ...?** with **Yes, I can't do Welcome**. Tap **No, keep me on**.
+4. Tap **Full roster**: both Door and Welcome say **You**.
+
+- [ ] Pass   [ ] Fail   Notes: ______________________________
+
 ### 11. Add and remove a day off
 
 1. On the phone, tap **Days off**. You should see **Days I can't serve**, a
@@ -344,8 +391,9 @@ laptop.
    trip** in the list **Days I have off**, once, and the day greyed and struck
    through on the calendar.
 5. Now pick the date of the **third Practice service** (it has a dot: Pat
-   still has a waiting request for it) and add it. You should see **You are already scheduled on
-   ... Please tell your scheduler.**
+   still has a waiting request for it) and add it. You should see **one** line,
+   **You are already scheduled on ... as Door and Welcome. Please tell your
+   scheduler.**
 6. Tap **Remove** beside each day off you added. You should see **Removed. You can
    be scheduled on those days again.**
 

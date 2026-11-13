@@ -107,12 +107,20 @@ export function createNotificationsService(deps) {
     inFlight.add(p);
   }
 
-  /** The "asked" message: every unanswered ask of the person, the first 3 by name. */
+  /**
+   * The "asked" message: every unanswered ask of the person, the first 3
+   * services by name. Asks on the same service share one part: "Sound and
+   * Vocals, Sun 8 Nov 10:00" (decision 0010).
+   */
   async function askedMessage(personId) {
     const asks = await data.slots.listForPerson(personId, today(), null, ['pending']);
     if (!asks.length) return null;
-    const parts = asks.slice(0, 3).map((s) => `${s.positionName}, ${at(s.serviceDate, s.serviceTime)}`);
-    const more = asks.length > 3 ? ` and ${asks.length - 3} more` : '';
+    const byService = new Map();
+    for (const s of asks) byService.set(s.serviceId, [...(byService.get(s.serviceId) ?? []), s]);
+    const groups = [...byService.values()];
+    const parts = groups.slice(0, 3).map((g) => `${joinAnd(g.map((s) => s.positionName))}, ${at(g[0].serviceDate, g[0].serviceTime)}`);
+    const rest = groups.slice(3).reduce((n, g) => n + g.length, 0);
+    const more = rest ? ` and ${rest} more` : '';
     const last = asks.at(-1);
     return { msg: message(`Asked to serve: ${parts.join('; ')}${more}. Tap to answer.`, { tag: 'asked' }), ttl: ttlUntil(last.serviceDate, last.serviceTime) };
   }

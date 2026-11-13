@@ -265,3 +265,16 @@ test('People shows who has notifications on', async () => {
     assert.equal((await c.browsers.ada.get('/api/people')).json.find((p) => p.name === 'Kim Kay').notifications, false);
   } finally { await c.t.close(); }
 });
+
+test('asked: positions at the same service share one part; "more" still counts asks', async () => {
+  const c = await church();
+  try {
+    const { ada } = c.browsers;
+    // Sam: two positions on 15 Nov (same service), then one on 22 Nov.
+    assert.equal((await ada.put(`/api/slots/${c.s15.slots[0].id}/assign`, { personId: c.ids.sam })).status, 200);
+    assert.equal((await ada.put(`/api/slots/${c.s15.slots[1].id}/assign`, { personId: c.ids.sam })).status, 200);
+    await ada.put(`/api/slots/${c.s22.slots[1].id}/assign`, { personId: c.ids.sam });
+    const got = (await c.inbox()).sam;
+    assert.equal(got.at(-1), `Asked to serve: ${c.s15.slots[0].positionName} and ${c.s15.slots[1].positionName}, Sun 15 Nov 9:00; Slides, Sun 22 Nov 10:30. Tap to answer.`);
+  } finally { await c.t.close(); }
+});

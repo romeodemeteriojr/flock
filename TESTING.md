@@ -22,7 +22,7 @@ test sleeps for more than 50 ms: time moves only through the injected clock
 ## The kinds of test and what each proves
 
 **Unit tests for the services** (`test/*-service.test.js`). Every business rule
-(double booking, blockouts, the 366-day limit, lockouts, at least one admin...)
+(the 3-positions limit, blockouts, the 366-day limit, lockouts, at least one admin...)
 with the service built from fakes or `makeContainer()`.
 
 **Invite links** (`test/invites-service.test.js`, `test/welcome-routes.test.js`,
@@ -85,13 +85,14 @@ file, under many requests at once over real HTTP:
 - 50 members log in at once;
 - 30 people accept or decline at once;
 - one member sends accept and decline at the same time;
-- two schedulers race to put the same person on one service;
+- five schedulers race to put the same person in 5 positions of one service (3 win);
 - five race to fill the same slot;
 - two edit the same person;
 - password resets at the same time;
 - blockouts added and removed at once.
 
-It proves: no 500s; no double booking; no lost updates (both concurrent edits
+It proves: no 500s; nobody over 3 positions on a service, or in the same
+position twice; no lost updates (both concurrent edits
 of a person survive, and every lockout failure is counted); exactly one audit
 entry per change (none for reads, refusals or answers that change nothing);
 and `PRAGMA integrity_check` and `foreign_key_check` pass at the end.

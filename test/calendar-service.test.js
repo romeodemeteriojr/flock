@@ -179,15 +179,19 @@ test('calendar: deleteService needs confirm when people are scheduled (has_peopl
   assert.deepEqual(await svc.deleteService(admin, a.id), { ok: true });
   assert.equal(count('slots'), 0);
   const b = await svc.createService(admin, { date: '2026-03-08', slots: [{ positionId: pos.drums, count: 3 }] });
+  // Pat in two slots is one person (decision 0010).
   for (const s of b.slots.slice(0, 2)) await data.slots.assign(s.id, { personId: pat.id, assignedAt: NOW });
   await assert.rejects(svc.deleteService(admin, b.id), (e) => {
     assert.ok(e instanceof ConflictError);
     assert.equal(e.code, 'has_people');
     assert.equal(e.exposeCode, true);
-    assert.equal(e.message, '2 people are scheduled on this date');
-    assert.deepEqual(e.details, { count: 2 });
+    assert.equal(e.message, '1 person is scheduled on this date');
+    assert.deepEqual(e.details, { count: 1 });
     return true;
   });
+  const quinn = await data.people.create({ name: 'Quinn Quill', email: 'quinn@example.com', passwordHash: 'x', createdAt: NOW });
+  await data.slots.assign(b.slots[2].id, { personId: quinn.id, assignedAt: NOW });
+  await assert.rejects(svc.deleteService(admin, b.id), { message: '2 people are scheduled on this date' });
   assert.equal(count('services'), 1);
   assert.deepEqual(await svc.deleteService(admin, b.id, { confirm: true }), { ok: true });
   assert.equal(count('services'), 0);

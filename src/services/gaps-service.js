@@ -6,6 +6,7 @@
 // src/container.js.
 import { ValidationError, NotFoundError, ConflictError } from '../errors.js';
 import { isValidDate, addDays, daysBetween, todayStr } from '../dates.js';
+import { MAX_POSITIONS_PER_SERVICE } from './assignments-service.js';
 
 /** How far ahead the gaps list looks by default, in days (4 weeks). */
 export const DEFAULT_GAP_DAYS = 28;
@@ -157,10 +158,13 @@ export function createGapsService(deps) {
     /**
      * Who could fill a slot: active people qualified for its position (or
      * everyone active with includeUnqualified, marked qualified:false), not
-     * blocked out that date, not already on that service and not the person
-     * who declined this slot. Ranked by fewest pending/accepted slots in the
-     * last 8 weeks plus the next 4 weeks, then longest since last served
-     * (never first), then name.
+     * blocked out that date, not the person in this slot or who declined it,
+     * and not someone who already holds this position or the most positions
+     * (MAX_POSITIONS_PER_SERVICE) on that service. Someone already serving
+     * there in another position is listed with alsoOn (their positions) and a
+     * reason. Ranked by not serving there first, then fewest services (not
+     * slots) in the last 8 weeks plus the next 4 weeks, then longest since last
+     * served (never first), then name.
      */
     async suggest({ slotId, includeUnqualified = false } = {}) {
       if (!isInt(slotId)) throw new ValidationError('Slot id must be a whole number');
@@ -171,15 +175,27 @@ export function createGapsService(deps) {
       return data.tx(async (d) => {
         const slot = await d.slots.findById(slotId);
         if (!slot) throw new NotFoundError('Slot not found');
-        const onService = new Set((await d.slots.listForService(slot.serviceId))
-          .filter((s) => s.personId !== null && HOLDING.includes(s.status))
-          .map((s) => s.personId));
-        if (slot.personId !== null && slot.status === 'declined') onService.add(slot.personId);
+        // Who already holds other slots of this service (decision 0010): they may
+        // take this one too, up to the limit, but never a second slot of the same position.
+        const onService = new Map(); // personId -> their other slots here
+        for (const s of await d.slots.listForService(slot.serviceId)) {
+          if (s.id === slot.id || s.personId === null || !HOLDING.includes(s.status)) continue;
+          onService.set(s.personId, [...(onService.get(s.personId) ?? []), s]);
+        }
+        const leaveOut = new Set();
+        if (slot.personId !== null) leaveOut.add(slot.personId); // in it now, or said no to it
+        for (const [id, mine] of onService) {
+          if (mine.length >= MAX_POSITIONS_PER_SERVICE || mine.some((s) => s.positionId === slot.positionId)) leaveOut.add(id);
+        }
         const blocked = await d.blockouts.blockedPersonIds(slot.serviceDate);
 
+        // Counted per service, not per slot: two positions on one morning is serving once.
         const history = new Map();
+        const counted = new Set();
         for (const s of await d.slots.assignedBetween('0001-01-01', aheadTo)) {
           if (!HOLDING.includes(s.status)) continue;
+          if (counted.has(`${s.serviceId}:${s.personId}`)) continue;
+          counted.add(`${s.serviceId}:${s.personId}`);
           if (!history.has(s.personId)) history.set(s.personId, { load: 0, past8: 0, lastServed: null });
           const h = history.get(s.personId);
           if (s.serviceDate >= backFrom && s.serviceDate <= aheadTo) h.load += 1;
@@ -191,12 +207,14 @@ export function createGapsService(deps) {
 
         const candidates = [];
         for (const p of await d.people.list()) {
-          if (!p.active || blocked.has(p.id) || onService.has(p.id)) continue;
+          if (!p.active || blocked.has(p.id) || leaveOut.has(p.id)) continue;
           const qualified = p.positionIds.includes(slot.positionId);
           if (!qualified && !includeUnqualified) continue;
           const h = history.get(p.id) ?? { load: 0, past8: 0, lastServed: null };
           const upcoming = h.load - h.past8;
+          const alsoOn = (onService.get(p.id) ?? []).map((s) => s.positionName);
           const reasons = [];
+          if (alsoOn.length) reasons.push(`Already serving as ${joinList(alsoOn)} at this service`);
           if (!qualified) reasons.push(`Not set up for ${slot.positionName}`);
           reasons.push(h.past8 === 0 ? 'Has not served in 8 weeks' : `Served ${plural(h.past8, 'time')} in the last 8 weeks`);
           reasons.push(lastServedReason(h.lastServed, now));
@@ -208,10 +226,13 @@ export function createGapsService(deps) {
             servedLast8Weeks: h.past8,
             lastServed: h.lastServed,
             qualified,
+            alsoOn,
             _load: h.load,
           });
         }
-        candidates.sort((a, b) => a._load - b._load
+        // People not yet serving at this service come first, so a fresh pair of hands is the best match.
+        candidates.sort((a, b) => a.alsoOn.length - b.alsoOn.length
+          || a._load - b._load
           || (a.lastServed === b.lastServed ? 0 : a.lastServed === null ? -1 : b.lastServed === null ? 1 : a.lastServed < b.lastServed ? -1 : 1)
           || byName(a.name, b.name)
           || a.personId - b.personId);
@@ -269,7 +290,10 @@ export function createGapsService(deps) {
       }
       const out = [];
       for (const { person, slots } of byPerson.values()) {
-        const parts = slots.map((s) => `${s.positionName} on ${shortDate(s.serviceDate)} at ${s.serviceTime}`);
+        // One part per service: "Sound and Vocals on Sun 8 Nov at 10:00" (decision 0010).
+        const byService = new Map();
+        for (const s of slots) byService.set(s.serviceId, [...(byService.get(s.serviceId) ?? []), s]);
+        const parts = [...byService.values()].map((g) => `${joinList(g.map((s) => s.positionName))} on ${shortDate(g[0].serviceDate)} at ${g[0].serviceTime}`);
         const pending = slots.filter((s) => s.status === 'pending').length;
         let ask;
         if (pending === 0) ask = 'We are glad you can make it.';

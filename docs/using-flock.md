@@ -136,8 +136,12 @@ Schedulers also see:
   is in it now (with **Remove**) and who could do it, either those
   **Trained** for it or **Everyone**. The first trained person, who has served
   least, is marked **Best match**. Flock warns about clashes (away that day,
-  not trained for it, already serving that morning); you can still go ahead
-  if you really mean to.
+  not trained for it); you can still go ahead if you really mean to.
+- **Several positions for one person.** Someone can hold up to 3 positions on
+  one service, for example Vocals and Keys. People already serving at that
+  service show **Already serving** in the list, after everyone else. A 4th
+  position, or the same position twice, is refused with a plain message.
+  **Fill open positions** never doubles people up; that is your choice.
 - **Fill open positions** (on Schedule) plans one to 8 weeks at a time: it
   puts someone in every empty position it can, fairly, and shows you the plan
   first. It only picks people who are trained for the position, are not away,

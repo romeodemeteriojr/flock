@@ -44,7 +44,7 @@ test('assign, schedule, accept, decline and unassign end to end', async () => {
     assert.equal(sched.json.nextServing.slotId, a);
     assert.deepEqual(sched.json.items, [{
       slotId: a, date: '2025-01-12', time: '09:00', serviceTitle: 'Sunday service', positionName: 'Drums', teamName: 'Band',
-      status: 'pending', coVolunteers: [{ name: 'Olive Other', positionName: 'Keys' }],
+      status: 'pending', alsoOn: [], coVolunteers: [{ name: 'Olive Other', positionName: 'Keys' }],
     }]);
     assert.deepEqual(sched.json.rosters, { '2025-01-12': [{ time: '09:00', serviceTitle: 'Sunday service', teams: [{ teamName: 'Band', positions: [
       { positionName: 'Drums', name: 'Max Member', status: 'pending', mine: true },
@@ -68,16 +68,24 @@ test('assign, schedule, accept, decline and unassign end to end', async () => {
   } finally { await app.close(); }
 });
 
-test('assign conflicts come back as 409 with a code; force overrides all but inactive', async () => {
+test('assign conflicts come back as 409 with a code; force overrides all but inactive, past and the position limits', async () => {
   const { app, data, db, service, call, adminCookie, memberId } = await boot();
   try {
+    // Two positions on one service is fine, with no warning (decision 0010).
     const [a, b] = await service('2025-01-12');
     await call('PUT', `/api/slots/${a}/assign`, adminCookie, { personId: memberId });
-    const dbl = await call('PUT', `/api/slots/${b}/assign`, adminCookie, { personId: memberId });
-    assert.equal(dbl.status, 409);
-    assert.equal(dbl.json.code, 'double_booked');
-    assert.equal(typeof dbl.json.error, 'string');
-    assert.equal((await call('PUT', `/api/slots/${b}/assign`, adminCookie, { personId: memberId, force: true })).status, 200);
+    const two = await call('PUT', `/api/slots/${b}/assign`, adminCookie, { personId: memberId });
+    assert.equal(two.status, 200);
+    assert.equal(two.json.slot.personId, memberId);
+
+    // A second slot of the same position is refused, force or not.
+    const [d1, d2] = await service('2025-01-26', [(await data.slots.findById(a)).positionId, (await data.slots.findById(a)).positionId]);
+    await call('PUT', `/api/slots/${d1}/assign`, adminCookie, { personId: memberId });
+    for (const force of [false, true]) {
+      const r = await call('PUT', `/api/slots/${d2}/assign`, adminCookie, { personId: memberId, force });
+      assert.deepEqual([r.status, r.json.code], [409, 'same_position']);
+      assert.equal(r.json.error, 'Max Member is already on Drums at this service');
+    }
 
     const newbie = await addPerson(db, { name: 'Nina New', email: 'nina@example.com' });
     const [c] = await service('2025-01-19');

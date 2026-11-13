@@ -117,20 +117,134 @@ test('assign: blocked (through the blockouts service) unless forced', async () =
   assert.equal((await svc.assign(admin, id, { personId: pat.id, force: true })).status, 'pending');
 });
 
-test('assign: double_booked on the same service unless forced; declined slots and other services do not count', async () => {
-  const { svc, admin, pat, drums, keys, service, data } = await setup();
-  const { slots: [a, b] } = await service('2025-01-12', [drums.id, keys.id]);
-  const { slots: [other] } = await service('2025-01-12', [drums.id], '18:00');
-  await svc.assign(admin, a, { personId: pat.id });
-  await conflict(svc.assign(admin, b, { personId: pat.id }), 'double_booked');
-  assert.equal((await svc.assign(admin, other, { personId: pat.id })).status, 'pending');
-  // Re-assigning the same slot to the same person is not a double booking.
-  assert.equal((await svc.assign(admin, a, { personId: pat.id })).status, 'pending');
-  await data.slots.respond(a, { status: 'declined', respondedAt: NOW });
+// ---------- several positions on one service (decision 0010) ----------
+
+// Five positions in the band, Pat and Quinn trained for all of them.
+async function fivePositions(ctx) {
+  const { data, drums, keys, pat, quinn } = ctx;
+  const band = (await data.teams.list()).find((t) => t.name === 'Band');
+  const sound = await data.positions.create(band.id, { name: 'Sound' });
+  const vocals = await data.positions.create(band.id, { name: 'Vocals' });
+  const bass = await data.positions.create(band.id, { name: 'Bass' });
+  const all = [drums.id, keys.id, sound.id, vocals.id, bass.id];
+  await data.qualifications.setForPerson(pat.id, all);
+  await data.qualifications.setForPerson(quinn.id, all);
+  return { sound, vocals, bass, all };
+}
+
+test('assign: up to 3 positions on one service, with no warning and no force', async () => {
+  const ctx = await setup();
+  const { svc, admin, pat, service, auditList } = ctx;
+  const { all } = await fivePositions(ctx);
+  const { slots: [d, k, s] } = await service('2025-01-12', all);
+  for (const id of [d, k, s]) {
+    const r = await svc.assign(admin, id, { personId: pat.id });
+    assert.equal(r.personId, pat.id);
+    assert.equal(r.status, 'pending');
+  }
+  for (const e of await auditList()) assert.doesNotMatch(e.detail, /forced/);
+});
+
+test('assign: a 4th position on one service is refused (too_many_positions), even with force, and changes nothing', async () => {
+  const ctx = await setup();
+  const { svc, admin, pat, service, slot, auditList } = ctx;
+  const { all } = await fivePositions(ctx);
+  const { slots: [d, k, s, v] } = await service('2025-01-12', all);
+  for (const id of [d, k, s]) await svc.assign(admin, id, { personId: pat.id });
+  const before = (await auditList()).length;
+  for (const force of [false, true]) {
+    await conflict(svc.assign(admin, v, { personId: pat.id, force }), 'too_many_positions');
+  }
+  await assert.rejects(svc.assign(admin, v, { personId: pat.id }),
+    { message: 'Pat Person already has 3 positions at this service, the most one person can have' });
+  assert.equal((await slot(v)).personId, null);
+  assert.equal((await slot(v)).status, 'open');
+  assert.equal((await auditList()).length, before, 'a refusal is not audited as a change');
+});
+
+test('assign: accepted counts toward the limit, declined does not; taking someone off frees a place', async () => {
+  const ctx = await setup();
+  const { svc, admin, pat, service, data } = ctx;
+  const { all } = await fivePositions(ctx);
+  const { slots: [d, k, s, v, b] } = await service('2025-01-12', all);
+  for (const id of [d, k, s]) await svc.assign(admin, id, { personId: pat.id });
+  await data.slots.respond(d, { status: 'accepted', respondedAt: NOW });
+  await conflict(svc.assign(admin, v, { personId: pat.id }), 'too_many_positions');
+  await data.slots.respond(s, { status: 'declined', respondedAt: NOW });
+  assert.equal((await svc.assign(admin, v, { personId: pat.id })).personId, pat.id); // d accepted, k + v pending
+  await conflict(svc.assign(admin, b, { personId: pat.id }), 'too_many_positions');
+  await svc.unassign(admin, k);
   assert.equal((await svc.assign(admin, b, { personId: pat.id })).personId, pat.id);
-  const { slots: [c, d] } = await service('2025-01-19', [drums.id, keys.id]);
-  await svc.assign(admin, c, { personId: pat.id });
-  assert.equal((await svc.assign(admin, d, { personId: pat.id, force: true })).personId, pat.id);
+});
+
+test('assign: at the limit, giving Pat a slot Pat already holds again is fine (not a 4th)', async () => {
+  const ctx = await setup();
+  const { svc, admin, pat, service, data } = ctx;
+  const { all } = await fivePositions(ctx);
+  const { slots: [d, k, s] } = await service('2025-01-12', all);
+  for (const id of [d, k, s]) await svc.assign(admin, id, { personId: pat.id });
+  assert.equal((await svc.assign(admin, s, { personId: pat.id })).status, 'pending');
+  // A slot Pat declined, given back to Pat while Pat holds 2 others: 3 in all, fine.
+  await data.slots.respond(s, { status: 'declined', respondedAt: NOW });
+  assert.equal((await svc.assign(admin, s, { personId: pat.id })).status, 'pending');
+});
+
+test('assign: replacing someone else still counts Pat\'s own positions (too_many_positions beats accepted)', async () => {
+  const ctx = await setup();
+  const { svc, admin, pat, quinn, service, data, slot } = ctx;
+  const { all } = await fivePositions(ctx);
+  const { slots: [d, k, s, v] } = await service('2025-01-12', all);
+  for (const id of [d, k, s]) await svc.assign(admin, id, { personId: pat.id });
+  await svc.assign(admin, v, { personId: quinn.id });
+  await data.slots.respond(v, { status: 'accepted', respondedAt: NOW });
+  for (const force of [false, true]) await conflict(svc.assign(admin, v, { personId: pat.id, force }), 'too_many_positions');
+  assert.equal((await slot(v)).personId, quinn.id, 'Quinn keeps the slot');
+  assert.equal((await slot(v)).status, 'accepted');
+});
+
+test('assign: the limit is per service: another service the same day, or another week, does not count', async () => {
+  const ctx = await setup();
+  const { svc, admin, pat, service } = ctx;
+  const { all } = await fivePositions(ctx);
+  const { slots: [d, k, s] } = await service('2025-01-12', all);
+  for (const id of [d, k, s]) await svc.assign(admin, id, { personId: pat.id });
+  const { slots: evening } = await service('2025-01-12', all, '18:00');
+  for (const id of evening.slice(0, 3)) assert.equal((await svc.assign(admin, id, { personId: pat.id })).personId, pat.id);
+  const { slots: [next] } = await service('2025-01-19', all);
+  assert.equal((await svc.assign(admin, next, { personId: pat.id })).personId, pat.id);
+});
+
+test('assign: two slots of the same position on one service is refused (same_position), even with force', async () => {
+  const { svc, admin, pat, drums, keys, service, slot, data } = await setup();
+  const { slots: [d1, d2, k] } = await service('2025-01-12', [drums.id, drums.id, keys.id]);
+  await svc.assign(admin, d1, { personId: pat.id });
+  for (const force of [false, true]) await conflict(svc.assign(admin, d2, { personId: pat.id, force }), 'same_position');
+  await assert.rejects(svc.assign(admin, d2, { personId: pat.id }), { message: 'Pat Person is already on Drums at this service' });
+  assert.equal((await slot(d2)).personId, null);
+  // A different position is fine.
+  assert.equal((await svc.assign(admin, k, { personId: pat.id })).personId, pat.id);
+  // Once Pat said no to the first Drums, the second one is open to Pat.
+  await data.slots.respond(d1, { status: 'declined', respondedAt: NOW });
+  assert.equal((await svc.assign(admin, d2, { personId: pat.id })).personId, pat.id);
+});
+
+test('assign: the hard limits come before the overridable checks, and past/inactive before them', async () => {
+  const ctx = await setup();
+  const { svc, admin, pat, person, drums, service, blockedSet, data } = ctx;
+  const { all } = await fivePositions(ctx);
+  const { slots: [d, k, s, v] } = await service('2025-01-12', all);
+  for (const id of [d, k, s]) await svc.assign(admin, id, { personId: pat.id });
+  // Blocked and at the limit: the limit is what the scheduler hears, so a forced retry is not offered for nothing.
+  blockedSet.add(`${pat.id}:2025-01-12`);
+  await conflict(svc.assign(admin, v, { personId: pat.id }), 'too_many_positions');
+  // Not trained and the same position: same_position.
+  const nina = await person('Nina New', 'nina');
+  const { slots: [x1, x2] } = await service('2025-01-19', [drums.id, drums.id]);
+  await svc.assign(admin, x1, { personId: nina.id, force: true });
+  await conflict(svc.assign(admin, x2, { personId: nina.id }), 'same_position');
+  // Inactive beats the limits.
+  await data.people.update(pat.id, { active: false });
+  await conflict(svc.assign(admin, v, { personId: pat.id, force: true }), 'inactive');
 });
 
 test('assign: reassigning pending or declined slots is allowed; an accepted one needs force', async () => {
@@ -284,7 +398,7 @@ test('mySchedule: pending and accepted only, 12 weeks from today, coVolunteers a
   assert.deepEqual(r.items.map((i) => i.slotId), [p1, acc]);
   assert.deepEqual(r.items[0], {
     slotId: p1, date: '2025-01-12', time: '09:00', serviceTitle: s1.title, positionName: 'Drums', teamName: 'Band',
-    status: 'pending', coVolunteers: [{ name: 'Quinn Quill', positionName: 'Keys' }],
+    status: 'pending', alsoOn: [], coVolunteers: [{ name: 'Quinn Quill', positionName: 'Keys' }],
   });
   assert.deepEqual(Object.keys(r.items[0].coVolunteers[0]).sort(), ['name', 'positionName']);
   assert.deepEqual(r.items[1].coVolunteers, []);
@@ -348,4 +462,74 @@ test('mySchedule rosters: the whole day of each day I serve, by service, team an
   // Saying no makes it not my day any more: no roster for it.
   await svc.respond(pat.id, mDrums, 'decline');
   assert.deepEqual(await svc.mySchedule(pat.id), { nextServing: null, items: [], rosters: {} });
+});
+
+// ---------- several positions on one service: answering and my schedule (decision 0010) ----------
+
+test('respond: taking back a decline is refused when Pat now holds the most positions (too_many_positions)', async () => {
+  const ctx = await setup();
+  const { svc, admin, pat, service, slot } = ctx;
+  const { all } = await fivePositions(ctx);
+  const { slots: [d, k, s, v] } = await service('2025-01-12', all);
+  await svc.assign(admin, d, { personId: pat.id });
+  await svc.respond(pat.id, d, 'decline');
+  for (const id of [k, s, v]) await svc.assign(admin, id, { personId: pat.id });
+  await conflict(svc.respond(pat.id, d, 'accept'), 'too_many_positions');
+  await assert.rejects(svc.respond(pat.id, d, 'accept'),
+    { message: 'You already have 3 positions at this service, the most one person can have' });
+  assert.equal((await slot(d)).status, 'declined');
+  // Saying no to one of the others frees the place, and then the take-back works.
+  await svc.respond(pat.id, v, 'decline');
+  assert.equal((await svc.respond(pat.id, d, 'accept')).status, 'accepted');
+});
+
+test('respond: taking back a decline is refused when Pat now holds that position in another slot (same_position)', async () => {
+  const { svc, admin, pat, drums, service, slot } = await setup();
+  const { slots: [d1, d2] } = await service('2025-01-12', [drums.id, drums.id]);
+  await svc.assign(admin, d1, { personId: pat.id });
+  await svc.respond(pat.id, d1, 'decline');
+  await svc.assign(admin, d2, { personId: pat.id });
+  await conflict(svc.respond(pat.id, d1, 'accept'), 'same_position');
+  await assert.rejects(svc.respond(pat.id, d1, 'accept'), { message: 'You are already on Drums at this service' });
+  assert.equal((await slot(d1)).status, 'declined');
+});
+
+test('respond: at the limit, accepting a pending ask and saying no are always fine', async () => {
+  const ctx = await setup();
+  const { svc, admin, pat, service } = ctx;
+  const { all } = await fivePositions(ctx);
+  const { slots: [d, k, s] } = await service('2025-01-12', all);
+  for (const id of [d, k, s]) await svc.assign(admin, id, { personId: pat.id });
+  for (const id of [d, k, s]) assert.equal((await svc.respond(pat.id, id, 'accept')).status, 'accepted');
+  assert.equal((await svc.respond(pat.id, k, 'decline')).status, 'declined');
+  assert.equal((await svc.respond(pat.id, k, 'accept')).status, 'accepted'); // back to 3, not 4
+});
+
+test('mySchedule: each position is its own item, and alsoOn names my other positions at that service only', async () => {
+  const ctx = await setup();
+  const { svc, admin, pat, quinn, service } = ctx;
+  const { all } = await fivePositions(ctx);
+  const { slots: [d, k, s, v] } = await service('2025-01-12', all);
+  const { slots: [evening] } = await service('2025-01-12', all, '18:00');
+  await svc.assign(admin, d, { personId: pat.id });
+  await svc.assign(admin, k, { personId: pat.id });
+  await svc.assign(admin, s, { personId: pat.id });
+  await svc.respond(pat.id, s, 'decline'); // declined: not mine any more
+  await svc.assign(admin, v, { personId: quinn.id });
+  await svc.assign(admin, evening, { personId: pat.id });
+  await svc.respond(pat.id, d, 'accept');
+
+  const r = await svc.mySchedule(pat.id);
+  assert.deepEqual(r.items.map((i) => [i.slotId, i.positionName, i.alsoOn]), [
+    [d, 'Drums', ['Keys']],
+    [k, 'Keys', ['Drums']],
+    [evening, 'Drums', []],
+  ]);
+  // Pat is never a co-volunteer of Pat.
+  for (const i of r.items) assert.ok(i.coVolunteers.every((c) => c.name !== 'Pat Person'));
+  assert.deepEqual(r.items[0].coVolunteers, [{ name: 'Quinn Quill', positionName: 'Vocals' }]);
+  // The roster marks both of Pat's positions as mine.
+  const morning = r.rosters['2025-01-12'].find((x) => x.time === '09:00');
+  const mine = morning.teams.flatMap((t) => t.positions).filter((p) => p.mine).map((p) => p.positionName);
+  assert.deepEqual(mine, ['Drums', 'Keys']);
 });
