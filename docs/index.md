@@ -6,7 +6,6 @@ yes or no, and mark the days they are away.
 
 - [Using Flock](using-flock.md): adding people, logging in, and what each page does.
 - [Running Flock](running-flock.md): settings, the first scheduler, notifications, backups.
-- [Putting Flock online](https://github.com/romeodemeteriojr/flock/blob/main/DEPLOY.md): Fly.io, updates, rolling back.
 - [Security](security.md): passwords, logins, and what a server needs.
 - [Design](design.md): the look, the installed app, phone and computer layouts.
 

@@ -1,8 +1,7 @@
 # Security
 
 Flock holds people's names, emails and schedules. This page says how it keeps
-logins safe and what a server running it needs. Fly.io's own checklist is in
-[DEPLOY.md](https://github.com/romeodemeteriojr/flock/blob/main/DEPLOY.md).
+logins safe and what a server running it needs.
 
 ## How passwords work
 
@@ -37,8 +36,8 @@ you do:
 
 - It **must** be served over **HTTPS** (the padlock in the browser), because
   passwords travel over the network when people log in. Run Flock behind an
-  HTTPS proxy or web server that handles the certificate (Fly.io does this
-  for you), and start it with `FLOCK_SECURE_COOKIES=1` so browsers only send
+  HTTPS proxy or web server that handles the certificate (most hosting
+  services do this for you), and start it with `FLOCK_SECURE_COOKIES=1` so browsers only send
   the login cookie over HTTPS.
 - Keep the database file private. Run Flock under its own user account, make
   sure only that account can read the `data` folder and the backups, and

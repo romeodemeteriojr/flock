@@ -33,7 +33,6 @@ The guides are also at <https://romeodemeteriojr.github.io/flock/>.
   page does.
 - [Running Flock](docs/running-flock.md): settings, the first scheduler,
   Google sign-in, notifications, backups and exports.
-- [Putting Flock online](DEPLOY.md): Fly.io, updates, releases, rolling back.
 - [Security](docs/security.md): how passwords and logins are kept safe, and
   what a server needs.
 - [Design](docs/design.md): the look, the installed app, phone and computer
