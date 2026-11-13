@@ -57,3 +57,11 @@ Plain JavaScript for Node.js 22.16 or newer, with no npm packages.
   by-hand checks. [docs/decisions/](docs/decisions/) records the main design
   decisions.
 - `node bin/flock.js help` lists the commands.
+
+## Licence
+
+Flock is free for churches, charities, schools and personal use, under the
+[PolyForm Noncommercial License 1.0.0](LICENSE). You may use, change and share
+it for any non-commercial purpose. Selling it, or using it for a business, needs
+the author's permission: ask through GitHub. The bundled Inter font has its own
+licence ([licenses/Inter-OFL.txt](licenses/Inter-OFL.txt)).
