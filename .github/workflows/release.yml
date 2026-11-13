@@ -47,7 +47,7 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           if ! git diff --quiet; then
-            git commit -am "Release v$VERSION (#$PR)"
+            git commit -am "chore: release v$VERSION (#$PR)"
             git push origin HEAD:main
           fi
           git tag -a "v$VERSION" -m "Release v$VERSION"

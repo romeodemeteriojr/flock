@@ -11,7 +11,7 @@
 // that heading to the new version.
 //
 // Usage:
-//   node scripts/release.js check --labels "feat,documentation"   (pull request check)
+//   node scripts/release.js check --labels "feat" --title "feat: …"  (pull request check)
 //   node scripts/release.js plan --labels "feat"                   (prints bump=… and version=…)
 //   node scripts/release.js apply 0.6.0                            (package.json + CHANGELOG)
 //   node scripts/release.js notes 0.6.0                            (that version's CHANGELOG section)
@@ -93,6 +93,29 @@ export function plan({ labels, released, pkgVersion, changelog }) {
   return { bump, version, problems };
 }
 
+export const TITLE_TYPES = Object.freeze(['feat', 'fix', 'docs', 'test', 'refactor', 'perf', 'style', 'build', 'ci', 'chore', 'revert']);
+const TITLE = /^([a-z]+)(\([\w./-]+\))?(!)?: \S/;
+
+/**
+ * What is wrong with a pull request title (Conventional Commits), or null.
+ * The type must match the release label: feat -> feat:, fix -> fix:,
+ * breaking -> a "!" (feat!:), "no release" -> any type but feat or fix.
+ */
+export function titleProblem(title, labels) {
+  const m = TITLE.exec(String(title ?? '').trim());
+  const example = 'Start the title with a type, like "feat: …", "fix: …", "docs: …" or "chore: …".';
+  if (!m || !TITLE_TYPES.includes(m[1])) return example;
+  const { bump } = bumpFor(labels);
+  if (bump === undefined) return null; // the label check already says what is wrong
+  const [, type, , bang] = m;
+  if (bump === 'major' && !bang) return 'The "breaking" label needs a "!" in the title, like "feat!: …".';
+  if (bump !== 'major' && bang) return 'A "!" title means a breaking change: use the "breaking" label.';
+  if (bump === 'minor' && type !== 'feat') return 'The "feat" label needs a "feat: …" title.';
+  if (bump === 'patch' && type !== 'fix') return 'The "fix" label needs a "fix: …" title.';
+  if (bump === null && (type === 'feat' || type === 'fix')) return `A "${type}: …" title needs the "${type}" label, not "no release".`;
+  return null;
+}
+
 // ---------- command line ----------
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -106,6 +129,11 @@ function main(argv) {
   const labels = (opt('labels') ?? '').split(',').filter((l) => l.trim());
   if (cmd === 'check' || cmd === 'plan') {
     const p = plan({ labels, released: latestTagVersion(gitTags()), pkgVersion: readPkg().version, changelog: readChangelog() });
+    const title = opt('title');
+    if (cmd === 'check' && title !== undefined) {
+      const problem = titleProblem(title, labels);
+      if (problem) p.problems.push(problem);
+    }
     if (p.problems.length) {
       for (const problem of p.problems) console.error(`Error: ${problem}`);
       return 1;

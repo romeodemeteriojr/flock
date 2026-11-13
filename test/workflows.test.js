@@ -4,7 +4,7 @@ import { readFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { join, dirname } from 'node:path';
 import { checkVersion } from '../scripts/check-version.js';
-import { bumpFor, nextVersion, latestTagVersion, releaseChangelog, changelogSection, plan } from '../scripts/release.js';
+import { bumpFor, nextVersion, latestTagVersion, releaseChangelog, changelogSection, plan, titleProblem } from '../scripts/release.js';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = (p) => readFileSync(join(root, p), 'utf8');
@@ -131,6 +131,37 @@ test('release labels: exactly one of breaking, feat, fix or "no release"', () =>
   assert.match(bumpFor(['feat', 'fix']).problem, /only one release label/);
 });
 
+test('PR titles: Conventional Commits, with the type matching the release label', () => {
+  const ok = [
+    ['feat: retire positions', ['feat']],
+    ['feat(teams): retire positions', ['feat', 'documentation']],
+    ['fix: keep past rosters', ['fix']],
+    ['feat!: drop the old API', ['breaking']],
+    ['docs: explain TZ', ['no release']],
+    ['ci: check PR titles', ['no release']],
+    ['chore: release v0.10.0', ['no release']],
+  ];
+  for (const [title, labels] of ok) assert.equal(titleProblem(title, labels), null, title);
+  const bad = [
+    ['Retire positions', ['feat'], /Start the title with a type/],
+    ['feat:no space', ['feat'], /Start the title/],
+    ['Feat: capital', ['feat'], /Start the title/],
+    ['feature: unknown type', ['feat'], /Start the title/],
+    ['feat: ', ['feat'], /Start the title/],
+    ['', ['feat'], /Start the title/],
+    ['fix: wrong label', ['feat'], /"feat" label needs a "feat: …"/],
+    ['feat: wrong label', ['fix'], /"fix" label needs a "fix: …"/],
+    ['feat: not marked', ['breaking'], /needs a "!"/],
+    ['feat!: no breaking label', ['feat'], /use the "breaking" label/],
+    ['feat: new thing', ['no release'], /needs the "feat" label/],
+    ['fix: a bug', ['no release'], /needs the "fix" label/],
+  ];
+  for (const [title, labels, re] of bad) assert.match(titleProblem(title, labels) ?? 'null', re, title);
+  // With no or two release labels, only the label check complains.
+  assert.equal(titleProblem('docs: x', []), null);
+  assert.equal(titleProblem('docs: x', ['feat', 'fix']), null);
+});
+
 test('nextVersion: semver, with breaking changes bumping the minor before 1.0.0', () => {
   assert.equal(nextVersion('0.4.0', 'minor'), '0.5.0');
   assert.equal(nextVersion('0.5.0', 'patch'), '0.5.1');
@@ -186,7 +217,9 @@ test('release.yml: only after a merge into main, writes contents, plans from the
 
 test('release-label.yml: runs on label changes, read-only', () => {
   const t = read('.github/workflows/release-label.yml');
-  assert.match(t, /types: \[opened, reopened, synchronize, labeled, unlabeled\]/);
+  assert.match(t, /types: \[opened, reopened, synchronize, labeled, unlabeled, edited\]/);
+  assert.match(t, /TITLE: \$\{\{ github\.event\.pull_request\.title \}\}/);
+  assert.match(t, /--title "\$TITLE"/);
   assert.match(t, /^permissions:\s*\n {2}contents: read\s*$/m);
   assert.match(t, /fetch-depth: 0/);
   assert.match(t, /release\.js check --labels "\$LABELS"/);
