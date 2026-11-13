@@ -256,6 +256,16 @@ phone's share sheet. Pages fade in, things you press give a little, and
 saying yes is thanked with a check. With reduced motion turned on, none of it
 moves.
 
+**The screens.** My schedule leads with the one thing that matters now: the
+next ask, with **Yes, I can** and **I can't** right there, or else the next
+time you serve; the rest follows as short cards whose details open on tap.
+Days off is a calendar: tap the first and last day you are away. Schedule
+opens with how full the coming weeks are, and **Fill open positions** opens a
+sheet. Gaps has two tabs (the gaps, and the reminders to send) and chips to
+show one kind of gap. People is a quiet list; tap someone for everything you
+can do for them, in a sheet. The slot panel shows who is in the position now
+and marks the best match.
+
 To change the brand colour, edit the colour list at the top of `web/style.css`
 (`--brand`, `--accent` and the few colours next to them, once for light and once
 for dark). `npm test` checks that every text and background pair is still easy

@@ -144,14 +144,18 @@ Use the laptop. Keep the terminal window open.
 
 ### 3. Add a person
 
-1. Click **People** in the menu. You should see Demo Admin and the twelve other
-   demo people, each with a coloured circle with initials, **Volunteer** or
-   **Scheduler**, and a small arrow, but no buttons. Tap a row: its buttons
-   appear under it (**Edit name**, **What can they do?** and so on, each with a
-   picture and words). Tap another row: the first one closes. Tap it again to
-   close it.
-2. Click **Add person**. In the Name box type `Pat Example`, and in the Email
-   box `pat.example@example.com`.
+1. Click **People** in the menu. You should see a search box with a **+**
+   button, the filters **All**, **Schedulers** and **Not joined** with counts,
+   and Demo Admin and the twelve other demo people: a coloured circle with
+   initials, the name, the email, and only the tags that apply (**Scheduler**,
+   **That's you**, **Not joined yet**). Tap a row: a sheet opens with that
+   person's name and everything you can do (**Positions**, **Change name**,
+   **Make a scheduler**, **Copy new invite**, **Reset login**, **Deactivate**).
+   Close it with the X, by tapping outside it, or (phone) by swiping it down.
+   Tap **Not joined**: only people who have not joined are listed.
+2. Tap **+** (**Add a person**). A sheet opens, explaining Scheduler and
+   Volunteer under the scheduler box. In the Name box type `Pat Example`, and
+   in the Email box `pat.example@example.com`.
 3. Clear the name and click the **Add person** button inside the form. You should
    see **Please type a name.**
 4. Type `Pat Example` again (and the email) and click **Add person** (try double-clicking it).
@@ -194,7 +198,7 @@ Use the laptop. Keep the terminal window open.
 
 ### 5. Say who can do the new position
 
-1. Go to **People**. Tap Pat Example's row, then click **What can they do?**.
+1. Go to **People**. Tap Pat Example's row, then **Positions**.
 2. You should see a list of every position, grouped by team, with tick boxes.
    Tick **Door** and click **Save**. You should see **Saved what Pat Example can do.**
 3. Do the same for Quinn Example.
@@ -225,40 +229,46 @@ Use the laptop. Keep the terminal window open.
 
 ### 7. Assign volunteers
 
-1. Click **Schedule**. You should see a grid of the next 8 weeks. Each position
-   shows a person with a word such as **Confirmed**, **Waiting for answer** or
-   **Declined**, or **Nobody yet**. On a phone it becomes one card per date,
-   closed, saying how many positions are **open**, **waiting**, **confirmed** and
-   **declined**. Tap a card to see its positions; it stays open while you assign
-   people. Tap it again to close it.
+1. Click **Schedule**. At the top a card says how many of all the positions
+   are confirmed, with a bar, chips for **waiting**, **said no** and **open**,
+   and **Fill open positions** (it opens a sheet with the planning form). Below
+   is a grid of the next 8 weeks. Each position shows a person with a word such
+   as **Confirmed**, **Waiting for answer** or **Declined**, or **Nobody yet**.
+   On a phone it becomes one card per date, closed, with a small bar per
+   position (green confirmed, amber waiting, red said no, outlined open),
+   "**5 of 9 confirmed**" and chips for what still needs doing. Tap a card to
+   see its positions; it stays open while you assign people. Tap it again to
+   close it.
 2. Find the first Practice service. Click its **Door** position (Nobody yet).
-3. A panel opens: **Who could do this**, with Pat Example and Quinn Example,
-   each with reasons such as "Has never served". The cursor should be on the
-   panel's heading.
+3. A panel opens with **Door** and the team and date under it, a dashed
+   **Nobody yet**, then **Who could do this** with Pat Example and Quinn
+   Example, each with reasons such as "Has never served". The first one says
+   **Best match**. The cursor should be on the panel's heading.
 4. Click **Assign** next to Pat Example. You should see **Pat Example is now on
    Door ... Waiting for their answer.** and the panel closes.
 5. Do the same for the **second** and **third** Practice service, again with
    Pat Example. (Pat should be offered each time.)
-6. Click Pat's name in the first service. The panel should offer **Remove
-   person**. Click it, then **No, go back**. Nothing changes.
-7. Open the second service's Door again and also look at the tabs **Only people
-   trained for this** and **Show people not trained for this**. Both should
-   work.
+6. Click Pat's name in the first service. The panel shows Pat with **Waiting
+   for answer** and **Remove**. Click it, then **No, go back**. Nothing changes.
+7. Open the second service's Door again and also try the switch **Trained** /
+   **Everyone**. Both should work.
 8. Press the **Escape** key while a panel is open. It should close.
 
 - [ ] Pass   [ ] Fail   Notes: ______________________________
 
 ### 8. Gaps, suggestions and reminders
 
-1. Click **Gaps**. You should see **Next 4 weeks** and five counts: **Nobody yet,
-   Said no, Hasn't answered, Now away, No longer active**. Below, the gaps are
-   grouped per service (date and time, with how many gaps it has), in date
-   order. Each position says what kind of gap it is, with the person's name
-   when there is one (for example **Said no** and who said it).
+1. Click **Gaps**. You should see two tabs, **Gaps** and **Reminders**, then
+   "**… gaps in the next 4 weeks**" and filter chips (**All** and each kind
+   there is, such as **Nobody yet** and **Said no**, with counts). Below, a
+   card per service (date and time, with how many gaps it has), in date order.
+   Each position says what kind of gap it is, with the person's name when
+   there is one (for example **Said no** and who said it). Tap **Said no**:
+   only those show; tap **All** again.
 2. Find the **Welcome (Greeters)** gap in the first Practice service. Click it.
    The same panel opens. Click **Assign** on the first suggested person. You
    should see their name is now on it, and the **Nobody yet** count goes down by one.
-3. Scroll to **Reminders**. You should see: **Flock never sends messages. Copy
+3. Tap the **Reminders** tab. You should see: **Flock never sends messages. Copy
    these into your usual messages app.**
 4. Set **Week starting** to the date of the first Practice service and click
    **Show messages**. You should see a ready-to-copy message for each person
@@ -322,15 +332,19 @@ laptop.
 ### 11. Add and remove a day off
 
 1. On the phone, tap **Days off**. You should see **Days I can't serve**, a
-   form with From, To and Reason, and **You have no days off saved**.
-2. Tap **Add** with the dates empty. You should see **Please pick** a date.
-3. Choose a To date that is before the From date. You should see a message that
-   the end cannot be before the start.
-4. Pick a date a few weeks away, type the reason `Family trip`, and tap **Add**
-   (try double-tapping). You should see **Saved. You are off ...** and **Family
-   trip** in the list **Days I have off**, once.
-5. Now add a day off on the date of the **third Practice service**, the one Pat
-   still has a waiting request for. You should see **You are already scheduled on
+   calendar of this month (today ringed, past days greyed, days you serve
+   dotted), **Tap a day to start.**, a Reason box, and **You have no days off
+   saved**.
+2. Tap **Add days off** with nothing picked. You should see **Please pick** a day.
+3. Tap a day a few weeks away (use the arrow for next month), then a day two
+   later. The three days are marked and it says, for example, **Sat 21 Nov to
+   Mon 23 Nov (3 days)**. Tap an earlier day: it starts again from that day.
+4. Pick one day, type the reason `Family trip`, and tap **Add days off** (try
+   double-tapping). You should see **Saved. You are off ...** and **Family
+   trip** in the list **Days I have off**, once, and the day greyed and struck
+   through on the calendar.
+5. Now pick the date of the **third Practice service** (it has a dot: Pat
+   still has a waiting request for it) and add it. You should see **You are already scheduled on
    ... Please tell your scheduler.**
 6. Tap **Remove** beside each day off you added. You should see **Removed. You can
    be scheduled on those days again.**
@@ -346,34 +360,32 @@ Back on the laptop, logged in as the scheduler.
 ### 12. Change someone's access level
 
 1. Go to **People**. Your own row (Demo Admin) says **That's you**. Tap it: it
-   has no "Make volunteer" button. That is on purpose.
-2. Tap Pat Example's row and click **Make scheduler**. You should see **Make Pat
-   Example a scheduler? ...** with two buttons.
-3. Click **No, go back**. Nothing changes.
-4. Click **Make scheduler** again, then **Yes, make a scheduler**. You should see
+   has no **Make a volunteer** and no **Deactivate**. That is on purpose.
+2. Tap Pat Example's row and then **Make a scheduler**. You should see **Make Pat
+   Example a scheduler? ...** with two buttons, in the sheet.
+3. Click **No, go back**. The sheet's list is back. Nothing changes.
+4. Tap **Make a scheduler** again, then **Yes, make a scheduler**. You should see
    **Pat Example is now a scheduler.** and the row says **Scheduler**.
 5. On the phone, reload the page. Pat should now also see **Schedule, Gaps,
    People** and the other scheduler pages.
-6. Back on the laptop click **Make volunteer** on Pat, then **Yes, make a
+6. Back on the laptop open Pat and tap **Make a volunteer**, then **Yes, make a
    volunteer**. You should see **Pat Example is now a volunteer.** Reload on the
    phone. The scheduler pages are gone again.
-7. Tap your own row, try **Deactivate**, then **Yes, deactivate**. You should see
-   **You can't deactivate your own account.**
 
 - [ ] Pass   [ ] Fail   Notes: ______________________________
 
 ### 13. Deactivate and reactivate a person
 
-1. Tap Pat's row and click **Deactivate**. You should see **Deactivate Pat Example? They
+1. Tap Pat's row and then **Deactivate**. You should see **Deactivate Pat Example? They
    will not be able to log in ... Nothing is deleted ...**
 2. Click **No, go back**, then **Deactivate** again, then **Yes, deactivate**. You
-   should see **Pat Example is deactivated. Their history is kept.** and a red
-   **Deactivated** tag.
+   should see **Pat Example is deactivated. Their history is kept.** and the row
+   greyed with a **Deactivated** tag.
 3. On the phone (still open) tap **Days off**. You should be sent to the Log in
    page with **Please log in again.**
 4. On the phone try to log in as Pat. You should see **Wrong email or
    password**.
-5. On the laptop click **Reactivate**, then **Yes, reactivate**. You should see
+5. On the laptop open Pat and tap **Reactivate**, then **Yes, reactivate**. You should see
    **Pat Example is active again.**
 6. On the phone log in as Pat with the password Pat chose. It should work.
 
@@ -381,8 +393,8 @@ Back on the laptop, logged in as the scheduler.
 
 ### 14. Reset a login
 
-1. On the laptop, tap Pat's row and click **Edit name**: the email cannot be changed
-   because Pat has joined. Cancel. Click **Reset login**. The confirmation
+1. On the laptop, tap Pat's row and then **Change name**: the email cannot be changed
+   because Pat has joined. Cancel. Tap **Reset login**. The confirmation
    should say that Pat's password and any linked sign-in stop working right
    away and Pat is logged out everywhere.
 2. Click **Yes, reset login** (try double-clicking). You should see
@@ -393,8 +405,8 @@ Back on the laptop, logged in as the scheduler.
 4. Pat's old password should now say **Wrong email or password**.
 5. Open the new invite link on the phone and choose a new password. Pat
    should be logged in directly; the old invite must no longer work.
-6. For a **demo** volunteer who has not joined, use **Copy new invite** on
-   People. Send Demo Alice her message and open its link to join as
+6. For a **demo** volunteer who has not joined, open them on People and use
+   **Copy new invite**. Send Demo Alice her message and open its link to join as
    `demo.alice@example.com`. Alice already has a day off from the demo.
 
 - [ ] Pass   [ ] Fail   Notes: ______________________________

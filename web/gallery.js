@@ -276,6 +276,7 @@ function pages(d) {
   ${section('p-off', "Days I can't serve", html`
     ${frame('Loading', myBlockouts.render({}, { today: d.today, loading: true }))}
     ${frame('With days off', off({ list: d.BLOCKOUTS }))}
+    ${frame('Picking three days', off({ list: d.BLOCKOUTS, pick: { start: addDays(d.today, 8), end: addDays(d.today, 10) }, serving: new Set([d.sunday]) }))}
     ${frame('Saved, with a clash', off({ list: d.BLOCKOUTS, message: 'Saved. You are off Sun 8 Nov.', conflicts: [{ date: d.sunday, positionName: 'Sound' }] }))}
     ${frame('Nothing saved', off({ list: [] }))}
     ${frame('A problem', off({ list: [], problem: 'Please pick the first day you can\'t serve (From).' }))}`)}
@@ -285,6 +286,10 @@ function pages(d) {
     ${frame('A person tapped: their buttons', screen('People', people.renderScreen(peopleModel({ selected: 5 }))))}
     ${frame('Adding someone', screen('People', people.renderScreen(peopleModel({ adding: true, newName: 'Noor Imaginary' }))))}
     ${frame('Invite message', screen('People', people.renderScreen(peopleModel({ invite: { name: 'Noor Imaginary', email: 'noor.imaginary@example.com', link: '/#/welcome?token=gallery-example', localOnly: true }, notice: 'Copied.' }))))}
+    ${frame("A person's sheet", screen('People', people.renderScreen(peopleModel({ selected: 5, entered: true }))))}
+    ${frame('Are you sure? (in the sheet)', screen('People', people.renderScreen(peopleModel({ selected: 3, entered: true, panel: { kind: 'active', id: 3 } }))))}
+    ${frame('Add a person', screen('People', people.renderScreen(peopleModel({ adding: true, entered: true }))))}
+    ${frame('Only "Not joined"', screen('People', people.renderScreen(peopleModel({ filter: 'invited' }))))}
     ${frame('Invite message on a phone that can share', screen('People', people.renderScreen(peopleModel({ canShare: true, invite: { name: 'Noor Imaginary', email: 'noor.imaginary@example.com', link: '/#/welcome?token=gallery-example', localOnly: false } }))))}
     ${frame('What can they do?', screen('People', people.renderScreen(peopleModel({ selected: 3, panel: { kind: 'positions', id: 3, checked: new Set([10]) } }))))}
     ${frame('Deactivate?', screen('People', people.renderScreen(peopleModel({ selected: 5, panel: { kind: 'active', id: 5 } }))))}
@@ -306,6 +311,7 @@ function pages(d) {
   ${section('p-schedule', 'Schedule', html`
     ${frame('Loading', schedule.render({}))}
     ${frame('Grid (wide) or cards (phone), today highlighted and opened', screen('Schedule', schedule.renderScreen(schedModel({ notice: 'Priya Demo is now on Vocals. Waiting for their answer.', open: new Set([1]) }))))}
+    ${frame('Fill open positions (sheet)', screen('Schedule', schedule.renderScreen(schedModel({ autofill: { open: true, entered: true, weekOf: d.today, weeks: 2, result: { assigned: [], unfilled: [] } } }))))}
     ${frame('No services', screen('Schedule', schedule.renderScreen(schedModel({ services: [] }))))}`)}
   ${section('p-gaps', 'Gaps', html`
     ${frame('Gaps', screen('Gaps', gaps.renderScreen(gapsModel())))}
