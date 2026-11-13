@@ -132,10 +132,11 @@ test('DST: a session lasts exactly its length in real time across the changeover
 // ---------------------------------------------------------------- today and the past
 
 test('today: a service on today\'s date can still be scheduled, answered, listed and found in gaps', async () => {
-  const { c, actor, memberId, service, s } = await church('2025-01-05T18:00:00Z'); // a Sunday evening
+  const { c, clock, actor, memberId, service, s } = await church('2025-01-03T18:00:00Z');
   try {
+    const yesterday = await service('2025-01-04'); // created while it was still upcoming
+    clock.set('2025-01-05T18:00:00Z'); // a Sunday evening
     const svc = await service('2025-01-05', '19:00');
-    const yesterday = await service('2025-01-04');
     await s.assignments.assign(actor, svc.slots[0].id, { personId: memberId });
     assert.equal((await s.assignments.respond(memberId, svc.slots[0].id, 'accept')).status, 'accepted');
     assert.deepEqual((await s.calendar.listServices()).map((x) => x.date), ['2025-01-05'], 'the default list starts today');
@@ -257,7 +258,7 @@ test('February 29: a Sunday service on 2032-02-29 works on the day; non-leap Feb
       assert.equal(await code(service(bad)), 'validation_error', bad);
       assert.equal(await code(s.blockouts.add(memberId, { startDate: bad })), 'validation_error', bad);
     }
-    assert.equal(await code(service('2000-02-29')), 'ok', '2000 was a leap year');
+    assert.equal(await code(service('2400-02-29')), 'ok', '2400 is a leap year');
     clock.set('2032-03-01T00:00:00Z'); // the next day
     assert.equal(await code(s.assignments.respond(memberId, svc.slots[0].id, 'decline')), 'past');
   } finally { c.close(); }

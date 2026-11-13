@@ -121,11 +121,18 @@ export { DuplicateError, InUseError } from './errors.js';
 
 /**
  * @typedef {object} TeamsRepo
- * @property {() => Promise<Team[]>} list  Sorted by sort, then name (case-insensitive), then id.
- * @property {(id: number) => Promise<Team|null>} findById
+ * @property {() => Promise<Team[]>} list  Active teams with their active positions,
+ *   sorted by sort, then name (case-insensitive), then id. Retired ones never appear.
+ * @property {(id: number) => Promise<Team|null>} findById  Active teams only (null for retired).
+ * @property {(name: string) => Promise<{id: number, name: string, sort: number}|null>} findRetiredByName
+ *   A retired team with that name (case-insensitive).
+ * @property {(id: number, t: {name: string}) => Promise<Team|null>} revive
+ *   Bring a retired team back under the name, last in order. Its positions stay retired.
+ * @property {(id: number, at: string) => Promise<boolean>} retire  Retire the team and its active positions.
  * @property {(t: {name: string, sort?: number}) => Promise<Team>} create
  *   Sort defaults to (highest sort + 1). Throws DuplicateError for a taken name (case-insensitive).
- * @property {(id: number, patch: {name?: string, sort?: number}) => Promise<Team|null>} update  DuplicateError for a taken name.
+ * @property {(id: number, patch: {name?: string, sort?: number}) => Promise<Team|null>} update
+ *   DuplicateError for a name taken by an active or a retired team (different messages).
  * @property {(id: number) => Promise<boolean>} remove
  *   Deletes the team and its positions (and their qualifications). Throws InUseError when
  *   one of its positions is used by a slot. False if the team does not exist.
@@ -133,7 +140,13 @@ export { DuplicateError, InUseError } from './errors.js';
 
 /**
  * @typedef {object} PositionsRepo
- * @property {(id: number) => Promise<Position|null>} findById
+ * @property {(id: number) => Promise<Position|null>} findById  Active positions only (null for retired).
+ * @property {(teamId: number, name: string) => Promise<Position|null>} findRetiredByName
+ *   A retired position in the team with that name (case-insensitive).
+ * @property {(id: number, p: {name: string}) => Promise<Position|null>} revive
+ *   Bring a retired position back under the name, last in its team; id and qualifications kept.
+ * @property {(id: number, at: string) => Promise<boolean>} retire
+ *   Hide the position from every list; slots that use it keep it. False if already retired.
  * @property {(teamId: number, p: {name: string, sort?: number}) => Promise<Position>} create
  *   Sort defaults to (highest sort in the team + 1). DuplicateError when the team already has
  *   that name (case-insensitive); Error when the team does not exist.
@@ -146,8 +159,9 @@ export { DuplicateError, InUseError } from './errors.js';
 /**
  * @typedef {object} QualificationsRepo
  * @property {(personId: number, positionIds: number[]) => Promise<number[]>} setForPerson
- *   Replaces the person's positions in one transaction; returns the unique ids ascending.
- *   Throws Error (and changes nothing) for an unknown person or position id.
+ *   Replaces the person's active positions in one transaction (rows for retired positions are
+ *   kept); returns the unique ids ascending. Throws Error (and changes nothing) for an unknown
+ *   person or an unknown or retired position id.
  * @property {(personId: number) => Promise<number[]>} listPositionIds  Ascending.
  * @property {(positionId: number) => Promise<{id: number, name: string}[]>} listPeople
  *   Active qualified people only, sorted by name (case-insensitive) then id.
@@ -213,6 +227,8 @@ export { DuplicateError, InUseError } from './errors.js';
  * @property {(id: number) => Promise<Slot|null>} clear  Back to open: no person, no times.
  * @property {(id: number, r: {status: 'accepted'|'declined'|'pending', respondedAt: string|null}) => Promise<Slot|null>} respond
  * @property {(id: number) => Promise<boolean>} remove
+ * @property {(positionIds: number[], from: string) => Promise<Slot[]>} listForPositionsFrom
+ *   Slots of these positions on services dated `from` or later, by date then time.
  * @property {(personId: number, serviceId: number) => Promise<number>} countForPersonOnService
  * @property {(fromDate: string, toDate: string) => Promise<Slot[]>} assignedBetween
  *   Every slot with a person (any status) on services in the inclusive range, for statistics. Same order as listForServices.

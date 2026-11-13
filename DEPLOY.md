@@ -19,6 +19,7 @@ Set these as environment variables on your host (see [Running Flock](docs/runnin
 | `FLOCK_SECURE_COOKIES` | `1` |
 | `FLOCK_TRUST_PROXY` | `1`, only when a proxy in front sets the client address header (otherwise everyone shares one IP for the sign-in limits) |
 | `FLOCK_PUBLIC_URL` | your `https://` address, so invite links and notifications use it |
+| `TZ` | your church's time zone, such as `America/Chicago`. It decides when a day is over and its services become past (locked). Without it, Flock uses the server's clock, often UTC, and warns at start |
 | `FLOCK_GOOGLE_CLIENT_ID`, `FLOCK_GOOGLE_CLIENT_SECRET` | optional, Google sign-in. Keep as your host's secrets |
 | `FLOCK_VAPID_PUBLIC_KEY`, `FLOCK_VAPID_PRIVATE_KEY` | optional, notifications (`node bin/flock.js push-keys` makes them). Keep as your host's secrets |
 

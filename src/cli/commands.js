@@ -88,6 +88,11 @@ export const commands = {
     const port = await app.listen(container.config.port);
     logger.info('flock started', { version: VERSION, port, pid: process.pid });
     console.log(`flock is running at http://localhost:${port}`);
+    if (!env.TZ) {
+      logger.warn('TZ is not set: "today" follows the server clock', {
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      });
+    }
 
     let stopping = false;
     const shutdown = (signal) => {

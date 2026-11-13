@@ -6,12 +6,14 @@ import { fixedClock } from '../src/infra/clock.js';
 import { silentLogger } from '../src/infra/logger.js';
 import { ConflictError, NotFoundError, ValidationError } from '../src/errors.js';
 import { makeData } from './helpers/data.js';
+import { recordingNotifications } from './helpers/notifications.js';
 
 const NOW = '2025-01-05T12:00:00.000Z';
 
 async function setup() {
   const { data } = makeData();
-  const teams = createTeamsService({ data, clock: fixedClock(NOW), logger: silentLogger() });
+  const notifications = recordingNotifications();
+  const teams = createTeamsService({ data, clock: fixedClock(NOW), logger: silentLogger(), notifications });
   const add = async (name, handle, role = 'member', active = true) => {
     const p = await data.people.create({ name, email: `${handle}@example.com`, role, passwordHash: 'x', createdAt: NOW });
     if (!active) await data.people.update(p.id, { active: false });
@@ -22,7 +24,7 @@ async function setup() {
   const admin = { id: adminId, role: 'admin' };
   const member = { id: memberId, role: 'member' };
   const actions = async () => (await data.audit.list()).reverse();
-  return { data, teams, add, admin, member, adminId, memberId, actions };
+  return { data, teams, add, admin, member, adminId, memberId, actions, notifications };
 }
 
 const conflict = (msg) => (e) => e instanceof ConflictError && e.status === 409 && e.message === msg;
@@ -81,19 +83,108 @@ test('teams service: positions CRUD, moving teams and duplicate names', async ()
   assert.ok(rows.some((r) => r.action === 'position.delete' && r.detail === `position ${p.id} "Keys"`));
 });
 
-test('teams service: used positions cannot be deleted (ConflictError with the old messages)', async () => {
-  const { teams, data, admin } = await setup();
+test('teams service: deleting a position retires it; past slots keep it, upcoming open slots go', async () => {
+  const { teams, data, admin, memberId, notifications } = await setup();
+  const t = (await teams.createTeam(admin, { name: 'Band' })).id;
+  const p = (await teams.createPosition(admin, t, { name: 'Drums' })).id;
+  await data.qualifications.setForPerson(memberId, [p]);
+  const past = await data.services.create({ date: '2025-01-04', title: 'Sunday' });
+  const [pastSlot] = await data.slots.createMany(past.id, [p]);
+  await data.slots.assign(pastSlot.id, { personId: memberId, status: 'accepted', assignedAt: NOW });
+  const today = await data.services.create({ date: '2025-01-05', title: 'Sunday' });
+  await data.slots.createMany(today.id, [p, p]);
+  assert.deepEqual(await teams.deletePosition(admin, p), { ok: true });
+  assert.equal(await data.positions.findById(p), null);
+  assert.deepEqual((await data.teams.findById(t)).positions, []);
+  assert.equal((await data.slots.listForService(today.id)).length, 0, 'upcoming open slots removed');
+  const kept = (await data.slots.listForService(past.id));
+  assert.deepEqual(kept.map((x) => [x.positionName, x.personId]), [['Drums', memberId]], 'past roster unchanged');
+  assert.deepEqual(notifications.events, []);
+  await assert.rejects(teams.deletePosition(admin, p), (e) => e instanceof NotFoundError);
+});
+
+test('teams service: deleting a position with people on upcoming services needs confirm, then tells them', async () => {
+  const { teams, data, admin, memberId, add, notifications, actions } = await setup();
+  const otherId = await add('Sam Singer', 'sam');
   const t = (await teams.createTeam(admin, { name: 'Band' })).id;
   const p = (await teams.createPosition(admin, t, { name: 'Drums' })).id;
   const svc = await data.services.create({ date: '2025-02-02', title: 'Sunday' });
-  const [slot] = await data.slots.createMany(svc.id, [p]);
-  await assert.rejects(teams.deletePosition(admin, p), conflict('This position is used by a service slot, so it cannot be deleted'));
-  await assert.rejects(teams.deleteTeam(admin, t), conflict('Remove or reassign its positions first'));
-  assert.ok(await data.positions.findById(p));
-  assert.equal((await data.audit.list()).filter((r) => r.action.endsWith('.delete')).length, 0);
-  await data.slots.remove(slot.id);
+  const [held, declined] = await data.slots.createMany(svc.id, [p, p]);
+  await data.slots.assign(held.id, { personId: memberId, status: 'pending', assignedAt: NOW });
+  await data.slots.assign(declined.id, { personId: otherId, status: 'declined', assignedAt: NOW });
+  await assert.rejects(teams.deletePosition(admin, p), (e) => e instanceof ConflictError && e.code === 'has_people'
+    && e.details.count === 1 && e.details.people[0].name === 'Max Member' && e.details.people[0].date === '2025-02-02');
+  assert.ok(await data.positions.findById(p), 'nothing changed without confirm');
+  assert.equal((await data.slots.listForService(svc.id)).length, 2);
+  await teams.deletePosition(admin, p, { confirm: true });
+  assert.equal((await data.slots.listForService(svc.id)).length, 0);
+  assert.deepEqual(notifications.events.map((e) => [e[0], e[2].personId]), [['removed', memberId]], 'declined person not told');
+  const [last] = (await actions()).slice(-1);
+  assert.equal(last.action, 'position.delete');
+  assert.match(last.detail, /\(1 people taken off\)$/);
+});
+
+test('teams service: deleting a team retires its positions with one confirm', async () => {
+  const { teams, data, admin, memberId, notifications } = await setup();
+  const t = (await teams.createTeam(admin, { name: 'Band' })).id;
+  const a = (await teams.createPosition(admin, t, { name: 'Drums' })).id;
+  const b = (await teams.createPosition(admin, t, { name: 'Bass' })).id;
+  const old = (await teams.createPosition(admin, t, { name: 'Harp' })).id;
+  await teams.deletePosition(admin, old);
+  const svc = await data.services.create({ date: '2025-02-02', title: 'Sunday' });
+  const [sa] = await data.slots.createMany(svc.id, [a, b]);
+  await data.slots.assign(sa.id, { personId: memberId, status: 'accepted', assignedAt: NOW });
+  await assert.rejects(teams.deleteTeam(admin, t), (e) => e.code === 'has_people' && e.details.count === 1);
+  assert.ok(await data.teams.findById(t));
+  await teams.deleteTeam(admin, t, { confirm: true });
+  assert.equal(await data.teams.findById(t), null);
+  assert.equal(await data.positions.findById(a), null);
+  assert.equal(await data.positions.findById(b), null);
+  assert.equal((await data.slots.listForService(svc.id)).length, 0);
+  assert.equal(notifications.events.length, 1);
+});
+
+test('teams service: adding a deleted name brings the old one back', async () => {
+  const { teams, data, admin, memberId, actions } = await setup();
+  const t = (await teams.createTeam(admin, { name: 'Band' })).id;
+  const p = (await teams.createPosition(admin, t, { name: 'Drums' })).id;
+  await teams.setQualifications(admin, memberId, [p]);
+  const past = await data.services.create({ date: '2025-01-01', title: 'Sunday' });
+  await data.slots.createMany(past.id, [p]);
+  await teams.deletePosition(admin, p);
+  // Saving someone's positions while Drums is retired keeps the hidden qualification.
+  await teams.setQualifications(admin, memberId, []);
+  const back = await teams.createPosition(admin, t, { name: 'drums' });
+  assert.equal(back.id, p);
+  assert.equal(back.name, 'drums');
+  assert.equal(back.revived, true);
+  assert.equal(back.qualifiedCount, 1);
+  assert.equal((await data.slots.listForService(past.id))[0].positionName, 'drums');
   await teams.deleteTeam(admin, t);
-  assert.equal(await data.positions.findById(p), null);
+  const team = await teams.createTeam(admin, { name: 'BAND' });
+  assert.equal(team.id, t);
+  assert.equal(team.revived, true);
+  assert.deepEqual((await data.teams.findById(t)).positions, [], 'positions stay retired');
+  assert.equal((await teams.createPosition(admin, t, { name: 'Drums' })).id, p);
+  const acts = (await actions()).map((r) => r.action);
+  assert.ok(acts.includes('team.revive') && acts.includes('position.revive'));
+});
+
+test('teams service: renaming or moving onto a deleted name is a clear conflict', async () => {
+  const { teams, admin } = await setup();
+  const t = (await teams.createTeam(admin, { name: 'Band' })).id;
+  const t2 = (await teams.createTeam(admin, { name: 'Tech' })).id;
+  const old = (await teams.createPosition(admin, t, { name: 'Drums' })).id;
+  await teams.deletePosition(admin, old);
+  const p = (await teams.createPosition(admin, t, { name: 'Keys' })).id;
+  await assert.rejects(teams.updatePosition(admin, p, { name: 'DRUMS' }),
+    conflict('A deleted position has that name. Add it as a new position to bring it back'));
+  const q = (await teams.createPosition(admin, t2, { name: 'Drums' })).id;
+  await assert.rejects(teams.updatePosition(admin, q, { teamId: t }),
+    conflict('A deleted position has that name. Add it as a new position to bring it back'));
+  await teams.deleteTeam(admin, t2);
+  await assert.rejects(teams.updateTeam(admin, t, { name: 'tech' }),
+    conflict('A deleted team has that name. Add it as a new team to bring it back'));
 });
 
 test('teams service: setQualifications replaces, validates and audits', async () => {

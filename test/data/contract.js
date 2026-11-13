@@ -386,6 +386,46 @@ export function runContract(name, makeData) {
         assert.deepEqual(await data.qualifications.listPositionIds(w.ann.id), []);
         assert.equal(await data.positions.remove(w.keys.id), false);
       });
+
+      test('positions.retire hides it; slots and qualifications stay; revive brings it back', async () => {
+        await fresh();
+        const w = await world();
+        const svc = await data.services.create({ date: '2025-01-05', time: '09:00', title: 'Sun' });
+        await data.slots.createMany(svc.id, [w.drums.id]);
+        await data.qualifications.setForPerson(w.ann.id, [w.drums.id, w.keys.id]);
+        assert.equal(await data.positions.retire(w.drums.id, T), true);
+        assert.equal(await data.positions.retire(w.drums.id, T), false);
+        assert.equal(await data.positions.findById(w.drums.id), null);
+        assert.deepEqual((await data.teams.findById(w.band.id)).positions.map((p) => p.name), ['Keys']);
+        assert.deepEqual((await data.slots.listForService(svc.id)).map((x) => x.positionName), ['Drums']);
+        await assert.rejects(data.qualifications.setForPerson(w.ann.id, [w.drums.id]), Error);
+        assert.deepEqual(await data.qualifications.setForPerson(w.ann.id, []), []);
+        await assert.rejects(data.positions.create(w.band.id, { name: 'drums' }), DuplicateError);
+        await assert.rejects(data.positions.update(w.keys.id, { name: 'DRUMS' }), DuplicateError);
+        assert.equal(await data.positions.findRetiredByName(w.band.id, 'DRUMS').then((p) => p.id), w.drums.id);
+        assert.equal(await data.positions.findRetiredByName(w.tech.id, 'Drums'), null);
+        assert.equal(await data.positions.findRetiredByName(w.band.id, 'Keys'), null);
+        const back = await data.positions.revive(w.drums.id, { name: 'drums' });
+        assert.deepEqual([back.id, back.name, back.sort], [w.drums.id, 'drums', w.keys.sort + 1]);
+        assert.deepEqual(await data.qualifications.listPositionIds(w.ann.id), [w.drums.id], 'kept while retired');
+        assert.equal(await data.positions.revive(9999, { name: 'X' }), null);
+      });
+
+      test('teams.retire retires its positions; revive brings the team back alone', async () => {
+        await fresh();
+        const w = await world();
+        assert.equal(await data.teams.retire(w.band.id, T), true);
+        assert.equal(await data.teams.retire(w.band.id, T), false);
+        assert.equal(await data.teams.findById(w.band.id), null);
+        assert.deepEqual((await data.teams.list()).map((t) => t.name), ['Tech']);
+        assert.equal(await data.positions.findById(w.keys.id), null);
+        await assert.rejects(data.teams.update(w.tech.id, { name: 'band' }), DuplicateError);
+        assert.equal((await data.teams.findRetiredByName('BAND')).id, w.band.id);
+        assert.equal(await data.teams.findRetiredByName('Tech'), null);
+        const back = await data.teams.revive(w.band.id, { name: 'Band' });
+        assert.deepEqual(back, { id: w.band.id, name: 'Band', sort: w.tech.sort + 1, positions: [] });
+        assert.equal((await data.positions.findRetiredByName(w.band.id, 'Keys')).id, w.keys.id);
+      });
     });
 
     // ---------- qualifications ----------
@@ -507,6 +547,20 @@ export function runContract(name, makeData) {
           personName: null,
         });
         assert.deepEqual(await data.slots.createMany(s.id, []), []);
+      });
+
+      test('listForPositionsFrom lists slots of those positions from a date, in service order', async () => {
+        await fresh();
+        const w = await world();
+        const old = await data.services.create({ date: '2025-01-05', time: '09:00', title: 'Sun' });
+        const late = await data.services.create({ date: '2025-01-12', time: '11:00', title: 'Sun' });
+        const early = await data.services.create({ date: '2025-01-12', time: '09:00', title: 'Sun' });
+        await data.slots.createMany(old.id, [w.drums.id]);
+        await data.slots.createMany(late.id, [w.drums.id, w.sound.id]);
+        await data.slots.createMany(early.id, [w.keys.id, w.drums.id]);
+        const got = await data.slots.listForPositionsFrom([w.drums.id, w.keys.id], '2025-01-12');
+        assert.deepEqual(got.map((x) => [x.serviceId, x.positionName]), [[early.id, 'Drums'], [early.id, 'Keys'], [late.id, 'Drums']]);
+        assert.deepEqual(await data.slots.listForPositionsFrom([], '2025-01-01'), []);
       });
 
       test('createMany with an unknown position creates nothing', async () => {

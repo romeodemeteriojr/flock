@@ -28,9 +28,17 @@ export function register(router, ctx) {
 
   router.add('GET', '/api/services', async ({ query }) => ok(await calendar().listServices(query.from, query.to)), { auth: 'admin' });
 
-  router.add('PATCH', '/api/services/:id', async ({ params, body, user }) => {
+  router.add('PATCH', '/api/services/:id', async ({ params, query, body, user }) => {
     const b = objectOr(body);
-    return ok(await calendar().updateService(user, pathId(params.id), { date: b.date, time: b.time, title: b.title }));
+    try {
+      return ok(await calendar().updateService(user, pathId(params.id),
+        { date: b.date, time: b.time, title: b.title, slots: b.slots }, { confirm: confirmed(query) }));
+    } catch (e) {
+      if (e instanceof ConflictError && e.code === 'has_people') {
+        return { status: 409, json: { error: e.message, code: 'has_people', count: e.details.count, people: e.details.people } };
+      }
+      throw e;
+    }
   }, { auth: 'admin' });
 
   router.add('DELETE', '/api/services/:id', async ({ params, query, user }) => {

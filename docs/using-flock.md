@@ -118,9 +118,18 @@ Schedulers also see:
 - **People**: see [Adding people](#adding-people).
 - **Teams**: create teams and the positions in each team (for example Band:
   Vocals, Guitar, Drums). Each team opens to show its positions and how many
-  people can do each.
+  people can do each. Deleting a position or a team takes it off upcoming
+  services; if people are down for it, Flock names them first, and tells them
+  once you say yes. Past services still show it. Add the same name again to
+  bring it back, with the people who can do it (a team comes back without its
+  positions; add them again too).
 - **Services**: add service dates with the positions you need. You can repeat
-  a service weekly for several weeks.
+  a service weekly for several weeks. **Edit** changes the date, time, title
+  and the positions with how many of each. A number can only go down by
+  empty spots; if everyone in it is already down, take someone off on
+  Schedule first. Taking a whole position off names the people in it and
+  tells them. Services before today are past: they can't be changed or
+  deleted, or answered.
 - **Schedule**: the next 8 weeks. The card at the top says how many positions
   are confirmed and what still needs doing. Each service shows a dot per
   position and how many are confirmed. Tap a position to open it: it shows who

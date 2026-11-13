@@ -22,6 +22,7 @@ Settings:
 | `FLOCK_DB=/path/to/church.db` | The database file. Default: `data/flock.db` in the Flock folder. |
 | `FLOCK_PORT=3000` | The port. Default: 8080. |
 | `FLOCK_PUBLIC_URL=https://schedule.example.org` | The address invite links use. Without it, links use the scheduler's current address (the command line uses `http://localhost:<port>`). Needed for notifications. |
+| `TZ=America/Chicago` | Your church's time zone. It decides when a day is over: services before today are past and can't be changed. Default: the computer's own time zone. |
 | `FLOCK_SECURE_COOKIES=1` | Browsers send the login cookie over HTTPS only. Set it whenever Flock is served over HTTPS. |
 
 `node bin/flock.js help` lists every command.

@@ -16,11 +16,12 @@ const FALLBACK = {
 const SERVER_MESSAGE = 'Something went wrong on our side. Please try again in a minute.';
 
 export class ApiError extends Error {
-  constructor({ status = 0, code = null, message }) {
+  constructor({ status = 0, code = null, message, data = null }) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
     this.code = code;
+    this.data = data; // the parsed error body, e.g. { count, people } with has_people
   }
 }
 
@@ -72,6 +73,7 @@ export function createApi(fetchFn = (url, init) => globalThis.fetch(url, init), 
       status: res.status,
       code: data && typeof data.code === 'string' ? data.code : null,
       message: messageFor(res.status, data),
+      data,
     });
     // A wrong password at /api/login is also a 401, but that is not "logged out".
     if (res.status === 401 && path !== '/api/login') callHook(api.onUnauthorized, err);

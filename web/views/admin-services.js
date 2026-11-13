@@ -7,6 +7,7 @@ import { formatDate, formatTime, todayString } from '../lib/dates.js';
 import { iconSlot } from '../lib/icons.js';
 import { toasts } from '../lib/toast.js';
 import { skeleton, emptyState, pageHead, disclosure, refocus } from '../lib/ui.js';
+import { takenOffText, peopleFrom } from '../lib/taken-off.js';
 
 export const title = 'Services';
 export const DEFAULT_TIME = '09:00';
@@ -68,6 +69,16 @@ export function readDraft(elements, teams) {
   return d;
 }
 
+// The edit form's starting values: the service's fields and its positions with counts.
+export function draftOf(svc) {
+  const pos = {};
+  for (const sl of svc?.slots ?? []) {
+    const cur = pos[sl.positionId];
+    pos[sl.positionId] = { on: true, count: String(cur ? Number(cur.count) + 1 : 1) };
+  }
+  return { date: svc?.date ?? '', time: svc?.time ?? '', title: svc?.title ?? '', pos };
+}
+
 export function weeksFrom(elements) {
   const n = Number(val(elements, 'weeks'));
   return Number.isInteger(n) && n >= 1 && n <= MAX_WEEKS ? n : null;
@@ -77,7 +88,9 @@ export function repeatNotice(r) {
   const made = r?.created?.length ?? 0;
   const skipped = r?.skipped ?? [];
   let text = made === 1 ? 'Added 1 more service.' : `Added ${made} more services.`;
-  if (skipped.length) text += ` Skipped ${skipped.map(formatDate).join(', ')}: there is already a service then.`;
+  if (skipped.length) text += ` Skipped ${skipped.map(formatDate).join(', ')}: there is already a service then, or it has passed.`;
+  const gone = r?.skippedPositions ?? [];
+  if (gone.length) text += ` Left out ${gone.join(', ')}: deleted on the Teams page.`;
   return text;
 }
 
@@ -104,6 +117,19 @@ export function sortServices(list) {
 
 // ---------- rendering ----------
 
+// The positions and how many of each. prefix keeps element ids unique when
+// the edit form is open next to the add form; the names stay the same.
+function positionPicker(teams, d, prefix = '') {
+  return html`${teams.length ? teams.map((t) => html`<fieldset class="field fieldset" data-team="${t.id}">
+      <legend><strong>${t.name}</strong></legend>
+      ${t.positions.length ? t.positions.map((p) => html`<div class="field pos-pick">
+        <label class="check" for="${prefix}pos-${p.id}"><input id="${prefix}pos-${p.id}" name="pos-${p.id}" type="checkbox"${d.pos[p.id]?.on ? html` checked` : ''}> ${p.name}</label>
+        <label class="count-label" for="${prefix}count-${p.id}">How many ${p.name}</label>
+        <input id="${prefix}count-${p.id}" name="count-${p.id}" type="number" min="1" max="${MAX_COUNT}" value="${d.pos[p.id]?.count ?? '1'}" inputmode="numeric">
+      </div>`) : html`<p class="hint">No positions in this team yet.</p>`}
+    </fieldset>`) : html`<p class="hint">No teams yet. Add teams and positions on the Teams page first.</p>`}`;
+}
+
 function createForm(teams, today, draft) {
   const d = draft ?? { date: today, time: DEFAULT_TIME, title: DEFAULT_TITLE, pos: {} };
   return html`<form class="form card form-card form-wide" data-form="create" novalidate>
@@ -117,14 +143,7 @@ function createForm(teams, today, draft) {
     <div class="field"><label for="svc-title">Title</label>
       <input id="svc-title" name="title" type="text" maxlength="100" value="${d.title}"></div>
     <h3>Positions needed</h3>
-    ${teams.length ? teams.map((t) => html`<fieldset class="field fieldset" data-team="${t.id}">
-      <legend><strong>${t.name}</strong></legend>
-      ${t.positions.length ? t.positions.map((p) => html`<div class="field pos-pick">
-        <label class="check" for="pos-${p.id}"><input id="pos-${p.id}" name="pos-${p.id}" type="checkbox"${d.pos[p.id]?.on ? html` checked` : ''}> ${p.name}</label>
-        <label class="count-label" for="count-${p.id}">How many ${p.name}</label>
-        <input id="count-${p.id}" name="count-${p.id}" type="number" min="1" max="${MAX_COUNT}" value="${d.pos[p.id]?.count ?? '1'}" inputmode="numeric">
-      </div>`) : html`<p class="hint">No positions in this team yet.</p>`}
-    </fieldset>`) : html`<p class="hint">No teams yet. Add teams and positions on the Teams page first.</p>`}
+    ${positionPicker(teams, d)}
     <button type="submit" class="btn btn-primary">${iconSlot('plus')} Add service</button>
   </form>`;
 }
@@ -133,16 +152,27 @@ function serviceCard(svc, m) {
   const mine = m.panel && m.panel.id === svc.id ? m.panel : null;
   let extra = '';
   if (mine?.kind === 'edit') {
-    const d = mine.draft ?? svc;
-    extra = html`<form class="form confirm" data-form="edit" data-id="${svc.id}" novalidate>
-      <div class="field"><label for="edit-date-${svc.id}">Date</label>
-        <input id="edit-date-${svc.id}" name="date" type="date" required value="${d.date}"></div>
-      <div class="field"><label for="edit-time-${svc.id}">Time</label>
-        <input id="edit-time-${svc.id}" name="time" type="time" required value="${d.time}"></div>
-      <div class="field"><label for="edit-title-${svc.id}">Title</label>
-        <input id="edit-title-${svc.id}" name="title" type="text" maxlength="100" value="${d.title}"></div>
-      <div class="btn-row"><button type="submit" class="btn btn-primary">Save changes</button>
-        <button type="button" class="btn" data-action="cancel">Cancel</button></div>
+    const d = mine.draft ?? draftOf(svc);
+    const id = svc.id;
+    extra = html`<form class="form confirm form-wide" data-form="edit" data-id="${id}" novalidate>
+      <div class="field-pair">
+      <div class="field"><label for="edit-date-${id}">Date</label>
+        <input id="edit-date-${id}" name="date" type="date" required value="${d.date}"></div>
+      <div class="field"><label for="edit-time-${id}">Time</label>
+        <input id="edit-time-${id}" name="time" type="time" required value="${d.time}"></div>
+      </div>
+      <div class="field"><label for="edit-title-${id}">Title</label>
+        <input id="edit-title-${id}" name="title" type="text" maxlength="100" value="${d.title}"></div>
+      <h3>Positions needed</h3>
+      ${positionPicker(m.teams, d, `edit-${id}-`)}
+      ${mine.people ? html`<div class="confirm confirm-danger" role="alertdialog" aria-label="Confirm">
+        <p><strong>${takenOffText(mine.people) || mine.message}</strong> ${mine.people.length === 1 ? 'is' : 'are'} on a position you took off. They will be taken off and told.</p>
+        <div class="btn-row">
+          <button type="button" class="btn btn-danger" data-action="edit-yes" data-id="${id}">Yes, save</button>
+          <button type="button" class="btn" data-action="edit-back" data-id="${id}">No, go back</button>
+        </div></div>`
+    : html`<div class="btn-row"><button type="submit" class="btn btn-primary">Save changes</button>
+        <button type="button" class="btn" data-action="cancel">Cancel</button></div>`}
     </form>`;
   }
   if (mine?.kind === 'repeat') {
@@ -237,8 +267,34 @@ export function createScreen({ api, root, today = todayString() }) {
     paint();
   };
 
+  // Save an edit. When it would take people off, ask again naming them and
+  // only then send the confirmation they saw.
+  async function saveEdit(id, body, confirmed) {
+    try {
+      await api.patch(`/api/services/${id}${confirmed ? '?confirm=1' : ''}`, body);
+    } catch (err) {
+      const people = peopleFrom(err);
+      if (!people || m.panel?.id !== id) throw err;
+      m.panel = { ...m.panel, body, people, message: err.message };
+      return;
+    }
+    m.panel = null;
+    await reload();
+    m.notice = 'Service saved.';
+  }
+
   const actions = {
     cancel: () => { m.panel = null; paint(); },
+    'edit-back': (id) => {
+      if (m.panel?.kind !== 'edit' || m.panel.id !== Number(id)) return;
+      m.panel = { kind: 'edit', id: m.panel.id, draft: m.panel.draft };
+      paint();
+    },
+    'edit-yes': (id) => attempt(async () => {
+      const panel = m.panel;
+      if (panel?.kind !== 'edit' || panel.id !== Number(id) || !panel.people) return;
+      await saveEdit(panel.id, panel.body, true);
+    }),
     select: (id) => { m.selected = m.selected === id ? null : id; m.panel = null; paint(); refocus(root, 'select', id); },
     edit: ask('edit'),
     repeat: ask('repeat'),
@@ -277,15 +333,12 @@ export function createScreen({ api, root, today = todayString() }) {
     edit: (form) => attempt(async () => {
       const svc = find(form.dataset.id);
       if (!svc) return;
-      const date = val(form.elements, 'date');
-      const time = val(form.elements, 'time');
-      const t = val(form.elements, 'title');
-      if (m.panel?.id === svc.id) m.panel.draft = { date, time, title: String(form.elements?.title?.value ?? '') };
-      if (!date || !time || !t) { m.error = 'Please fill in the date, time and title.'; return; }
-      await api.patch(`/api/services/${svc.id}`, { date, time, title: t });
-      m.panel = null;
-      await reload();
-      m.notice = 'Service saved.';
+      const draft = readDraft(form.elements, m.teams);
+      if (m.panel?.id === svc.id) m.panel.draft = draft;
+      if (!draft.date || !draft.time || !draft.title.trim()) { m.error = 'Please fill in the date, time and title.'; return; }
+      const r = serviceBody(form.elements, m.teams);
+      if (r.error) { m.error = r.error; return; }
+      await saveEdit(svc.id, r.body, false);
     }),
     repeat: (form) => attempt(async () => {
       const svc = find(form.dataset.id);

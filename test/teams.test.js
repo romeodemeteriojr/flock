@@ -58,15 +58,15 @@ test('create, rename, delete team; duplicates', async () => {
     assert.equal((await call('PATCH', '/api/teams/999', 'admin', { name: 'Z' })).status, 404);
     await call('POST', `/api/teams/${other}/positions`, 'admin', { name: 'Mixer' });
     assert.equal((await call('DELETE', `/api/teams/${other}`, 'admin')).status, 200);
-    assert.equal(db.prepare('SELECT COUNT(*) n FROM positions').get().n, 0);
+    assert.equal(db.prepare('SELECT COUNT(*) n FROM positions WHERE retired_at IS NULL').get().n, 0);
     assert.equal((await call('DELETE', `/api/teams/${other}`, 'admin')).status, 404);
     const actions = db.prepare('SELECT action FROM audit').all().map((a) => a.action);
     assert.ok(actions.includes('team.create') && actions.includes('team.update') && actions.includes('team.delete'));
   } finally { await app.close(); }
 });
 
-test('positions CRUD and deletion refused when used by a slot', async () => {
-  const { app, db, call } = await boot();
+test('positions CRUD; deleting retires and needs confirm when people are on it', async () => {
+  const { app, db, s, call } = await boot();
   try {
     const t1 = (await call('POST', '/api/teams', 'admin', { name: 'Band' })).json.id;
     const t2 = (await call('POST', '/api/teams', 'admin', { name: 'Sound' })).json.id;
@@ -82,17 +82,23 @@ test('positions CRUD and deletion refused when used by a slot', async () => {
     assert.equal((await call('PATCH', `/api/positions/${p}`, 'admin', { teamId: 999 })).status, 400);
     assert.equal((await call('PATCH', '/api/positions/999', 'admin', { name: 'A' })).status, 404);
 
-    db.prepare("INSERT INTO services (date, time, title) VALUES ('2025-02-02','09:00','Sunday')").run();
-    db.prepare('INSERT INTO slots (service_id, position_id) VALUES (1, ?)').run(p);
+    // A person on an upcoming service: 409 with who, then confirm.
+    db.prepare("INSERT INTO services (date, time, title) VALUES ('2099-02-02','09:00','Sunday')").run();
+    db.prepare("INSERT INTO slots (service_id, position_id, person_id, status) VALUES (1, ?, ?, 'pending')").run(p, s.memberId);
     r = await call('DELETE', `/api/positions/${p}`, 'admin');
     assert.equal(r.status, 409);
-    assert.equal(typeof r.json.error, 'string');
-    r = await call('DELETE', `/api/teams/${t2}`, 'admin');
-    assert.equal(r.status, 409);
-    assert.equal(r.json.error, 'Remove or reassign its positions first');
-    db.prepare('DELETE FROM slots').run();
-    assert.equal((await call('DELETE', `/api/positions/${p}`, 'admin')).status, 200);
+    assert.equal(r.json.code, 'has_people');
+    assert.equal(r.json.count, 1);
+    assert.equal(r.json.people.length, 1);
+    assert.equal(db.prepare('SELECT COUNT(*) n FROM slots').get().n, 1);
+    assert.equal((await call('DELETE', `/api/positions/${p}?confirm=1`, 'admin')).status, 200);
+    assert.equal(db.prepare('SELECT COUNT(*) n FROM slots').get().n, 0);
+    assert.equal((await call('DELETE', `/api/positions/${p}`, 'admin')).status, 404);
     assert.equal((await call('DELETE', `/api/teams/${t2}`, 'admin')).status, 200);
+    // The same name brings the old position back.
+    r = await call('POST', `/api/teams/${t1}/positions`, 'admin', { name: 'Keys' });
+    assert.equal(r.status, 201);
+    assert.equal(r.json.revived, undefined);
   } finally { await app.close(); }
 });
 

@@ -819,7 +819,7 @@ test('UAT 20: double clicks, odd names, stale tabs, rapid page changes and the b
   await tapOpen(admin, 'select', victim.id);
   await admin.click('repeat', victim.id);
   await admin.submit('repeat', { weeks: '1' });
-  said(admin, /Added 0 more services\. Skipped .*there is already a service then\./);
+  said(admin, /Added 0 more services\. Skipped .*there is already a service then/);
   wellBuilt(admin, 'repeat');
   await tapOpen(admin, 'select', victim.id);
   await admin.click('delete', victim.id);
