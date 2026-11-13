@@ -415,6 +415,12 @@ test('UAT 9 to 11: volunteer sees My schedule, says yes and no, adds and removes
   said(phone, /Coming up/);
   said(phone, /Please answer/);
   assert.match(phone.html(), /data-banner>You&#39;re serving|data-banner>Next time you serve/, 'the banner tells the next time');
+  // The My schedule tab says how many asks are waiting.
+  const badge = () => /<span class="nav-badge" aria-hidden="true">(\d)<\/span><span class="visually-hidden">, \d to answer/.exec(phone.html())?.[1] ?? null;
+  const pendingCards = () => (phone.html().match(/class="card serve-card is-pending"/g) || []).length;
+  const asksAtStart = pendingCards();
+  assert.ok(asksAtStart >= 2);
+  assert.equal(badge(), String(asksAtStart));
   wellBuilt(phone, 'My schedule');
 
   // A volunteer sees no scheduler pages, and cannot reach them by typing the address.
@@ -438,6 +444,7 @@ test('UAT 9 to 11: volunteer sees My schedule, says yes and no, adds and removes
   assert.equal(countCalls(phone, 'POST', new RegExp(`/api/me/slots/${first}/accept`)), 1);
   assert.ok(phone.toasts().some((x) => /Thank you! You are confirmed\./.test(x)), phone.text());
   assert.equal(waiting().includes(first), false, 'it no longer asks for an answer');
+  assert.equal(badge(), String(asksAtStart - 1), 'the badge goes down');
   wellBuilt(phone, 'after saying yes');
 
   // The confirmed card stays, and opens the full roster of that day: every team and position, me included.
@@ -457,6 +464,7 @@ test('UAT 9 to 11: volunteer sees My schedule, says yes and no, adds and removes
   await phone.click('decline', second);
   assert.ok(phone.toasts().some((x) => /Your scheduler will find someone else/.test(x)), phone.text());
   assert.equal(phone.has(`[data-slot="${second}"]`), false, 'a declined request leaves my list');
+  assert.equal(badge(), asksAtStart > 2 ? String(asksAtStart - 2) : null, 'and down again (no badge at 0)');
 
   // Changing my mind about a confirmed one asks "Are you sure?" first.
   await phone.click('decline-ask', first);

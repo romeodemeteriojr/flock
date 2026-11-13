@@ -11,6 +11,8 @@
 - **Edge to edge.** On phones with a notch or rounded corners Flock now fills the whole screen; the top bar, the page and the messages keep clear of the notch and the status bar.
 - **A slimmer top bar.** Just the Flock mark, the bell and your picture. When you scroll down, the page's name slides into the bar. "Logged in as", the key and **Log out** have moved:
 - **Your account** is a new sheet that opens when you tap your picture: who you are (name, Scheduler or Volunteer, email), **Notifications**, **Change my password** and **Log out**. Close it with the X, by tapping outside it or with Escape.
+- **Numbers on the tabs.** My schedule shows how many asks are waiting for your answer; schedulers see how many gaps there are on Gaps (on a phone, the asks also show on More). Screen readers hear the words ("2 to answer"). An installed Flock also shows the number of asks on its app icon, where the phone supports it.
+- **More is a bottom sheet** on phones, rising from behind the tab bar with bigger rows.
 - **Shortcuts.** Press and hold the Flock icon on Android (and in desktop Chrome or Edge) for **My schedule** and **Days off**.
 
 ## 0.6.0

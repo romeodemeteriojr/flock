@@ -176,7 +176,8 @@ export function renderScreen(m, panelHtml = '') {
 
 // ---------- screen controller ----------
 
-export function createScreen({ api, root, today = todayString() }) {
+/** onChange(): something was assigned, removed or asked (the tab badges may be different now). */
+export function createScreen({ api, root, today = todayString(), onChange = () => {} }) {
   const m = {
     services: [], teams: [], loading: true, error: '', notice: '', today, from: today, to: addDays(today, WEEKS * 7 - 1),
     open: new Set(), // the phone cards that are open
@@ -199,6 +200,7 @@ export function createScreen({ api, root, today = todayString() }) {
       m.notice = notice;
       m.error = '';
       try { await reload(); } catch (err) { m.error = String(err?.message || 'Could not reload the schedule.'); }
+      onChange();
     },
   });
 
@@ -248,6 +250,7 @@ export function createScreen({ api, root, today = todayString() }) {
       a.input = null;
       m.notice = n === 1 ? 'Asked 1 person. They will see it in My schedule.' : `Asked ${n} people. They will see it in My schedule.`;
       await reload();
+      onChange();
     } catch (err) {
       a.error = String(err?.message || 'Could not fill those weeks.');
     }
@@ -299,5 +302,5 @@ export function render(state) { // eslint-disable-line no-unused-vars
 export function mount(root, ctx) {
   const screen = root?.querySelector?.('[data-screen]');
   if (!screen) return undefined;
-  return createScreen({ api: ctx.api, root: screen, today: ctx.today ?? todayString() }).ready;
+  return createScreen({ api: ctx.api, root: screen, today: ctx.today ?? todayString(), onChange: () => ctx.refreshCounts?.().catch(() => {}) }).ready;
 }

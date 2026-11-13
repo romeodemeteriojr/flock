@@ -376,7 +376,19 @@ h2:focus-visible { outline: 3px solid var(--focus); }
 .nav-item a:has(.nav-label-short) .nav-label-short { display: inline; }
 .nav-more .nav-label-short { display: inline; }
 
-/* "More" menu (admins on phones): a small sheet above the tab bar. */
+/* Count badges on tabs: what you have to answer, the gaps. The words are in
+   a visually hidden span beside it, so it is never a number alone. */
+.nav-badge {
+  position: absolute; top: 2px; left: calc(50% + 12px);
+  min-width: 1.15rem; height: 1.15rem; padding: 0 0.3rem;
+  border-radius: var(--radius-pill);
+  color: var(--danger-bg); background: var(--danger);
+  box-shadow: 0 0 0 2px var(--bar-bg);
+  font-size: 0.68rem; font-weight: 800; line-height: 1.15rem; text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+/* "More" (admins on phones): a bottom sheet that rises from behind the tab bar. */
 .nav-sub-wrap { display: none; }
 .nav-sub { list-style: none; margin: 0; padding: 0; }
 .nav-scrim { display: none; }
@@ -384,21 +396,30 @@ h2:focus-visible { outline: 3px solid var(--focus); }
   display: block; position: fixed; inset: 0; z-index: -1; background: var(--scrim);
 }
 .nav.is-open .nav-sub-wrap {
-  display: block; position: absolute; left: var(--s-3); right: var(--s-3);
-  bottom: calc(100% + var(--s-2));
-  padding: var(--s-2); border-radius: var(--radius-xl);
-  background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow-3);
-  animation: rise var(--med) var(--ease);
+  display: block; position: absolute; left: 0; right: 0; bottom: 100%;
+  padding: 0 var(--s-2) var(--s-2);
+  border: 0; border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+  background: var(--surface); box-shadow: var(--shadow-3);
+  transform: translateY(var(--sheet-drag, 0px));
+  animation: slide-up 200ms var(--ease);
 }
+.nav-sub-title { margin: 0; padding: var(--s-3) var(--s-3) var(--s-2); font-size: var(--fs-xl); font-weight: var(--weight-head); letter-spacing: -0.02em; }
 .nav.is-open .nav-sub a {
   flex-direction: row; justify-content: flex-start; gap: var(--s-3);
-  min-height: 52px; padding: var(--s-2) var(--s-4);
+  min-height: var(--control-lg-size); padding: var(--s-2) var(--s-3);
   border-radius: var(--radius-lg);
-  color: var(--text); font-size: var(--fs-md);
+  color: var(--text); font-size: var(--fs-md); font-weight: 600;
+}
+.nav.is-open .nav-sub .nav-icon {
+  width: 2.25rem; height: 2.25rem; padding: 7px; border-radius: 10px;
+  color: var(--on-accent-soft); background: var(--accent-soft);
 }
 .nav.is-open .nav-sub a:hover { background: var(--surface-2); }
-.nav.is-open .nav-sub a[aria-current="page"] { color: var(--on-accent-soft); }
 .nav.is-open .nav-sub a::after { top: 0; left: 0; width: 100%; height: 100%; border-radius: var(--radius-lg); }
+.nav.is-open .nav-sub a[aria-current="page"]::after { background: var(--surface-2); }
+.nav.is-open .nav-sub a[aria-current="page"] .nav-icon { color: var(--on-accent); background: var(--accent); }
+/* In a row of the More sheet the badge sits at the end of the row. */
+.nav.is-open .nav-sub .nav-badge { position: static; margin-left: auto; box-shadow: none; }
 .nav-sub .nav-label { display: inline; }
 
 /* ---------- message box (kept for old markup) ---------- */
@@ -1022,6 +1043,10 @@ th, td { text-align: left; padding: var(--s-2) var(--s-3); border-bottom: 1px so
   .nav-more-item { display: none; }
   /* Also when the phone "More" menu was left open and the window got wider. */
   .nav-sub-wrap, .nav-sub, .nav.is-open .nav-sub-wrap { display: contents; }
+  /* The sheet's handle and title belong to the phone sheet only. */
+  .nav-sub-wrap > .sheet-grab, .nav-sub-title { display: none; }
+  /* In the row of pills the badge follows the label. */
+  .nav-list .nav-badge, .nav.is-open .nav-sub .nav-badge { position: static; margin-left: var(--s-1); box-shadow: none; }
   .nav.is-open .nav-sub-wrap { position: static; padding: 0; box-shadow: none; animation: none; }
   .nav.is-open .nav-sub a {
     flex-direction: row; justify-content: center; gap: var(--s-2); min-height: var(--control-size);

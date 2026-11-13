@@ -11,6 +11,7 @@ import { watchIcons } from './lib/icons.js';
 import { skeleton } from './lib/ui.js';
 import * as push from './lib/push.js';
 import { registerWorker, applyUpdate, watchUpdates } from './lib/worker.js';
+import { loadCounts, setAppBadge } from './lib/counts.js';
 
 const GENERIC = 'Something went wrong. Please reload the page and try again.';
 
@@ -24,7 +25,7 @@ export const SHELL = `
 
 export function createApp({ root, win = globalThis.window, api = createApi() }) {
   const doc = root.ownerDocument;
-  const state = { user: null, accountOpen: false };
+  const state = { user: null, accountOpen: false, counts: { answer: 0, gaps: 0 } };
   let pending = null; // message to keep through the next page change
   let renderCount = 0;
 
@@ -57,7 +58,11 @@ export function createApp({ root, win = globalThis.window, api = createApi() }) 
 
   function setUser(user) {
     state.user = user;
-    if (!user) { state.push = null; pushFor = null; state.accountOpen = false; paintLayer(); return; }
+    if (!user) {
+      state.push = null; pushFor = null; state.accountOpen = false; paintLayer();
+      countsFor = null; state.counts = { answer: 0, gaps: 0 }; setAppBadge(win, 0);
+      return;
+    }
     // The login reply names the person only; the account sheet also shows the
     // email. Fill in the rest quietly (start-up already has it from /api/me).
     if (!('email' in user)) {
@@ -105,9 +110,26 @@ export function createApp({ root, win = globalThis.window, api = createApi() }) 
   }
   const toggleAccount = () => (state.accountOpen ? closeAccount() : openAccount());
 
+  // ----- the numbers on the tabs and the app icon (web/lib/counts.js) -----
+  let countsFor = null;
+  // Pages that already loaded a number pass it here (My schedule, Gaps).
+  function setCounts(next) {
+    const before = `${state.counts.answer}/${state.counts.gaps}`;
+    state.counts = { ...state.counts, ...next };
+    setAppBadge(win, state.counts.answer);
+    if (state.user && `${state.counts.answer}/${state.counts.gaps}` !== before) paintTop();
+  }
+  // After a change elsewhere (assigning, autofill): ask the server again.
+  async function refreshCounts() {
+    const user = state.user;
+    if (!user) return;
+    const c = await loadCounts(api, user);
+    if (state.user === user) setCounts(c);
+  }
+
   const ctx = {
     api, state, win, navigate, showError, showMessage, setUser, paintTop, rerender: () => render(),
-    openAccount, closeAccount, toggleAccount,
+    openAccount, closeAccount, toggleAccount, setCounts, refreshCounts,
   };
   account.mount(layer, ctx);
 
@@ -151,6 +173,7 @@ export function createApp({ root, win = globalThis.window, api = createApi() }) 
         pending = null;
       } else toaster.clear();
       if (state.user && pushFor !== state.user.id) { pushFor = state.user.id; loadPush(); }
+      if (state.user && countsFor !== state.user.id) { countsFor = state.user.id; refreshCounts().catch(() => {}); }
       pageTitle = view.title ?? '';
       paintTop();
       main.innerHTML = view.render(state);

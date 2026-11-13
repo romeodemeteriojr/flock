@@ -13,6 +13,7 @@ import { html } from '../lib/html.js';
 import { navRoutes, pathOf, isAdmin } from '../routes.js';
 import { iconSlot } from '../lib/icons.js';
 import { avatar } from '../lib/avatar.js';
+import { badgeText } from '../lib/counts.js';
 
 // One picture per page, each showing the thing itself: a crossed-out calendar
 // for days off, a calendar for the schedule, a missing puzzle piece for gaps.
@@ -24,8 +25,14 @@ const SHORT = { '/blockouts': 'Days off' };
 // The admin's tabs on a phone, in this order; the rest go under "More".
 export const ADMIN_TABS = Object.freeze(['/schedule', '/gaps', '/people']);
 
-function link(r, current) {
-  return html`<li class="nav-item"><a href="#${r.path}" ${r.path === current ? html`aria-current="page"` : ''}>${iconSlot(ICONS[r.path] ?? 'chevron', 'nav-icon')}<span class="nav-label">${r.label}</span>${SHORT[r.path] ? html`<span class="nav-label-short">${SHORT[r.path]}</span>` : ''}</a></li>`;
+// A count on a tab: the number for the eye, the words for a screen reader.
+function badge(n, words) {
+  const text = badgeText(n);
+  return text ? html`<span class="nav-badge" aria-hidden="true">${text}</span><span class="visually-hidden">, ${n} ${words}</span>` : '';
+}
+
+function link(r, current, extra = '') {
+  return html`<li class="nav-item"><a href="#${r.path}" ${r.path === current ? html`aria-current="page"` : ''}>${iconSlot(ICONS[r.path] ?? 'chevron', 'nav-icon')}<span class="nav-label">${r.label}</span>${SHORT[r.path] ? html`<span class="nav-label-short">${SHORT[r.path]}</span>` : ''}${extra}</a></li>`;
 }
 
 // The bell (decision 0008): opens the Notifications page; says whether they are on here.
@@ -44,14 +51,20 @@ export function render(state, hash = '', title = '') {
   const main = admin ? ADMIN_TABS.map((p) => all.find((r) => r.path === p)).filter(Boolean) : all;
   const extra = admin ? all.filter((r) => !ADMIN_TABS.includes(r.path)) : [];
   const extraCurrent = extra.some((r) => r.path === current);
+  // Badges: what you have to answer (on My schedule, wherever it is) and, for
+  // schedulers, the gaps. On a phone My schedule is inside More, so More carries it too.
+  const answer = state.counts?.answer ?? 0;
+  const badges = { '/': badge(answer, 'to answer'), '/gaps': badge(state.counts?.gaps ?? 0, 'gaps') };
+  const tab = (r) => link(r, current, badges[r.path] ?? '');
+  const moreHasAnswer = extra.some((r) => r.path === '/');
   const menu = all.length ? html`
     <nav class="nav${admin ? ' nav-admin' : ''}" aria-label="Main menu">
       <ul class="nav-list">
-        ${main.map((r) => link(r, current))}
+        ${main.map(tab)}
         ${extra.length ? html`<li class="nav-item nav-more-item">
-          <button type="button" class="nav-more${extraCurrent ? ' has-current' : ''}" data-action="nav-more" aria-expanded="false" aria-controls="nav-more-menu">${iconSlot('more', 'nav-icon')}<span class="nav-label-short">More</span>${extraCurrent ? html`<span class="visually-hidden"> (the page you are on is in here)</span>` : ''}</button>
+          <button type="button" class="nav-more${extraCurrent ? ' has-current' : ''}" data-action="nav-more" aria-expanded="false" aria-controls="nav-more-menu">${iconSlot('more', 'nav-icon')}<span class="nav-label-short">More</span>${extraCurrent ? html`<span class="visually-hidden"> (the page you are on is in here)</span>` : ''}${moreHasAnswer ? badge(answer, 'to answer') : ''}</button>
         </li>
-        <li class="nav-item nav-sub-wrap"><ul class="nav-sub" id="nav-more-menu">${extra.map((r) => link(r, current))}</ul></li>` : ''}
+        <li class="nav-item nav-sub-wrap"><div class="sheet-grab" aria-hidden="true"></div><h2 class="nav-sub-title" id="nav-more-title">More</h2><ul class="nav-sub" id="nav-more-menu" aria-labelledby="nav-more-title">${extra.map(tab)}</ul></li>` : ''}
       </ul>
       ${extra.length ? html`<div class="nav-scrim" data-action="nav-close"></div>` : ''}
     </nav>` : '';

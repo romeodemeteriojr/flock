@@ -158,7 +158,8 @@ export function renderScreen(m, panelHtml = '') {
 
 // ---------- screen controller ----------
 
-export function createScreen({ api, root, today = todayString(), win = globalThis }) {
+/** onGaps(n): told the number of gaps after every load (the Gaps tab's badge). */
+export function createScreen({ api, root, today = todayString(), win = globalThis, onGaps = () => {} }) {
   const m = {
     loading: true, error: '', notice: '', summary: {}, items: [],
     reminders: { weekOf: today, list: null, loading: false, error: '', notice: '', push: false, sent: new Set(), sending: false },
@@ -174,6 +175,7 @@ export function createScreen({ api, root, today = todayString(), win = globalThi
     const r = await api.get('/api/admin/gaps');
     m.summary = r?.summary ?? {};
     m.items = Array.isArray(r?.items) ? r.items : [];
+    onGaps(m.items.length);
   };
   const panel = createSlotPanel({
     api,
@@ -285,5 +287,5 @@ export function render(state) { // eslint-disable-line no-unused-vars
 export function mount(root, ctx) {
   const screen = root?.querySelector?.('[data-screen]');
   if (!screen) return undefined;
-  return createScreen({ api: ctx.api, root: screen, today: ctx.today ?? todayString() }).ready;
+  return createScreen({ api: ctx.api, root: screen, today: ctx.today ?? todayString(), onGaps: (gaps) => ctx.setCounts?.({ gaps }) }).ready;
 }

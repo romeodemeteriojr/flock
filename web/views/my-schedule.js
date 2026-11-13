@@ -9,6 +9,7 @@ import { statusChip } from '../lib/slotpanel.js';
 import { skeleton, emptyState, pageHead, disclosure, refocus } from '../lib/ui.js';
 import { showCard, dismissCard } from '../lib/push.js';
 import { turnOn } from './notifications.js';
+import { answerCount } from '../lib/counts.js';
 
 export const title = 'My schedule';
 
@@ -144,6 +145,7 @@ export function mount(main, ctx) {
     try {
       view.data = await ctx.api.get('/api/me/schedule');
       view.error = null;
+      ctx.setCounts?.({ answer: answerCount(view.data) }); // the tab's badge and the app icon
     } catch (err) {
       view.error = err?.message || 'Something went wrong. Please try again.';
     }
