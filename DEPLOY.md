@@ -182,13 +182,7 @@ At most about **$2.34 a month** for one small machine plus a 1 GB volume, and mu
 
 ## Automatic checks and releases
 
-GitHub Actions runs the checks for you and, when you press a button, deploys.
-
-### One-time setup
-
-1. Create a **PRIVATE** repository on the church's GitHub account and push this code to it.
-2. Create a Fly deploy token: `flyctl tokens create deploy -a <app>` (use your app name from `fly.toml`).
-3. In GitHub open Settings, Secrets and variables, Actions, and add a repository secret named `FLY_API_TOKEN` with that token. Never put the token anywhere else (not in files, chats or emails).
+GitHub Actions runs the checks for you on every pull request and push. This repository does **not** deploy: it holds only the code and a template `fly.toml`. Keep your real `fly.toml` and deploy token somewhere private (for example a separate private repository) so your server's name is not published.
 
 ### How to release
 
@@ -206,11 +200,19 @@ While Flock is 0.x, `breaking` bumps the middle number (0.5.3 → 0.6.0), as sem
 1. In the pull request, write what changed under `## Unreleased` at the top of `CHANGELOG.md`. Leave `package.json` alone.
 2. Add exactly one release label. The **Release label** check says which version merging will release, and fails if the label or the `## Unreleased` section is missing.
 3. Merge to `main` when the checks are green. The **Release** workflow then sets the version in `package.json`, renames `## Unreleased` to that version, pushes the `vX.Y.Z` tag and makes a GitHub release from the CHANGELOG section. Nothing is deployed.
-4. To deploy, open the Actions tab, choose **Deploy**, press **Run workflow** and type the tag (for example `v0.5.0`), or run `gh workflow run deploy.yml -f tag=v0.5.0`.
 
 Do it by hand only if the Release workflow cannot run: set the version in `package.json`, rename the CHANGELOG heading, merge, then `git tag vX.Y.Z` and `git push origin vX.Y.Z`.
 
-The free GitHub plan has no approval gate, so pressing the manual Run workflow button IS the gate. Nothing deploys by itself.
+### Deploying a release
+
+A safe deploy does these steps, in this order, on a checkout of the release tag with your real `fly.toml`:
+
+1. `node scripts/check-version.js --tag vX.Y.Z`, `node --test` and `node scripts/check-config.js --production`.
+2. Take a volume snapshot first (`flyctl volumes snapshots create <volume id> -a <app>`) and stop if it fails.
+3. `flyctl deploy --remote-only --ha=false` (one machine, one database).
+4. Check `https://<app>.fly.dev/api/health` for 2 minutes.
+
+Automating these steps from a private repository, with a manually started workflow and a `FLY_API_TOKEN` secret (`flyctl tokens create deploy -a <app>`), works well. Pressing **Run workflow** is then the approval step.
 
 ### What CI checks on every push
 
@@ -218,7 +220,6 @@ On every push to `main` and every pull request, on Node 22 and 24: the whole tes
 
 ### If a deploy fails, or you need to roll back
 
-- The Deploy workflow makes a volume snapshot first and stops if it cannot. It then deploys and checks `/api/health` for 2 minutes.
-- If the check fails it prints ROLLBACK instructions. Run `flyctl releases -a <app>` to find the previous image, then `flyctl deploy -a <app> --image <previous image>`.
+- If the health check fails, run `flyctl releases -a <app>` to find the previous image, then `flyctl deploy -a <app> --image <previous image>`.
 - If data looks wrong, list snapshots with `flyctl volumes snapshots list <volume id>` and restore as described in the backup section above.
 - Check `flyctl status` and `flyctl logs` as well.

@@ -3,8 +3,8 @@ name: Release
 # After a pull request is merged into main, its release label decides the next
 # version (scripts/release.js): package.json and CHANGELOG.md are updated on
 # main, the vX.Y.Z tag is pushed and a GitHub release is made from the
-# CHANGELOG section. "no release" does nothing. Deploying stays manual: run the
-# Deploy workflow with the new tag.
+# CHANGELOG section. "no release" does nothing. Nothing is deployed from this
+# repository.
 on:
   pull_request:
     types: [closed]

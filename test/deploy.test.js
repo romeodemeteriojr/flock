@@ -14,11 +14,11 @@ const ok = (over = {}) => checkConfig({ fly, dockerfile, ...over });
 const bad = (over) => checkConfig({ fly, dockerfile, ...over });
 
 test('check-config passes on the repo files (also for production), and a placeholder only fails in production', () => {
+  // The repo's fly.toml is a template; the real one lives with whoever deploys.
+  const filled = fly.replace(/^app = '.*'$/m, "app = 'flock-example'").replace(/^primary_region = '.*'$/m, "primary_region = 'abc'");
   assert.deepEqual(ok(), []);
-  assert.deepEqual(ok({ production: true }), []);
-  const template = fly.replace(/^app = '.*'$/m, "app = 'flock-CHANGE-ME'").replace(/^primary_region = '.*'$/m, "primary_region = 'CHANGE-ME'");
-  assert.deepEqual(ok({ fly: template }), []);
-  const problems = ok({ production: true, fly: template });
+  assert.deepEqual(ok({ fly: filled, production: true }), []);
+  const problems = ok({ production: true });
   assert.ok(problems.some((p) => /app name is still the placeholder/.test(p)));
   assert.ok(problems.some((p) => /primary_region is still the placeholder/.test(p)));
 });
@@ -26,7 +26,7 @@ test('check-config passes on the repo files (also for production), and a placeho
 test('check-config script runs as a command', () => {
   const run = (...a) => spawnSync(process.execPath, [`${root}scripts/check-config.js`, ...a], { encoding: 'utf8' });
   assert.equal(run().status, 0);
-  assert.equal(run('--production').status, 0);
+  assert.equal(run('--production').status, 1, 'the template still has placeholders');
 });
 
 test('check-config fails on bad variants', () => {
@@ -68,8 +68,9 @@ test('.dockerignore lists the required entries', () => {
 });
 
 test('fly.toml has the required sections', () => {
-  assert.match(fly, /^app = '[a-z0-9-]+'$/m);
-  assert.match(fly, /^primary_region = '[a-z]{3}'$/m);
+  assert.match(fly, /^app = 'flock-CHANGE-ME'$/m);
+  assert.match(fly, /^primary_region = 'CHANGE-ME'$/m);
+  assert.doesNotMatch(fly, /^\s*FLOCK_PUBLIC_URL/m, 'the live address belongs to the deployer, not the repo');
   assert.match(fly, /GLOBALLY UNIQUE/);
   assert.match(fly, /^primary_region = /m);
   assert.match(fly, /\[build\]\s+dockerfile = 'Dockerfile'/);

@@ -108,7 +108,7 @@ No database changes: it deploys over 0.3.0 as it is.
 
 ## 0.3.0
 
-Breaking: needs a fresh database (see below). First release deployed to Fly.io (`flock-CHANGE-ME`, Sydney) by the Deploy workflow.
+Breaking: needs a fresh database (see below).
 
 ### Also
 

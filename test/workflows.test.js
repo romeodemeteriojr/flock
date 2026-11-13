@@ -8,9 +8,8 @@ import { bumpFor, nextVersion, latestTagVersion, releaseChangelog, changelogSect
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = (p) => readFileSync(join(root, p), 'utf8');
-const FILES = ['.github/workflows/ci.yml', '.github/workflows/deploy.yml', '.github/workflows/release.yml', '.github/workflows/release-label.yml'];
+const FILES = ['.github/workflows/ci.yml', '.github/workflows/release.yml', '.github/workflows/release-label.yml'];
 const ci = () => read(FILES[0]);
-const deploy = () => read(FILES[1]);
 const code = (t) => t.split('\n').map((l) => l.replace(/^(\s*)#.*$/, '$1'));
 
 // Returns {line, text} for each line inside a `run:` block (inline or multi-line).
@@ -53,30 +52,9 @@ test('ci.yml triggers, permissions, matrix and test command', () => {
   assert.match(t, /Dependabot/);
 });
 
-test('deploy.yml is manual only with a required tag input', () => {
-  const t = deploy();
-  assert.match(t, /^ {2}workflow_dispatch:/m);
-  assert.match(t, /inputs:\s*\n {6}tag:[\s\S]*?required: true/);
-  const onBlock = t.match(/^on:\n((?: {2}.*\n|\n)+)/m)[1];
-  assert.deepEqual(onBlock.match(/^ {2}(\w+):/gm).map((s) => s.trim()), ['workflow_dispatch:']);
-  assert.match(t, /^permissions:\s*\n {2}contents: read\s*$/m);
-  assert.match(t, /^concurrency:\s*\n {2}group: deploy\s*\n {2}cancel-in-progress: false/m);
-  assert.match(t, /\^v\[0-9\]\+/);
-  assert.match(t, /check-version\.js --tag "\$TAG"/);
-  assert.match(t, /node --test$/m);
-  assert.match(t, /check-config\.js --production/);
-  assert.match(t, /superfly\/flyctl-actions\/setup-flyctl/);
-  assert.match(t, /flyctl volumes snapshots create/);
-  // Only a never-used volume (first deploy) may skip the snapshot; any other failure stops the deploy.
-  assert.match(t, /grep -q 'uninitialized volume'/);
-  assert.match(t, /Could not create a snapshot\. Refusing to deploy\.[\s\S]*?exit 1/);
-  assert.match(t, /flyctl volumes list.*--json/);
-  assert.match(t, /flyctl deploy --remote-only --ha=false/);
-  assert.match(t, /\/api\/health/);
-  assert.match(t, /ROLLBACK/);
-  assert.match(t, /flyctl releases/);
-  assert.match(t, /flyctl deploy .*--image <previous image>/);
-  assert.ok(t.indexOf('snapshots create') < t.indexOf('deploy --remote-only'));
+test('there is no deploy workflow or Fly token here (deploying happens from a private repo)', () => {
+  assert.equal(existsSync(join(root, '.github/workflows/deploy.yml')), false);
+  for (const f of FILES) assert.doesNotMatch(read(f), /flyctl|FLY_API_TOKEN|workflow_dispatch/, f);
 });
 
 test('no dangerous triggers anywhere', () => {
@@ -84,7 +62,6 @@ test('no dangerous triggers anywhere', () => {
     const t = code(read(f)).join('\n');
     assert.doesNotMatch(t, /pull_request_target/, f);
   }
-  assert.doesNotMatch(code(deploy()).join('\n'), /^ {2}(push|pull_request|pull_request_target):/m);
 });
 
 test('no ${{ }} expression inside run blocks', () => {
@@ -95,20 +72,12 @@ test('no ${{ }} expression inside run blocks', () => {
   }
 });
 
-test('secrets: only FLY_API_TOKEN, only in env of deploy steps', () => {
+test('no workflow uses repository secrets', () => {
   for (const f of FILES) {
-    const lines = code(read(f));
-    lines.forEach((l, i) => {
-      if (/secrets\./.test(l)) {
-        assert.match(l, /^\s+FLY_API_TOKEN: \$\{\{ secrets\.FLY_API_TOKEN \}\}\s*$/, `${f}:${i + 1}`);
-        assert.match(lines[i - 1], /^\s+env:\s*$/, `${f}:${i + 1} must be directly in env`);
-      }
-      assert.doesNotMatch(l, /secrets\[|toJSON\(secrets|secrets\s*\}\}/, `${f}:${i + 1}`);
+    code(read(f)).forEach((l, i) => {
+      assert.doesNotMatch(l, /secrets\.|secrets\[|toJSON\(secrets/, `${f}:${i + 1}`);
     });
   }
-  assert.doesNotMatch(ci(), /secrets\./);
-  assert.equal((deploy().match(/secrets\.FLY_API_TOKEN/g) || []).length, 2);
-  for (const r of runLines(deploy())) assert.doesNotMatch(r.text, /echo.*FLY_API_TOKEN/);
 });
 
 test('workflow hygiene: no tabs, timeouts set', () => {
@@ -142,13 +111,11 @@ test('check-version runs on the real repo', () => {
   }), []);
 });
 
-test('DEPLOY.md has the new section and no token-like string', () => {
+test('DEPLOY.md has the releases section and no token-like string', () => {
   const t = read('DEPLOY.md');
   assert.match(t, /^## Automatic checks and releases$/m);
   const section = t.slice(t.indexOf('## Automatic checks and releases'));
-  for (const w of ['PRIVATE', 'FLY_API_TOKEN', 'flyctl tokens create deploy', 'Run workflow', 'ROLLBACK', 'no approval gate']) {
-    assert.ok(section.includes(w), w);
-  }
+  for (const w of ['release label', 'roll back', 'snapshot']) assert.ok(section.toLowerCase().includes(w), w);
   assert.doesNotMatch(t, /\bFlyV1\s+\S+|\bfo1_[A-Za-z0-9_-]{10,}|\bgh[pousr]_[A-Za-z0-9]{20,}|\b[A-Za-z0-9+/_-]{40,}={0,2}(?=\s|$)/);
 });
 
