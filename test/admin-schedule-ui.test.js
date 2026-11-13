@@ -466,6 +466,13 @@ const REMINDERS = { reminders: [
   { personId: 7, name: 'Ann Lee', message: 'Hi Ann, a reminder that you are serving as Mixer on Sun 8 Nov at 09:00. We are glad you can make it. Thank you!' },
   { personId: 8, name: 'Bo Diaz', message: 'Hi Bo, a reminder. Please open Flock and accept or decline. Thank you!' },
 ] };
+// The Reminders tab of the Gaps page.
+async function remindersSetup(extra = {}, win) {
+  const r = await gapsSetup(extra, win);
+  await r.root.click('tab', undefined, { dataset: { action: 'tab', tab: 'reminders' } });
+  return r;
+}
+
 async function gapsSetup(extra = {}, win) {
   const api = fakeApi({ 'GET /api/admin/gaps': GAPS, ...extra });
   const root = fakeRoot();
@@ -478,8 +485,13 @@ async function gapsSetup(extra = {}, win) {
 test('gaps: summary counts by kind, then one group per service (roster day) in date order, each item with its kind', async () => {
   const { root } = await gapsSetup();
   const h = root.innerHTML;
-  assert.match(h, /data-count="open">2<\/strong> Nobody yet/);
-  assert.match(h, /data-count="inactive">0<\/strong> No longer active/);
+  // "5 gaps in the next 4 weeks", then a filter chip per kind present (none for kinds with zero).
+  assert.match(h, /<p class="gap-summary" data-summary><span class="fill-num num">5<\/span><span class="fill-words">gaps in the next 4 weeks<\/span><\/p>/);
+  assert.match(h, /data-filter="all" aria-pressed="true">All <span class="filter-count num" data-count="all">5<\/span>/);
+  assert.match(h, /data-filter="open" aria-pressed="false">Nobody yet <span class="filter-count num" data-count="open">2<\/span>/);
+  assert.doesNotMatch(h, /data-filter="inactive"/, 'no chip for a kind with none');
+  assert.match(h, /data-tab="gaps" aria-pressed="true">Gaps<\/button><button type="button" class="segment" data-action="tab" data-tab="reminders" aria-pressed="false">Reminders</);
+  assert.doesNotMatch(h, /data-reminders-panel/, 'reminders are on their own tab');
   // One group per service (its date and time), in date order, with a count badge (role="img").
   assert.deepEqual([...h.matchAll(/data-gap-service="([^"]+)"/g)].map((x) => x[1]), ['2026-11-08T09:00', '2026-11-15T09:00']);
   const badges = [...h.matchAll(/role="img" data-gap-count="([^"]+)" aria-label="([^"]+)">(\d+)</g)].map((x) => x.slice(1));
@@ -530,6 +542,9 @@ test('gaps: hostile names stay text', async () => {
     'GET /api/admin/gaps': { summary: {}, items: [{ ...GAPS.items[0], personName: bad, positionName: bad, teamName: bad, serviceTitle: bad }] },
     'GET /api/admin/reminders?weekOf=2026-11-08': { reminders: [{ personId: 1, name: bad, message: bad }] },
   });
+  assert.ok(!root.innerHTML.includes('<b '));
+  assert.match(root.innerHTML, /&lt;b onmouseover=x&gt;/);
+  await root.click('tab', undefined, { dataset: { action: 'tab', tab: 'reminders' } });
   root.submit('reminders', { weekOf: '2026-11-08' });
   await flush();
   assert.ok(!root.innerHTML.includes('<b '));
@@ -539,7 +554,7 @@ test('gaps: hostile names stay text', async () => {
 test('reminders: never-sends note, pick a week, copy one and copy all', async () => {
   const copied = [];
   const win = { navigator: { clipboard: { writeText: async (t) => { copied.push(t); } } } };
-  const { api, root } = await gapsSetup({ 'GET /api/admin/reminders?weekOf=2026-11-08': REMINDERS }, win);
+  const { api, root } = await remindersSetup({ 'GET /api/admin/reminders?weekOf=2026-11-08': REMINDERS }, win);
   assert.match(root.innerHTML, /Flock never sends messages\. Copy these into your usual messages app\./);
   assert.match(root.innerHTML, /name="weekOf" type="date" required value="2026-11-04"/);
   root.submit('reminders', { weekOf: '2026-11-08' });
@@ -564,7 +579,7 @@ test('reminders: Send reminders reaches those with notifications on; the rest ke
     { ...REMINDERS.reminders[0], hasPush: true },
     { ...REMINDERS.reminders[1], hasPush: false },
   ] };
-  const { api, root } = await gapsSetup({
+  const { api, root } = await remindersSetup({
     'GET /api/admin/reminders?weekOf=2026-11-08': list,
     'POST /api/admin/reminders/send': { weekOf: '2026-11-08', sent: [list.reminders[0].personId], copy: [list.reminders[1].personId] },
   }, win);
@@ -587,12 +602,12 @@ test('reminders: Send reminders reaches those with notifications on; the rest ke
 });
 
 test('reminders: without push there is no Send button and a failed send is explained', async () => {
-  const off = await gapsSetup({ 'GET /api/admin/reminders?weekOf=2026-11-08': { push: false, reminders: REMINDERS.reminders.map((x) => ({ ...x, hasPush: false })) } }, {});
+  const off = await remindersSetup({ 'GET /api/admin/reminders?weekOf=2026-11-08': { push: false, reminders: REMINDERS.reminders.map((x) => ({ ...x, hasPush: false })) } }, {});
   off.root.submit('reminders', { weekOf: '2026-11-08' });
   await flush();
   assert.doesNotMatch(off.root.innerHTML, /send-reminders/);
   const fail = Object.assign(new Error('Notifications are not set up on this Flock yet'), { status: 409 });
-  const on = await gapsSetup({
+  const on = await remindersSetup({
     'GET /api/admin/reminders?weekOf=2026-11-08': { push: true, reminders: REMINDERS.reminders.map((x) => ({ ...x, hasPush: true })) },
     'POST /api/admin/reminders/send': fail,
   }, {});
@@ -605,11 +620,11 @@ test('reminders: without push there is no Send button and a failed send is expla
 });
 
 test('reminders: empty week and no clipboard are explained', async () => {
-  const { root } = await gapsSetup({ 'GET /api/admin/reminders?weekOf=2026-11-08': { reminders: [] } }, {});
+  const { root } = await remindersSetup({ 'GET /api/admin/reminders?weekOf=2026-11-08': { reminders: [] } }, {});
   root.submit('reminders', { weekOf: '2026-11-08' });
   await flush();
   assert.match(root.innerHTML, /Nobody is scheduled that week/);
-  const two = await gapsSetup({ 'GET /api/admin/reminders?weekOf=2026-11-08': REMINDERS }, {});
+  const two = await remindersSetup({ 'GET /api/admin/reminders?weekOf=2026-11-08': REMINDERS }, {});
   two.root.submit('reminders', { weekOf: '2026-11-08' });
   await flush();
   await two.root.click('copy-all');
@@ -631,7 +646,7 @@ for (const action of ['copy-one', 'copy-all']) {
       setTimeout(fn, ms) { timers.push({ fn, ms }); return timers.length; },
       clearTimeout() {},
     };
-    const { root } = await gapsSetup({ 'GET /api/admin/reminders?weekOf=2026-11-08': REMINDERS }, win);
+    const { root } = await remindersSetup({ 'GET /api/admin/reminders?weekOf=2026-11-08': REMINDERS }, win);
     root.submit('reminders', { weekOf: '2026-11-08' });
     await flush();
     root.click(action, 8);
@@ -670,7 +685,7 @@ test('reminders: copy button shows a check SVG, then the copy SVG after 1.5s', a
     setTimeout: (fn, ms) => { timers.push({ fn, ms }); return timers.length; },
     clearTimeout: (id) => cleared.push(id),
   };
-  const { root } = await gapsSetup({ 'GET /api/admin/reminders?weekOf=2026-11-08': REMINDERS }, win);
+  const { root } = await remindersSetup({ 'GET /api/admin/reminders?weekOf=2026-11-08': REMINDERS }, win);
   root.submit('reminders', { weekOf: '2026-11-08' });
   await flush();
   const CHECK = '<path d="M4.75 12.75l4.75 4.75 9.75-10.75"/>';
@@ -776,4 +791,25 @@ test('schedule: the fill card counts every position, and a full service says so'
   assert.equal(schedule.fillWords({ open: 1, pending: 2, accepted: 5, declined: 1 }), '5 of 9 confirmed, 2 waiting, 1 said no, 1 open');
   const many = [{ ...full[0], slots: Array.from({ length: 25 }, (_, i) => ({ ...full[0].slots[0], id: 100 + i })) }];
   assert.doesNotMatch(schedule.renderScreen({ ...m, services: many }), /fill-pips/, 'over 24 positions: the line alone');
+});
+
+test('gaps: a filter shows one kind and hides services left empty; the tabs swap gaps and reminders', async () => {
+  const { root } = await gapsSetup();
+  const filter = (f) => root.click('filter', undefined, { dataset: { action: 'filter', filter: f } });
+  await filter('declined');
+  let h = root.innerHTML;
+  assert.match(h, /data-filter="declined" aria-pressed="true"/);
+  assert.match(h, /data-filter="all" aria-pressed="false"/);
+  assert.deepEqual([...h.matchAll(/data-gap-type="(\w+)"/g)].map((x) => x[1]), ['declined']);
+  assert.deepEqual([...h.matchAll(/data-gap-service="([^"]+)"/g)].map((x) => x[1]), ['2026-11-08T09:00'], 'the other service has no "Said no": hidden');
+  assert.match(h, /data-count="all">5</, 'the counts still say the whole picture');
+  await filter('nonsense');
+  assert.match(root.innerHTML, /data-filter="all" aria-pressed="true"/);
+  await root.click('tab', undefined, { dataset: { action: 'tab', tab: 'reminders' } });
+  h = root.innerHTML;
+  assert.match(h, /data-tab="reminders" aria-pressed="true"/);
+  assert.match(h, /data-reminders-panel/);
+  assert.doesNotMatch(h, /data-gap-service|data-summary/);
+  await root.click('tab', undefined, { dataset: { action: 'tab', tab: 'gaps' } });
+  assert.match(root.innerHTML, /data-summary/);
 });

@@ -359,6 +359,7 @@ test('UAT 3 to 8: scheduler adds people, a team, positions, a service, assigns, 
   assert.equal(gapCount(page, 'open'), openBefore - 1, 'one gap fewer');
 
   // --- Reminders: drafted to copy, never sent ---
+  await page.clickWhere('[data-action="tab"][data-tab="reminders"]');
   said(page, /Flock never sends messages/);
   await page.submit('reminders', { weekOf: SERVICE_DATE });
   said(page, /Pat Example/);
@@ -719,6 +720,7 @@ test('UAT 20 (odd text): hostile and odd text is shown as plain text on every pa
   await admin.click('slot-open', slotB);
   wellBuilt(admin, 'gap panel');
   await admin.click('slot-close');
+  await admin.clickWhere('[data-action="tab"][data-tab="reminders"]');
   await admin.submit('reminders', { weekOf: SERVICE_DATE });
   said(admin, /<b onmouseover=alert\(3\)>Eve<\/b>/);
   wellBuilt(admin, 'reminders');

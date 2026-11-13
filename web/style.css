@@ -1082,6 +1082,35 @@ th, td { text-align: left; padding: var(--s-2) var(--s-3); border-bottom: 1px so
 .reminder-who { display: flex; align-items: center; gap: var(--s-2); margin: 0 0 var(--s-2); }
 .reminder-text { margin: 0; padding: var(--s-3); border-radius: var(--radius); background: var(--surface-2); }
 
+/* Gaps: two tabs, a count, filter chips, and a card per service. */
+.page-tabs { margin: 0 0 var(--s-5); }
+.gap-summary { display: flex; align-items: baseline; gap: var(--s-2); margin: 0 0 var(--s-3); }
+.gap-summary .fill-num { color: var(--danger); }
+.filters {
+  display: flex; gap: var(--s-2); overflow-x: auto; scrollbar-width: none;
+  margin: 0 calc(-1 * var(--s-4)) var(--s-5); padding: var(--s-1) var(--s-4);
+}
+.filters::-webkit-scrollbar { display: none; }
+.filter-chip {
+  display: inline-flex; align-items: center; gap: var(--s-2); flex: none;
+  min-height: var(--control-size); padding: 0 var(--s-4);
+  border: 1px solid var(--line); border-radius: var(--radius-pill);
+  background: var(--surface); color: var(--text);
+  font: inherit; font-size: var(--fs-sm); font-weight: 650; cursor: pointer;
+  transition: background-color var(--fast) var(--ease), transform var(--fast) var(--ease);
+}
+.filter-chip:active { transform: scale(0.96); }
+.filter-chip[aria-pressed="true"] { border-color: var(--accent); color: var(--on-accent-soft); background: var(--accent-soft); font-weight: 800; }
+.filter-chip[aria-pressed="true"]::before { content: "✓"; }
+.filter-count { color: var(--muted); font-variant-numeric: tabular-nums; }
+.filter-chip[aria-pressed="true"] .filter-count { color: inherit; }
+.gap-card { padding: var(--s-3) var(--s-3) var(--s-2); }
+.gap-card .gap-title { margin: 0; padding: var(--s-1) var(--s-2) 0; font-size: var(--fs-md); }
+.gap-card .gap-sub { margin: 0; padding: 0 var(--s-2) var(--s-2); }
+.gap-card .gap-btn { margin: 0; border: 0; border-radius: var(--radius); box-shadow: none; background: none; padding: var(--s-2) var(--s-10) var(--s-2) var(--s-2); }
+.gap-card .gap-btn:hover { background: var(--surface-2); box-shadow: none; }
+.gap-card .gap-list > li + li { border-top: 1px solid var(--line); }
+
 /* ---------- slot panel: bottom sheet on phones, side panel on wide screens ---------- */
 .sheet-layer { position: fixed; inset: 0; z-index: 50; }
 .sheet-backdrop { position: absolute; inset: 0; background: var(--scrim); }
@@ -1319,7 +1348,7 @@ th, td { text-align: left; padding: var(--s-2) var(--s-3); border-bottom: 1px so
     scroll-behavior: auto !important;
   }
   .btn:active, .segment:active, .slot-btn:active, .icon-btn:active,
-  .nav-list a:active, .nav-more:active, .serve-card:hover, .cal-day:active,
+  .nav-list a:active, .nav-more:active, .serve-card:hover, .cal-day:active, .filter-chip:active,
   .serve-card:active, .sched-card:active, .avatar-btn:active { transform: none !important; }
   /* The check is drawn at once; the strip and the toast still say it. */
   .is-celebrating .done-burst path { stroke-dashoffset: 0; animation: none !important; }

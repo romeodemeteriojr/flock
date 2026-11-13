@@ -308,11 +308,13 @@ function pages(d) {
     ${frame('Grid (wide) or cards (phone), today highlighted and opened', screen('Schedule', schedule.renderScreen(schedModel({ notice: 'Priya Demo is now on Vocals. Waiting for their answer.', open: new Set([1]) }))))}
     ${frame('No services', screen('Schedule', schedule.renderScreen(schedModel({ services: [] }))))}`)}
   ${section('p-gaps', 'Gaps', html`
-    ${frame('Gaps and reminders', screen('Gaps', gaps.renderScreen(gapsModel())))}
-    ${frame('Reminders on a phone that can share', screen('Gaps', gaps.renderScreen(gapsModel({ canShare: true }))))}
-    ${frame('Reminders with notifications on', screen('Gaps', gaps.renderScreen(gapsModel({ reminders: { weekOf: d.sunday, push: true, sent: new Set(), loading: false, error: '', notice: '',
+    ${frame('Gaps', screen('Gaps', gaps.renderScreen(gapsModel())))}
+    ${frame('Gaps, only "Said no"', screen('Gaps', gaps.renderScreen(gapsModel({ filter: 'declined' }))))}
+    ${frame('Reminders', screen('Gaps', gaps.renderScreen(gapsModel({ tab: 'reminders' }))))}
+    ${frame('Reminders on a phone that can share', screen('Gaps', gaps.renderScreen(gapsModel({ tab: 'reminders', canShare: true }))))}
+    ${frame('Reminders with notifications on', screen('Gaps', gaps.renderScreen(gapsModel({ tab: 'reminders', reminders: { weekOf: d.sunday, push: true, sent: new Set(), loading: false, error: '', notice: '',
       list: d.REMINDERS.map((x, i) => ({ ...x, hasPush: i % 2 === 0 })) } }))))}
-    ${frame('Reminders sent', screen('Gaps', gaps.renderScreen(gapsModel({ reminders: { weekOf: d.sunday, push: true, loading: false, error: '',
+    ${frame('Reminders sent', screen('Gaps', gaps.renderScreen(gapsModel({ tab: 'reminders', reminders: { weekOf: d.sunday, push: true, loading: false, error: '',
       sent: new Set(d.REMINDERS.filter((x, i) => i % 2 === 0).map((x) => x.personId)),
       notice: gaps.sentWords(Math.ceil(d.REMINDERS.length / 2), Math.floor(d.REMINDERS.length / 2)),
       list: d.REMINDERS.map((x, i) => ({ ...x, hasPush: i % 2 === 0 })) } }))))}

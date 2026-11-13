@@ -72,11 +72,16 @@ export function allRemindersText(reminders) {
 
 // ---------- rendering ----------
 
-function summary(sum) {
-  return html`<ul class="stats" data-summary>${GAP_ORDER.map((t) => {
-    const n = Number(sum?.[t] ?? 0);
-    return html`<li class="stat${n ? ' stat-' + GAP_TONE[t] : ''}"><strong class="stat-num num" data-count="${t}">${n}</strong> ${GAP_LABELS[t]}</li>`;
-  })}</ul>`;
+// How many weeks the gaps list covers (the server's default, 28 days).
+export const GAP_WEEKS = 4;
+
+// "7 gaps in the next 4 weeks", then a chip per kind present to filter by.
+function summary(m, groups) {
+  const all = groups.reduce((n, g) => n + g.items.length, 0);
+  const byKind = Object.fromEntries(GAP_ORDER.map((t) => [t, groups.reduce((n, g) => n + g.items.filter((i) => i.type === t).length, 0)]));
+  const chip = (key, label, n) => html`<button type="button" class="filter-chip" data-action="filter" data-filter="${key}" aria-pressed="${(m.filter ?? 'all') === key ? 'true' : 'false'}">${label} <span class="filter-count num" data-count="${key}">${n}</span></button>`;
+  return html`<p class="gap-summary" data-summary><span class="fill-num num">${all}</span><span class="fill-words">${all === 1 ? 'gap' : 'gaps'} in the next ${GAP_WEEKS} weeks</span></p>
+    <div class="filters" role="group" aria-label="Show">${chip('all', 'All', all)}${GAP_ORDER.filter((t) => byKind[t]).map((t) => chip(t, GAP_LABELS[t], byKind[t]))}</div>`;
 }
 
 // Colour family per kind (the label words always go with it).
@@ -142,22 +147,34 @@ function reminders(m) {
   </section>`;
 }
 
+// Two tabs: the gaps themselves, and the reminders to send. The tab lives in
+// the screen's state, not the address.
+function tabs(m) {
+  const tab = (key, label) => html`<button type="button" class="segment" data-action="tab" data-tab="${key}" aria-pressed="${(m.tab ?? 'gaps') === key ? 'true' : 'false'}">${label}</button>`;
+  return html`<div class="segmented page-tabs" role="group" aria-label="What to show">${tab('gaps', 'Gaps')}${tab('reminders', 'Reminders')}</div>`;
+}
+
+function gapsTab(m) {
+  const groups = groupGaps(m.items);
+  if (!groups.length) return emptyState('No gaps. Every position has someone.', 'art-done');
+  const kind = m.filter && m.filter !== 'all' ? m.filter : null;
+  const shown = groups.map((g) => ({ ...g, items: kind ? g.items.filter((i) => i.type === kind) : g.items })).filter((g) => g.items.length);
+  return html`${summary(m, groups)}
+    ${shown.map((g) => html`<section class="card gap-card gap-group" data-gap-service="${g.key}">
+      <h3 class="gap-title"><span class="gap-label num">${formatDate(g.date)} at ${formatTime(g.time)}</span> <span class="gap-count" role="img" data-gap-count="${g.key}" aria-label="${gapWords(g.items.length)}">${g.items.length}</span></h3>
+      <p class="hint gap-sub">${g.serviceTitle}</p>
+      <ul class="list gap-list">${g.items.map(gapItem)}</ul>
+    </section>`)}`;
+}
+
 export function renderScreen(m, panelHtml = '') {
   if (m.loading) return String(skeleton('Loading…', 'list', 4));
-  const groups = groupGaps(m.items);
   return String(html`
     ${m.error ? html`<p class="form-error" role="alert">${m.error}</p>` : ''}
     ${toasts([[m.notice, 'ok']])}
     ${panelHtml}
-    <h2 class="section-title">Next 4 weeks</h2>
-    ${summary(m.summary)}
-    ${groups.length ? html`<p class="hint">Tap a position to find someone.</p>
-    ${groups.map((g) => html`<section class="gap-group" data-gap-service="${g.key}">
-      <h3 class="gap-title"><span class="gap-icon">${iconSlot('calendar')}</span> <span class="gap-label num">${formatDate(g.date)} at ${formatTime(g.time)}</span> <span class="gap-count" role="img" data-gap-count="${g.key}" aria-label="${gapWords(g.items.length)}">${g.items.length}</span></h3>
-      <p class="hint">${g.serviceTitle}</p>
-      <ul class="list gap-list">${g.items.map(gapItem)}</ul>
-    </section>`)}` : emptyState('No gaps. Every position has someone.', 'art-done')}
-    ${reminders(m)}
+    ${tabs(m)}
+    ${(m.tab ?? 'gaps') === 'reminders' ? reminders(m) : gapsTab(m)}
   `);
 }
 
@@ -166,7 +183,7 @@ export function renderScreen(m, panelHtml = '') {
 /** onGaps(n): told the number of gaps after every load (the Gaps tab's badge). */
 export function createScreen({ api, root, today = todayString(), win = globalThis, onGaps = () => {} }) {
   const m = {
-    loading: true, error: '', notice: '', summary: {}, items: [],
+    loading: true, error: '', notice: '', summary: {}, items: [], tab: 'gaps', filter: 'all',
     reminders: { weekOf: today, list: null, loading: false, error: '', notice: '', push: false, sent: new Set(), sending: false },
     canShare: canShare(win),
   };
@@ -266,6 +283,18 @@ export function createScreen({ api, root, today = todayString(), win = globalThi
       sheet.opened(id);
       return panel.open(gapSlot(it));
     }
+    if (action === 'tab') {
+      m.tab = el.dataset.tab === 'reminders' ? 'reminders' : 'gaps';
+      paint();
+      root.querySelector?.(`[data-action="tab"][data-tab="${m.tab}"]`)?.focus?.();
+      return undefined;
+    }
+    if (action === 'filter') {
+      m.filter = Object.hasOwn(GAP_LABELS, el.dataset.filter) ? el.dataset.filter : 'all';
+      paint();
+      root.querySelector?.(`[data-action="filter"][data-filter="${m.filter}"]`)?.focus?.();
+      return undefined;
+    }
     if (action === 'copy-all') return copy(allRemindersText(toCopy(m.reminders)), el, 'Copy all', 'all');
     if (action === 'share-all') {
       const text = allRemindersText(toCopy(m.reminders));
@@ -300,7 +329,7 @@ export function createScreen({ api, root, today = todayString(), win = globalThi
 
 export function render(state) { // eslint-disable-line no-unused-vars
   return String(html`
-    ${pageHead(title, 'What still needs someone, and reminders to send.')}
+    ${pageHead(title, 'What still needs someone.')}
     <div data-screen>${skeleton('Loading…', 'list', 4)}</div>
   `);
 }

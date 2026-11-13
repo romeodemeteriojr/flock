@@ -74,7 +74,7 @@ test('reminders: Share all and Share on each, only where the phone can share', a
     { personId: 5, name: 'Bo', message: 'Hi Bo, you are on Sound on Sunday.', hasPush: false },
     { personId: 6, name: 'Cy', message: 'Hi Cy, you are on Door on Sunday.', hasPush: false },
   ];
-  const m = { loading: false, error: '', notice: '', summary: {}, items: [], canShare: true,
+  const m = { loading: false, error: '', notice: '', summary: {}, items: [], canShare: true, tab: 'reminders',
     reminders: { weekOf: '2026-11-15', list, loading: false, error: '', notice: '', push: false, sent: new Set(), sending: false } };
   const s = gaps.renderScreen(m);
   assert.match(s, /class="btn btn-primary" data-action="share-all"/);

@@ -379,6 +379,13 @@ export function openPage({ url, jar = { cookie: '' }, fetchLog = [] } = {}) {
     if (found.el.disabled || found.tag.attrs.has('disabled')) return Promise.resolve(false);
     return finish(dispatch('click', found.el)).then(() => true);
   };
+  /** Click the first control matching a selector (for buttons told apart by other data, like data-tab). */
+  page.clickWhere = (sel) => {
+    const found = locate(sel);
+    if (!found) throw new Error(`There is no "${sel}" on the page`);
+    if (found.el.disabled || found.tag.attrs.has('disabled')) return Promise.resolve(false);
+    return finish(dispatch('click', found.el)).then(() => true);
+  };
   /** Is there such a control, and is it usable? */
   page.canClick = (action, id) => {
     const found = locate(selFor(action, id));
