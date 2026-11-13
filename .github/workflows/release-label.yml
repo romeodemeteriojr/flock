@@ -1,11 +1,11 @@
 name: Release label
 
 # Every pull request needs exactly one release label: breaking, feat, fix or
-# "no release". This check says which version merging it will release, and
+# "no release", and a Conventional Commits title that matches it (feat: …). This check says which version merging it will release, and
 # that CHANGELOG.md has an "## Unreleased" section for it (scripts/release.js).
 on:
   pull_request:
-    types: [opened, reopened, synchronize, labeled, unlabeled]
+    types: [opened, reopened, synchronize, labeled, unlabeled, edited]
 
 permissions:
   contents: read
@@ -26,7 +26,8 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: '24.x'
-      - name: Check the release label
+      - name: Check the release label and title
         env:
           LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
-        run: node scripts/release.js check --labels "$LABELS"
+          TITLE: ${{ github.event.pull_request.title }}
+        run: node scripts/release.js check --labels "$LABELS" --title "$TITLE"
