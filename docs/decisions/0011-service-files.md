@@ -17,8 +17,11 @@ Status: proposed (built; accept when merged)
   expired files** on the Services page, or `flock purge-files` on the server.
 - Who added a file can remove it; a scheduler can remove any.
 - **Only a short list of file types** is kept, by extension (`FILE_TYPES`):
-  PDF, images, text and chord charts, audio, video, and macro-free office
-  files. The stored type comes from the extension; the phone's
+  PDF, text and chord charts, and photos (jpg, png, gif, webp): all shown by
+  Flock's viewer on an iPhone and Android. Office files, audio, video, csv
+  and HEIC were dropped from the list (see the CHANGELOG), so
+  every file opens inside Flock with its Close button; share those as links.
+  Ones added before stay until they expire and still open in the phone. The stored type comes from the extension; the phone's
   `Content-Type` is ignored. Anything else is refused (`400 file_type`) and
   the phone offers a link instead.
 - **Per person** (not schedulers): at most **30 files and links an hour**
@@ -65,8 +68,9 @@ SQLite file, with no packages and no background jobs.
   video use their own tags. Plain text sits in a frame, so it (and only it)
   may be framed by Flock itself (`frame-ancestors 'self'`,
   `X-Frame-Options: SAMEORIGIN`); every other file and response still refuses
-  any frame. Office files download as before; the phone shows them with its
-  own Done button.
+  any frame. Audio and video added before the list was cut still play in
+  the viewer; older office, csv and HEIC files download as before. All of
+  them go when they expire.
 - **PDFs are drawn by PDF.js**, one canvas per page. In a frame an iPhone
   draws only the first page of a PDF (found in 0.13.1), and no browser can
   draw PDF pages without a library. PDF.js (Mozilla, Apache-2.0, legacy build
@@ -104,10 +108,9 @@ reach the app, its data or people's phones. Still to do:
   trusted. Read the first bytes (PDF, JPEG, PNG and so on), refuse files whose
   content and name disagree, and refuse polyglots (a file that is both an
   image and a page).
-- ~~**Allow a short list of types only.**~~ Done (see the TL;DR). Office
-  files are allowed only in their macro-free forms (`docx`, `xlsx`, `pptx`,
-  OpenDocument); a renamed `docm` still passes, which the content check
-  above would catch.
+- ~~**Allow a short list of types only.**~~ Done (see the TL;DR), and cut
+  to the types Flock can show itself, so no office files at all (which also
+  closes the renamed-`docm` gap).
 - **Remove hidden data.** Photos carry location (EXIF GPS) and documents
   carry author names. Strip it on upload, or warn.
 - **Scan in a separate process.** Run checks (and any virus scanner) in a

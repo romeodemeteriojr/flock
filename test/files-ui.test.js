@@ -60,10 +60,10 @@ test('viewer: shows what a phone can show itself; the rest opens in the phone', 
   const { viewKind, createViewer } = await import('../web/lib/viewer.js');
   assert.equal(viewKind('application/pdf'), 'pdf', 'drawn by PDF.js: every page, also on an iPhone');
   assert.equal(viewKind('text/plain'), 'frame');
-  for (const m of ['image/jpeg', 'image/png', 'image/heic', 'IMAGE/WEBP']) assert.equal(viewKind(m), 'image', m);
+  for (const m of ['image/jpeg', 'image/png', 'IMAGE/WEBP']) assert.equal(viewKind(m), 'image', m);
   assert.equal(viewKind('audio/mpeg'), 'audio');
   assert.equal(viewKind('video/quicktime'), 'video');
-  for (const m of ['application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/html', 'image/svg+xml', 'application/octet-stream', null, undefined]) {
+  for (const m of ['application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'image/heic', 'text/csv', 'text/html', 'image/svg+xml', 'application/octet-stream', null, undefined]) {
     assert.equal(viewKind(m), null, String(m));
   }
   assert.equal(createViewer(undefined), null, 'no DOM: nothing to build');

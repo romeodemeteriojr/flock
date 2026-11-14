@@ -19,27 +19,21 @@ export const MAX_LIVE_BYTES = 50 * 1024 * 1024;
 
 const HOLDING = new Set(['pending', 'accepted']);
 const ADD_ACTIONS = ['attachment.add_file', 'attachment.add_link'];
-const OOXML = 'application/vnd.openxmlformats-officedocument';
-const ODF = 'application/vnd.oasis.opendocument';
 
 /**
  * The only files Flock keeps, by extension, and the type each is sent as.
- * The type the phone sends is ignored. Apps and installers (apk, ipa, exe),
- * iPhone profiles (mobileconfig), pages (html, svg), scripts, archives and
- * office files that can carry macros (doc, docm, xls, ...) are not on it.
+ * The type the phone sends is ignored. Only PDF, text (and chord charts) and
+ * photos: every one opens in Flock's own viewer (web/lib/viewer.js) on an
+ * iPhone and Android. No office files (share a Word file or Google Doc as a
+ * link), no audio or video, no csv, no HEIC (Android cannot show it; an
+ * iPhone sends a JPEG when asked for one). Apps, installers, iPhone
+ * profiles, pages, scripts and archives were never on it.
  */
 export const FILE_TYPES = Object.freeze({
   pdf: 'application/pdf',
   jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', gif: 'image/gif',
-  webp: 'image/webp', heic: 'image/heic', heif: 'image/heif',
+  webp: 'image/webp',
   txt: 'text/plain', md: 'text/plain', cho: 'text/plain', chopro: 'text/plain', chordpro: 'text/plain',
-  csv: 'text/csv',
-  mp3: 'audio/mpeg', m4a: 'audio/mp4', aac: 'audio/aac', wav: 'audio/wav',
-  mp4: 'video/mp4', m4v: 'video/mp4', mov: 'video/quicktime',
-  docx: `${OOXML}.wordprocessingml.document`,
-  xlsx: `${OOXML}.spreadsheetml.sheet`,
-  pptx: `${OOXML}.presentationml.presentation`,
-  odt: `${ODF}.text`, ods: `${ODF}.spreadsheet`, odp: `${ODF}.presentation`,
 });
 
 /** The type to keep a file as, from its name; null when it is not allowed. */
@@ -48,7 +42,7 @@ export function typeFor(name) {
   return (m && Object.hasOwn(FILE_TYPES, m[1].toLowerCase())) ? FILE_TYPES[m[1].toLowerCase()] : null;
 }
 
-const ALLOWED_WORDS = 'PDF, photos, text, chord charts, audio, video, and Word, Excel or PowerPoint files';
+const ALLOWED_WORDS = 'PDF, text and chord charts, and photos';
 
 /** The last day a service's files can be opened. */
 export const expiresOn = (serviceDate) => addDays(serviceDate, KEEP_DAYS);
