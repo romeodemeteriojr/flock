@@ -23,6 +23,8 @@ export const expiresOn = (serviceDate) => addDays(serviceDate, KEEP_DAYS);
 export function cleanName(raw) {
   const s = String(raw ?? '')
     .replace(/[\u0000-\u001f\u007f-\u009f]/g, '')
+    // Direction controls can make "x\u202Efdp.exe" show as "xexe.pdf".
+    .replace(/[\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]/g, '')
     .replace(/[\\/]+/g, '-')
     .replace(/\s+/g, ' ')
     .trim();
