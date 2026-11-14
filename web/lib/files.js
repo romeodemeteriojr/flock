@@ -25,7 +25,7 @@ export function sizeWords(bytes) {
 }
 
 export const tooBigWords = (name, bytes) => `${name} is ${sizeWords(bytes)}. Files can be at most 5 MB, so add a link to it instead.`;
-export const wrongTypeWords = (name) => `Flock can't keep ${name}. It keeps PDF, photos, text, chord charts, audio, video, and Word, Excel or PowerPoint files. For anything else, add a link to it instead.`;
+export const wrongTypeWords = (name) => `Flock can't keep ${name}. It keeps PDF, text and chord charts, and photos. For anything else, such as a Word file, Google Doc or video, add a link to it instead.`;
 
 /** True when the name ends in one of the extensions the server keeps. */
 export function allowedName(name, types) {

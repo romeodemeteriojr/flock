@@ -16,7 +16,8 @@ import { icon } from './icons.js';
 import { backStep } from './sheet.js';
 
 const FRAME = new Set(['text/plain']);
-const IMAGE = /^image\/(png|jpeg|gif|webp|heic|heif)$/;
+// HEIC is no longer kept (Android cannot show it); an older one opens in the phone.
+const IMAGE = /^image\/(png|jpeg|gif|webp)$/;
 const AUDIO = /^audio\//;
 const VIDEO = /^video\//;
 

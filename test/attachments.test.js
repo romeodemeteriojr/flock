@@ -107,9 +107,9 @@ test('files: anyone signed in can add one; only who added it or a scheduler can 
 }));
 
 test('files: at most 5 MB; bigger is refused with a pointer to links', () => withBoot(async ({ svc, who, upload }) => {
-  const exact = await upload(who.on, Buffer.alloc(MAX_FILE_BYTES, 1), { name: 'big.mp4', type: 'application/octet-stream' });
+  const exact = await upload(who.on, Buffer.alloc(MAX_FILE_BYTES, 1), { name: 'big.pdf', type: 'application/octet-stream' });
   assert.equal(exact.status, 201, 'exactly 5 MB is fine');
-  const over = await upload(who.on, Buffer.alloc(MAX_FILE_BYTES + 1, 1), { name: 'huge.mp4', type: 'application/octet-stream' });
+  const over = await upload(who.on, Buffer.alloc(MAX_FILE_BYTES + 1, 1), { name: 'huge.pdf', type: 'application/octet-stream' });
   assert.equal(over.status, 413);
   assert.match(over.json.error, /5 MB.*link/);
   const empty = await upload(who.on, '', { name: 'empty.txt' });
@@ -159,7 +159,7 @@ test('files: each person can keep 50 MB on services not yet expired; schedulers 
   const five = Buffer.alloc(MAX_FILE_BYTES, 1);
   const n = MAX_LIVE_BYTES / MAX_FILE_BYTES;
   for (let i = 0; i < n; i++) {
-    assert.equal((await upload(who.off, five, { name: `${i}.mp4`, serviceId: i < 5 ? svc.id : other.id })).status, 201, `file ${i}`);
+    assert.equal((await upload(who.off, five, { name: `${i}.pdf`, serviceId: i < 5 ? svc.id : other.id })).status, 201, `file ${i}`);
   }
   const over = await upload(who.off, 'one more byte', { name: 'x.txt', serviceId: other.id });
   assert.equal(over.status, 409);
@@ -169,7 +169,7 @@ test('files: each person can keep 50 MB on services not yet expired; schedulers 
   assert.equal((await upload(who.admin, five, { name: 'slides.pdf', serviceId: other.id })).status, 201, 'schedulers have no cap');
   // Once the first service's week is over, its files stop counting.
   setNow('2025-01-20T08:00:00');
-  assert.equal((await upload(who.off, five, { name: 'later.mp4', serviceId: other.id })).status, 201);
+  assert.equal((await upload(who.off, five, { name: 'later.pdf', serviceId: other.id })).status, 201);
 }));
 
 test('links: an https address, named by the person or by its site; nothing that runs code', () => withBoot(async ({ svc, who }) => {
@@ -267,6 +267,11 @@ test('attachments: names, types and addresses are cleaned', () => {
   assert.equal(typeFor('Setlist.PDF'), 'application/pdf');
   assert.equal(typeFor('stage.jpeg'), 'image/jpeg');
   assert.equal(typeFor('song.chopro'), 'text/plain');
+  // Only types Flock's viewer can show: no office files, csv or HEIC.
+  for (const bad of ['plan.docx', 'rota.xlsx', 'talk.pptx', 'plan.odt', 'rota.ods', 'talk.odp', 'list.csv', 'IMG_1.HEIC', 'x.heif',
+    'song.mp3', 'take.m4a', 'a.aac', 'a.wav', 'clip.mp4', 'clip.m4v', 'IMG_2.MOV']) {
+    assert.equal(typeFor(bad), null, bad);
+  }
   for (const bad of ['app.apk', 'app.ipa', 'setup.exe', 'wifi.mobileconfig', 'page.html', 'pic.svg', 'run.sh', 'x.js',
     'songs.zip', 'old.doc', 'macro.docm', 'sheet.xlsm', 'pdf', 'noext', '.pdf.exe', 'a.pdf ', undefined, 'constructor', 'x.__proto__']) {
     assert.equal(typeFor(bad), null, String(bad));
@@ -301,4 +306,11 @@ test('downloads: only plain text may be framed, and only by Flock (its viewer)',
     assert.match(h['Content-Security-Policy'], /frame-ancestors 'none'/, String(mime));
     assert.equal(h['X-Frame-Options'], 'DENY', String(mime));
   }
+});
+
+test('every file type Flock keeps opens in its own viewer (with the Close button)', async () => {
+  const { FILE_TYPES } = await import('../src/services/attachments-service.js');
+  const { viewKind } = await import('../web/lib/viewer.js');
+  for (const [ext, mime] of Object.entries(FILE_TYPES)) assert.ok(viewKind(mime), `.${ext} (${mime}) would leave Flock`);
+  assert.deepEqual(Object.keys(FILE_TYPES).sort(), ['cho', 'chopro', 'chordpro', 'gif', 'jpeg', 'jpg', 'md', 'pdf', 'png', 'txt', 'webp']);
 });
