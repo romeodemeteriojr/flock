@@ -545,11 +545,8 @@ input[type="checkbox"], input[type="radio"] { width: 1.4rem; height: 1.4rem; acc
 .pick-team-body { margin-top: var(--s-2); }
 .pick-team-body[hidden] { display: none; }
 .start-row { display: flex; flex-wrap: wrap; gap: var(--s-2); }
-.start-choice { flex-direction: column; align-items: flex-start; gap: 2px; min-height: 44px; min-width: 0; max-width: 100%; text-align: left; white-space: normal; overflow-wrap: anywhere; }
-.start-choice[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); }
-.start-main { font-weight: 700; }
-.start-sub { font-size: var(--fs-xs); color: var(--muted); font-weight: 500; }
-@media (max-width: 420px) { .start-choice { width: 100%; } }
+.start-choice { border-radius: 999px; max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
+.start-choice[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--on-accent-soft); }
 .count-label { font-size: var(--fs-xs); color: var(--muted); margin: 0; overflow-wrap: anywhere; }
 .pos-pick .check { min-width: 0; overflow-wrap: anywhere; }
 .input-icon { position: relative; }
@@ -1043,13 +1040,14 @@ th, td { text-align: left; padding: var(--s-2) var(--s-3); border-bottom: 1px so
 .position-name { margin: 0; }
 .position-row .btn-row { margin-top: var(--s-2); }
 .service-row .btn-row { margin-top: var(--s-3); }
-.service-main { display: flex; gap: var(--s-3); align-items: flex-start; }
-.service-icon {
-  display: inline-flex; padding: 10px; border-radius: var(--radius);
-  background: var(--accent-soft); color: var(--on-accent-soft);
-}
-.service-title { display: block; margin: 0; }
+.service-list { padding: var(--s-1) var(--s-4); }
+.service-list > li { padding: var(--s-2) 0; }
+.service-main { display: flex; gap: var(--s-3); align-items: center; }
+.service-main .date-tile { width: 3.1rem; padding: 5px 0 6px; }
+.service-main .date-tile-day { font-size: 1.3rem; }
+.service-title { display: block; margin: 0; font-weight: 650; overflow-wrap: anywhere; }
 .service-text { min-width: 0; }
+.service-detail { margin: var(--s-2) 0 0; color: var(--muted); font-size: var(--fs-sm); }
 
 /* ---------- schedule: grid on wide screens, cards on phones ---------- */
 .sched-range { display: flex; align-items: center; gap: var(--s-2); margin-bottom: var(--s-4); }
@@ -1558,7 +1556,7 @@ html.viewer-open, html.viewer-open body { overflow: hidden; }
   .hero { color: #000; background: #fff; border: 2px solid #000; }
   .hero-eyebrow { background: none; padding: 0; }
   .chip, .chip-today { border-color: #000; color: #000; background: none; }
-  .date-tile, .off-icon, .service-icon { background: none; color: #000; border: 1px solid #000; }
+  .date-tile, .off-icon { background: none; color: #000; border: 1px solid #000; }
   /* The grid prints; the phone cards do not. Slot buttons print as plain text. */
   .sched-grid { display: block !important; max-height: none; overflow: visible; border: 0; }
   .sched-cards { display: none !important; }

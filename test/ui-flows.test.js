@@ -317,6 +317,9 @@ test('UAT 3 to 8: scheduler adds people, a team, positions, a service, assigns, 
   assert.equal(countCalls(page, 'POST', /^\/api\/services$/), 1, 'the mistakes never left the page, and the double click sent one');
   said(page, /Service added for/);
   said(page, /Midweek prayer/);
+  said(page, /7:00 pm · 2 spots/);
+  const added = (await page.api.get(`/api/services?from=${SERVICE_DATE}&to=${SERVICE_DATE}`)).find((x) => x.title === 'Midweek prayer');
+  await tapOpen(page, 'select', added.id);
   said(page, /Ushers: Door x2\./);
   wellBuilt(page, 'services');
   const service = (await page.api.get(`/api/services?from=${SERVICE_DATE}&to=${SERVICE_DATE}`)).find((x) => x.title === 'Midweek prayer');

@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+No database changes.
+
+- **Services list is slimmer.** Each service is one row: a date tile, its title, and its time and number of spots. The positions and who is scheduled show when you tap the row, next to **Edit**. The rows sit together in one card.
+- **Start from** choices are just the title and time.
+
 ## 0.13.1
 
 No database changes.

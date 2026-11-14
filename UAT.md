@@ -218,8 +218,9 @@ Use the laptop. Keep the terminal window open.
    **Greeters** and tick **Welcome** (also `1`). The folded lines now say
    **Door** and **Welcome**.
 4. Click **Add service** (try double-clicking). You should see **Service added
-   for** that date, and the new service in the list: **Practice service**, with
-   **Greeters: Welcome. Ushers: Door.** Only one should be added.
+   for** that date, and the new service in the list: a date tile, **Practice
+   service** and **9:00 am · 2 spots**. Only one should be added. Tap it: the
+   positions show under it, **Greeters: Welcome. Ushers: Door.**
 5. Tap the new service, click **Repeat for more weeks**, type `2`, and click
    **Repeat**. You should see **Added 2 more services.** Now there are three
    Practice services, one week apart.
