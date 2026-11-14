@@ -75,7 +75,7 @@ export function mount(layer, ctx) {
     const action = el.dataset?.action ?? el.getAttribute?.('data-action');
     if (action === 'account-close') ctx.closeAccount();
     else if (action === 'logout') return logout(ctx, el);
-    else if (action === 'install') { ctx.closeAccount({ focus: false }); return ctx.install?.(); }
+    else if (action === 'install') return ctx.install?.(); // closes this sheet itself
     else if (el.getAttribute?.('href')) { e.preventDefault?.(); ctx.closeAccount({ focus: false, to: el.getAttribute('href') }); }
     return undefined;
   });

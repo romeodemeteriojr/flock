@@ -119,11 +119,13 @@ export function createApp({ root, win = globalThis.window, api = createApi() }) 
   }
   // focus: false when leaving the page anyway (a link, logging out).
   // to: a link in the sheet; it is followed once the sheet is closed.
-  function closeAccount({ focus = true, to = null } = {}) {
+  // handOff: another sheet opens in its place and takes over its Back step.
+  function closeAccount({ focus = true, to = null, handOff = false } = {}) {
     if (!state.accountOpen) return;
     state.accountOpen = false;
     if (!focus) accountSheet.opened(null);
     if (to) accountSheet.goTo(to);
+    else if (handOff) accountSheet.handOff();
     paintTop();
     paintLayer();
   }
@@ -151,9 +153,11 @@ export function createApp({ root, win = globalThis.window, api = createApi() }) 
     paintLayer();
   }
   // The browser's own prompt where there is one; the three steps on an iPhone.
+  // From the account sheet: the steps take its place (and its Back step).
   async function install() {
-    if (installer.canPrompt()) return installer.prompt();
-    if (isIosSafari(win)) { openInstallSteps(); return 'steps'; }
+    if (installer.canPrompt()) { closeAccount({ focus: false }); return installer.prompt(); }
+    if (isIosSafari(win)) { closeAccount({ focus: false, handOff: true }); openInstallSteps(); return 'steps'; }
+    closeAccount({ focus: false });
     return 'unavailable';
   }
   layer.addEventListener('click', (e) => {
