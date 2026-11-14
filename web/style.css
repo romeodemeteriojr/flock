@@ -306,16 +306,13 @@ h2:focus-visible { outline: 3px solid var(--focus); }
   display: inline-flex; align-items: center; gap: var(--s-2);
   flex: 1 1 auto; min-width: 0;
   min-height: var(--control-size); padding-right: var(--s-2);
-  color: var(--text); text-decoration: none;
-  font-size: 1.12rem; font-weight: 750; letter-spacing: -0.035em;
+  color: var(--muted); text-decoration: none;
+  font-size: 0.95rem; font-weight: 600; letter-spacing: -0.01em;
 }
-/* The mark is the app icon in small: a white bird on the brand colour, in both themes. */
-.brand-mark {
-  width: 1.75rem; height: 1.75rem; padding: 3px; border-radius: 8px;
-  color: var(--on-brand);
-  background: var(--brand);
-  box-shadow: var(--shadow-1);
-}
+/* A quiet label, not a logo: a grey bird and "Flock", so the eye goes to the
+   page and its one coloured action, not the corner. */
+.brand { gap: 6px; }
+.brand-mark { width: 1.25rem; height: 1.25rem; flex: none; color: inherit; }
 /* "Flock" and the page title sit in the same place and cross-fade. */
 .top-titles { display: grid; min-width: 0; }
 .brand-name, .top-title {
@@ -325,7 +322,7 @@ h2:focus-visible { outline: 3px solid var(--focus); }
 .top-title {
   opacity: 0; transform: translateY(6px);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  font-weight: 700; letter-spacing: -0.02em;
+  color: var(--text); font-size: 1.05rem; font-weight: 700; letter-spacing: -0.02em;
 }
 .top.is-scrolled .brand-name { opacity: 0; transform: translateY(-6px); }
 .top.is-scrolled .top-title { opacity: 1; transform: none; }
@@ -1472,8 +1469,8 @@ html.viewer-open, html.viewer-open body { overflow: hidden; }
   .top.is-scrolled { background: var(--bar-bg); }
   .top::before { display: none; }
   .topbar { display: contents; }
-  .brand { flex: none; order: 1; padding: 0 var(--s-3); min-height: 56px; font-size: 1.3rem; }
-  .brand-mark { width: 2rem; height: 2rem; padding: 4px; border-radius: 9px; }
+  .brand { flex: none; order: 1; padding: 0 var(--s-3); min-height: 56px; font-size: 1rem; }
+  .brand-mark { width: 1.35rem; height: 1.35rem; }
   /* No title swap in the side column: the page's own heading is always in view. */
   .top-title { display: none; }
   .top.is-scrolled .brand-name { opacity: 1; transform: none; }

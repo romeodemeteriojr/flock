@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+No database changes.
+
+- **A quieter top corner.** The Flock logo in the top left was a solid indigo tile, the same colour as the buttons you're meant to tap, so it pulled the eye. It's now a small grey bird and "Flock", like a subtitle. Scrolled, the page title still takes its place.
+
 ## 0.15.0
 
 No database changes.
