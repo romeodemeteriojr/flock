@@ -25,6 +25,7 @@ const isDayTitle = (t) => DAYS.some((d) => t === `${d} service`);
 export const LIST_DAYS = 182; // how far ahead the upcoming list looks
 const MAX_COUNT = 20;
 const MAX_WEEKS = 26;
+const RECENT_DAYS = 91; // how far back "Start from" looks
 
 // ---------- pure helpers (tested directly) ----------
 
@@ -91,6 +92,50 @@ export function draftOf(svc) {
   return { date: svc?.date ?? '', time: svc?.time ?? '', title: svc?.title ?? '', pos };
 }
 
+// "Drums, Keys x2" for what is picked in a team, or "None picked".
+export function teamSummary(team, pos = {}) {
+  const parts = [];
+  for (const p of team?.positions ?? []) {
+    if (!pos[p.id]?.on) continue;
+    const n = Number(pos[p.id].count);
+    parts.push(n > 1 ? `${p.name} x${n}` : p.name);
+  }
+  return parts.length ? parts.join(', ') : 'None picked';
+}
+
+const startKeyOf = (svc) => `${svc.title}|${svc.time}`;
+
+// The services a new one can start from: the latest of each title and time
+// that has positions, newest first, at most 4. Past ones count.
+export function startChoices(list) {
+  const latest = new Map();
+  for (const s of list ?? []) {
+    if (!s.slots?.length) continue;
+    const k = startKeyOf(s);
+    const cur = latest.get(k);
+    if (!cur || s.date > cur.date || (s.date === cur.date && s.id > cur.id)) latest.set(k, s);
+  }
+  return sortServices([...latest.values()]).reverse().slice(0, 4);
+}
+
+// A week after the source, then on a week at a time until it is today or later
+// and nothing is on at that time.
+export function nextFreeDate(src, list, today) {
+  const taken = new Set((list ?? []).filter((s) => s.time === src.time).map((s) => s.date));
+  let date = addDays(src.date, 7);
+  for (let i = 0; i < 52; i++) {
+    if (date >= today && !taken.has(date)) return date;
+    date = addDays(date, 7);
+  }
+  return today;
+}
+
+// The add form's values when starting from a service: its time, title and
+// positions, on the next free week.
+export function draftFrom(src, list, today) {
+  return { ...draftOf(src), date: nextFreeDate(src, list, today) };
+}
+
 export function weeksFrom(elements) {
   const n = Number(val(elements, 'weeks'));
   return Number.isInteger(n) && n >= 1 && n <= MAX_WEEKS ? n : null;
@@ -131,28 +176,51 @@ export function sortServices(list) {
 
 // ---------- rendering ----------
 
-// The positions and how many of each. prefix keeps element ids unique when
-// the edit form is open next to the add form; the names stay the same.
-function positionPicker(teams, d, prefix = '') {
+// The positions and how many of each, one folded line per team. Folded teams
+// stay in the form (hidden), so what is picked is still sent. prefix keeps
+// element ids unique when the edit form is open next to the add form.
+function positionPicker(teams, d, prefix = '', open = new Set()) {
   // Teams with no positions have nothing to pick: one line about them, not one each.
   const usable = teams.filter((t) => t.positions?.length);
   const bare = teams.length - usable.length;
   const bareNote = bare && usable.length ? html`<p class="hint" data-bare-teams>${bare === 1 ? '1 team has' : `${bare} teams have`} no positions yet, so ${bare === 1 ? 'it is' : 'they are'} not shown. Add positions on the Teams page.</p>` : '';
   if (teams.length && !usable.length) return html`<p class="hint">No positions yet. Add positions on the Teams page first.</p>`;
-  return html`${usable.length ? usable.map((t) => html`<fieldset class="field fieldset" data-team="${t.id}">
-      <legend><strong>${t.name}</strong></legend>
+  return html`${usable.length ? usable.map((t) => {
+    const isOpen = open.has(t.id);
+    const label = html`<span class="pick-team-name">${t.name}</span><span class="disclosure-sub" data-team-sum="${t.id}">${teamSummary(t, d.pos)}</span>`;
+    return html`<div class="field fieldset pick-team" data-team="${t.id}" role="group" aria-label="${t.name}">
+      ${disclosure({ action: 'toggle-pick-team', id: t.id, open: isOpen, label })}
+      <div class="pick-team-body" data-team-body="${t.id}"${isOpen ? '' : html` hidden`}>
       ${t.positions.map((p) => html`<div class="field pos-pick">
         <label class="check" for="${prefix}pos-${p.id}"><input id="${prefix}pos-${p.id}" name="pos-${p.id}" type="checkbox"${d.pos[p.id]?.on ? html` checked` : ''}> ${p.name}</label>
         <label class="count-label" for="${prefix}count-${p.id}">How many ${p.name}</label>
         <input id="${prefix}count-${p.id}" name="count-${p.id}" type="number" min="1" max="${MAX_COUNT}" value="${d.pos[p.id]?.count ?? '1'}" inputmode="numeric">
       </div>`)}
-    </fieldset>`) : html`<p class="hint">No teams yet. Add teams and positions on the Teams page first.</p>`}${bareNote}`;
+      </div>
+    </div>`;
+  }) : html`<p class="hint">No teams yet. Add teams and positions on the Teams page first.</p>`}${bareNote}`;
 }
 
-function createForm(teams, today, draft) {
-  const d = draft ?? { date: today, time: DEFAULT_TIME, title: titleFor(today), pos: {} };
+// Buttons to copy a recent service into the form, and Blank to start clean.
+function startFrom(m) {
+  const choices = startChoices(m.recent);
+  if (!choices.length) return '';
+  const chip = (id, on, main, sub) => html`<button type="button" class="btn start-choice" data-action="start-from" data-id="${id}" aria-pressed="${on ? 'true' : 'false'}"><span class="start-main">${main}</span>${sub ? html`<span class="start-sub">${sub}</span>` : ''}</button>`;
+  return html`<div class="field" data-start-from>
+    <h3 id="start-from-head">Start from</h3>
+    <div class="start-row" role="group" aria-labelledby="start-from-head">
+      ${choices.map((c, i) => chip(i, m.startKey === startKeyOf(c), `${c.title} · ${formatTime(c.time)}`, positionsSummary(c, m.teams)))}
+      ${chip(-1, m.startKey === null, 'Blank', '')}
+    </div>
+  </div>`;
+}
+
+function createForm(m) {
+  const { teams, today } = m;
+  const d = m.draft ?? { date: today, time: DEFAULT_TIME, title: titleFor(today), pos: {} };
   return html`<form class="form card form-card form-wide" data-form="create" novalidate>
-    <h2 class="card-title">Add a service</h2>
+    <h2 class="card-title" id="add-title" tabindex="-1">Add a service</h2>
+    ${startFrom(m)}
     <div class="field-pair">
     <div class="field"><label for="svc-date">Date</label>
       <input id="svc-date" name="date" type="date" required min="${today}" value="${d.date}"></div>
@@ -162,8 +230,9 @@ function createForm(teams, today, draft) {
     <div class="field"><label for="svc-title">Title</label>
       <input id="svc-title" name="title" type="text" maxlength="100" value="${d.title}"></div>
     <h3>Positions needed</h3>
-    ${positionPicker(teams, d)}
-    <button type="submit" class="btn btn-primary">${iconSlot('plus')} Add service</button>
+    ${positionPicker(teams, d, '', m.openTeams)}
+    <div class="btn-row"><button type="submit" class="btn btn-primary">${iconSlot('plus')} Add service</button>
+      <button type="button" class="btn" data-action="add-cancel">Cancel</button></div>
   </form>`;
 }
 
@@ -183,7 +252,7 @@ function serviceCard(svc, m) {
       <div class="field"><label for="edit-title-${id}">Title</label>
         <input id="edit-title-${id}" name="title" type="text" maxlength="100" value="${d.title}"></div>
       <h3>Positions needed</h3>
-      ${positionPicker(m.teams, d, `edit-${id}-`)}
+      ${positionPicker(m.teams, d, `edit-${id}-`, m.openTeams)}
       ${mine.people ? html`<div class="confirm confirm-danger" role="alertdialog" aria-label="Confirm">
         <p><strong>${takenOffText(mine.people) || mine.message}</strong> ${mine.people.length === 1 ? 'is' : 'are'} on a position you took off. They will be taken off and told.</p>
         <div class="btn-row">
@@ -240,10 +309,10 @@ export function renderScreen(m) {
   if (m.loading) return String(skeleton('Loading…', 'cards', 2));
   return String(html`
     ${toasts([[m.notice, 'ok'], [m.error, 'error']])}
-    ${createForm(m.teams, m.today, m.draft)}
+    ${m.adding ? createForm(m) : html`<div class="btn-row"><button type="button" class="btn btn-primary" data-action="add-open">${iconSlot('plus')} Add a service</button></div>`}
     <h2 class="section-title">Upcoming services</h2>
     ${m.services.length ? html`<ul class="list card-list" data-services>${m.services.map((s) => serviceCard(s, m))}</ul>`
-    : emptyState('No upcoming services yet. Add one above.', 'art-calendar')}
+    : emptyState('No upcoming services yet. Tap Add a service above.', 'art-calendar')}
     <section class="card purge-card" aria-label="Expired files">
       <h2 class="section-title">Expired files</h2>
       <p class="hint">Files and links are kept until a week after their service. After that nobody can open them; clearing them frees the space.</p>
@@ -256,7 +325,7 @@ export function renderScreen(m) {
 
 export function createScreen({ api, root, today = todayString() }) {
   // selected: the service whose buttons show.
-  const m = { teams: [], services: [], loading: true, panel: null, error: '', notice: '', today, draft: null, selected: null };
+  const m = { teams: [], services: [], recent: [], loading: true, panel: null, error: '', notice: '', today, draft: null, selected: null, adding: false, startKey: null, openTeams: new Set() };
   let busy = false;
   const notices = createNoticeClock();
   const paint = () => {
@@ -267,10 +336,14 @@ export function createScreen({ api, root, today = todayString() }) {
   const reload = async () => {
     const [t, s] = await Promise.all([
       api.get('/api/teams'),
-      api.get(`/api/services?from=${m.today}&to=${addDays(m.today, LIST_DAYS)}`),
+      api.get(`/api/services?from=${addDays(m.today, -RECENT_DAYS)}&to=${addDays(m.today, LIST_DAYS)}`),
     ]);
     m.teams = Array.isArray(t) ? t : [];
-    m.services = sortServices(Array.isArray(s) ? s : []);
+    m.recent = sortServices(Array.isArray(s) ? s : []);
+    m.services = m.recent.filter((x) => x.date >= m.today);
+    // A lone team has nothing to choose between: start it open.
+    const usable = m.teams.filter((x) => x.positions?.length);
+    if (usable.length === 1) m.openTeams.add(usable[0].id);
   };
   const find = (id) => m.services.find((s) => s.id === Number(id));
   m.files = createFiles({ api, paint: () => paint(), onCount: (id, n) => { const svc = find(id); if (svc) svc.files = n; } });
@@ -295,6 +368,7 @@ export function createScreen({ api, root, today = todayString() }) {
     if (!svc) return;
     m.panel = { kind, id: svc.id, count: scheduledCount(svc) };
     m.selected = svc.id; // a panel under a row keeps that row open
+    m.adding = false; // one form open at a time
     m.error = '';
     m.notice = '';
     paint();
@@ -317,6 +391,30 @@ export function createScreen({ api, root, today = todayString() }) {
   }
 
   const actions = {
+    'add-open': () => {
+      m.adding = true; m.draft = null; m.startKey = null; m.panel = null; m.selected = null; m.error = ''; m.notice = '';
+      paint();
+      root.querySelector?.('#add-title')?.focus?.();
+    },
+    'add-cancel': () => {
+      m.adding = false; m.draft = null; m.startKey = null; m.error = '';
+      paint();
+      root.querySelector?.('[data-action="add-open"]')?.focus?.();
+    },
+    'start-from': (id) => {
+      const src = startChoices(m.recent)[id];
+      m.error = '';
+      if (src) { m.draft = draftFrom(src, m.recent, m.today); m.startKey = startKeyOf(src); } else { m.draft = null; m.startKey = null; }
+      paint();
+    },
+    // Fold or unfold in place: no repaint, so nothing typed is lost.
+    'toggle-pick-team': (id, el) => {
+      const open = !m.openTeams.has(id);
+      if (open) m.openTeams.add(id); else m.openTeams.delete(id);
+      const body = root.querySelector?.(`[data-team-body="${id}"]`);
+      if (body) body.hidden = !open;
+      el?.setAttribute?.('aria-expanded', open ? 'true' : 'false');
+    },
     cancel: () => { m.panel = null; paint(); },
     'edit-back': (id) => {
       if (m.panel?.kind !== 'edit' || m.panel.id !== Number(id)) return;
@@ -376,6 +474,8 @@ export function createScreen({ api, root, today = todayString() }) {
       if (r.error) { m.error = r.error; return; }
       await api.post('/api/services', r.body);
       m.draft = null;
+      m.adding = false;
+      m.startKey = null;
       await reload();
       m.notice = `Service added for ${formatDate(r.body.date)} at ${formatTime(r.body.time)}.`;
     }),
@@ -405,6 +505,15 @@ export function createScreen({ api, root, today = todayString() }) {
   // A problem goes away once the person starts fixing it.
   // A new date brings its day's title, unless a title was typed.
   root.addEventListener('change', (e) => {
+    // A ticked position or a new count updates its team's folded line.
+    const hit = /^(?:pos|count)-(\d+)$/.exec(e.target?.name ?? '');
+    const form = hit && e.target.form;
+    if (form?.elements) {
+      const team = m.teams.find((t) => (t.positions ?? []).some((p) => p.id === Number(hit[1])));
+      const sum = team && root.querySelector?.(`[data-team-sum="${team.id}"]`);
+      if (sum) sum.textContent = teamSummary(team, readDraft(form.elements, m.teams).pos);
+      return;
+    }
     if (e.target?.id !== 'svc-date') return;
     const title = root.querySelector?.('#svc-title');
     if (title && (!title.value || isDayTitle(title.value))) title.value = titleFor(e.target.value);
@@ -419,7 +528,7 @@ export function createScreen({ api, root, today = todayString() }) {
     const el = e.target?.closest?.('[data-action]');
     if (el && m.files.click(el)) return;
     const fn = el && actions[el.dataset.action];
-    if (fn) fn(Number(el.dataset.id));
+    if (fn) fn(Number(el.dataset.id), el);
   });
   root.addEventListener('submit', (e) => {
     const form = e.target?.closest?.('form[data-form]');

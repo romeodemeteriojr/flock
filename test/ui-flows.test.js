@@ -301,6 +301,10 @@ test('UAT 3 to 8: scheduler adds people, a team, positions, a service, assigns, 
   // --- Services: a date with two Door positions ---
   await page.goto('#/services');
   wellBuilt(page);
+  assert.equal(page.has('#svc-date'), false, 'the page opens on the list; the form waits for the button');
+  await page.clickButton('Add a service');
+  assert.equal(page.has('#svc-date'), true);
+  wellBuilt(page, 'add form');
   await page.submit('create', { date: '', time: '19:00', title: 'Midweek prayer' });
   said(page, /Please pick a date\./);
   await page.submit('create', { date: SERVICE_DATE, time: '19:00', title: 'Midweek prayer', [`pos-${door}`]: true, [`count-${door}`]: '0' });
@@ -709,6 +713,7 @@ test('UAT 20 (odd text): hostile and odd text is shown as plain text on every pa
   wellBuilt(admin, 'people');
 
   await admin.goto('#/services');
+  await admin.clickButton('Add a service');
   await admin.submit('create', { date: SERVICE_DATE, time: '20:00', title: HOSTILE.title, [`pos-${pos}`]: true, [`count-${pos}`]: '2' });
   said(admin, /<svg onload=alert\(4\)>Party' & more/);
   wellBuilt(admin, 'services');

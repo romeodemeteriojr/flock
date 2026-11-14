@@ -130,7 +130,10 @@ Schedulers also see:
   once you say yes. Past services still show it. Add the same name again to
   bring it back, with the people who can do it (a team comes back without its
   positions; add them again too).
-- **Services**: add service dates with the positions you need. You can repeat
+- **Services**: tap **Add a service** to add a date with the positions you
+  need. Teams are folded: tap one to open it. Under **Start from**, tap a
+  recent service to copy its time, title and positions onto the next free
+  week. You can repeat
   a service weekly for several weeks. There can be at most 10 upcoming
   services; add more as the earlier ones pass. **Edit** changes the date, time, title
   and the positions with how many of each. A number can only go down by
