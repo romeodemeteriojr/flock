@@ -96,3 +96,7 @@ test('CSS: a long unbroken name wraps instead of pushing the page sideways', () 
   assert.match(css, /\.menu-text \{[^}]*min-width: 0; overflow-wrap: anywhere;/);
   assert.match(css, /\.account-text \{[^}]*min-width: 0; overflow-wrap: anywhere;/);
 });
+
+test('CSS: a scrolling table is its own positioning box, so hidden text in a wide table cannot widen the page', () => {
+  assert.match(css, /\.table-wrap \{ overflow-x: auto; position: relative; \}/);
+});
