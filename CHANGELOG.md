@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+No database changes.
+
+- **No false "Something went wrong" after adding Flock to the Home Screen.** On some iPhones, Share → Add to Home Screen worked but showed the error anyway. The browser had reported a problem of its own, with no error from Flock attached. Flock now only shows that message for its own errors and quietly logs the rest.
+
 ## 0.15.1
 
 No database changes.
