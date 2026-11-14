@@ -9,8 +9,10 @@ Database change: migration 0005 adds the `attachments` table. Older versions of 
 Anyone can attach a **file (up to 5 MB) or a link** to a service, such as a setlist, run sheet or rehearsal video. (Decision 0011.)
 
 - **Who sees them:** only the people serving at that service (asked or confirmed) and schedulers.
-- **Where:** **Files** under the next service on **My schedule** and in each card's **Details**; schedulers also get **Files** on each service on **Services**.
+- **Where:** **Files** under the next service on **My schedule** and in each card's **Details**; schedulers also get **Files** on each service on **Services**. For the week after a service, **My schedule** keeps it under **Last week** so its files can still be opened.
 - **Bigger than 5 MB?** Flock says so before sending and opens **Add a link** instead.
+- **Only safe file types:** PDF, photos, text and chord charts, audio, video, and Word, Excel or PowerPoint files. Apps, installers, iPhone profiles, web pages, scripts, zip files and office files that can hold macros are refused; share those as a link.
+- **Limits per person** (schedulers have none): 30 files and links an hour, and 50 MB of files on services that have not expired.
 - **Opening** a file uses the phone's own viewer.
 - **They expire a week after the service.** From then on nobody can open them. Nothing is deleted on a timer: a scheduler taps **Clear expired files** on **Services**, or runs `node bin/flock.js purge-files`.
 - Who added a file can remove it; schedulers can remove any.

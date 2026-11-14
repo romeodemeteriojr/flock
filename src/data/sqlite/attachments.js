@@ -57,6 +57,11 @@ export function attachmentsRepo({ db, run }) {
       'SELECT COUNT(*) AS n FROM attachments WHERE service_id = ?',
     ).get(serviceId).n)),
 
+    /** Bytes of the files personId added to services dated fromDate or later. */
+    bytesAddedBy: (personId, fromDate) => run(() => num(db.prepare(
+      'SELECT COALESCE(SUM(a.size), 0) AS n FROM attachments a JOIN services sv ON sv.id = a.service_id WHERE a.added_by = ? AND sv.date >= ?',
+    ).get(personId, fromDate).n)),
+
     remove: (attachmentId) => run(() => changed(db.prepare('DELETE FROM attachments WHERE id = ?').run(attachmentId))),
 
     /** Deletes every attachment on services dated on or before lastDate. */

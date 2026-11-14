@@ -850,6 +850,10 @@ th, td { text-align: left; padding: var(--s-2) var(--s-3); border-bottom: 1px so
 .hero-quiet .banner { font-size: var(--fs-xl); }
 .serve-card { padding: var(--s-4); transition: box-shadow var(--med) var(--ease), transform var(--med) var(--ease); }
 .serve-card.is-pending { border-width: 2px; border-color: color-mix(in srgb, var(--warning) 45%, var(--warning-bg)); }
+/* Last week's services: there for their files only, so they step back. */
+.serve-card.is-past { box-shadow: none; background: var(--bg); }
+.serve-card.is-past .date-tile { opacity: 0.7; }
+.section-title + .section-hint { margin: calc(-1 * var(--s-2)) 0 var(--s-3); }
 .serve-head { display: flex; align-items: flex-start; gap: var(--s-3); flex-wrap: wrap; }
 .serve-text { flex: 1 1 10rem; min-width: 0; }
 .serve-title { font-size: var(--fs-lg); margin: 2px 0 var(--s-1); }

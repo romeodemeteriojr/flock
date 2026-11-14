@@ -1,7 +1,8 @@
 // The files and links of one service (decision 0011), as a small panel any
 // view can show: the list (each opens in the phone's own viewer), "Add a file"
 // (up to 5 MB), "Add a link" (for anything bigger), and Remove for who added it.
-// A file over 5 MB is never sent: the panel says so and offers the link form.
+// A file over 5 MB, or of a type the server does not keep, is never sent: the
+// panel says so and offers the link form.
 //
 //   const files = createFiles({ api, paint, onCount });
 //   files.render(serviceId, key)          // key keeps element ids unique
@@ -23,6 +24,13 @@ export function sizeWords(bytes) {
 }
 
 export const tooBigWords = (name, bytes) => `${name} is ${sizeWords(bytes)}. Files can be at most 5 MB, so add a link to it instead.`;
+export const wrongTypeWords = (name) => `Flock can't keep ${name}. It keeps PDF, photos, text, chord charts, audio, video, and Word, Excel or PowerPoint files. For anything else, add a link to it instead.`;
+
+/** True when the name ends in one of the extensions the server keeps. */
+export function allowedName(name, types) {
+  const m = /\.([a-z0-9]{1,10})$/i.exec(String(name ?? ''));
+  return Boolean(m) && types.includes(m[1].toLowerCase());
+}
 
 /** "Files", "Files (2)". */
 export const filesLabel = (n) => (n ? `Files (${n})` : 'Files');
@@ -102,10 +110,11 @@ export function createFiles({ api, paint = () => {}, onCount = () => {} }) {
     } else {
       const list = s.data.files;
       const busy = s.busy ? 'disabled' : '';
+      const accept = (s.data.types ?? []).map((t) => `.${t}`).join(',');
       body = html`
         ${list.length ? html`<ul class="list file-list">${list.map((f) => row(f, s, id))}</ul>` : html`<p class="hint">No files yet.</p>`}
         ${s.linking ? linkForm(s, id, key) : html`<div class="btn-row btn-row-compact">
-          <label class="btn btn-sm file-pick${s.busy ? ' is-disabled' : ''}">${iconSlot('plus')} Add a file<input type="file" class="visually-hidden" data-files-pick="${id}" ${busy}></label>
+          <label class="btn btn-sm file-pick${s.busy ? ' is-disabled' : ''}">${iconSlot('plus')} Add a file<input type="file" class="visually-hidden" data-files-pick="${id}" accept="${accept}" ${busy}></label>
           <button type="button" class="btn btn-sm" data-action="files-link" data-id="${id}" ${busy}>${iconSlot('link')} Add a link</button>
         </div>`}
         <p class="hint">Up to 5 MB each; for bigger files add a link. Kept until ${formatDate(s.data.expiresOn)}.</p>`;
@@ -120,8 +129,11 @@ export function createFiles({ api, paint = () => {}, onCount = () => {} }) {
 
   async function upload(id, file) {
     const s = state(id);
-    if (file.size > MAX_BYTES) {
-      s.problem = tooBigWords(file.name, file.size);
+    const types = s.data?.types;
+    const refused = types && !allowedName(file.name, types) ? wrongTypeWords(file.name)
+      : file.size > MAX_BYTES ? tooBigWords(file.name, file.size) : null;
+    if (refused) {
+      s.problem = refused;
       s.note = null;
       s.linking = true;
       s.linkName = file.name;

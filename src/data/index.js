@@ -300,6 +300,8 @@ export { DuplicateError, InUseError } from './errors.js';
  * @typedef {object} AuditRepo
  * @property {(e: {at: string|Date, actorId?: number|null, action: string, detail?: string}) => Promise<void>} log
  *   Detail is cut to 500 characters.
+ * @property {(q: {actorId: number, actions: string[], since: string|Date}) => Promise<number>} countSince
+ *   Entries by actorId with one of the actions, at or after since.
  * @property {(limit?: number) => Promise<AuditEntry[]>} list  Newest first (default 100 entries).
  */
 
@@ -337,6 +339,8 @@ export { DuplicateError, InUseError } from './errors.js';
  * @property {(serviceId: number) => Promise<Attachment[]>} listForService  Oldest first.
  * @property {(serviceIds: number[]) => Promise<Record<number, number>>} countByService  Services with none are left out.
  * @property {(serviceId: number) => Promise<number>} countForService
+ * @property {(personId: number, fromDate: string) => Promise<number>} bytesAddedBy
+ *   Bytes of the files personId added to services dated fromDate or later.
  * @property {(id: number) => Promise<boolean>} remove
  * @property {(lastDate: string) => Promise<{removed: number, bytes: number}>} removeForServicesUpTo
  *   Deletes the attachments of every service dated on or before lastDate.

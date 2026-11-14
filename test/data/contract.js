@@ -905,6 +905,14 @@ export function runContract(name, makeData) {
         assert.deepEqual(Object.keys(all[0]).sort(), ['action', 'actorId', 'at', 'detail', 'id']);
         assert.deepEqual((await data.audit.list(2)).map((e) => e.action), ['a.three', 'a.two']);
         assert.equal((await data.audit.list()).length, 3);
+        await data.audit.log({ at: '2025-01-03T00:00:00.000Z', actorId: 1, action: 'a.two' });
+        await data.audit.log({ at: '2025-01-04T00:00:00.000Z', actorId: 2, action: 'a.two' });
+        const count = (q) => data.audit.countSince({ actorId: 1, actions: ['a.one', 'a.two'], since: '2025-01-01T00:00:00.000Z', ...q });
+        assert.equal(await count({}), 2, 'actor 1, either action, both days');
+        assert.equal(await count({ since: new Date('2025-01-02T00:00:00.000Z') }), 1);
+        assert.equal(await count({ actions: ['a.three'] }), 0);
+        assert.equal(await count({ actions: [] }), 0);
+        assert.equal(await count({ actorId: 2 }), 1);
       });
     });
 
@@ -970,6 +978,10 @@ export function runContract(name, makeData) {
         assert.equal(await data.attachments.countForService(s2.id), 0);
         assert.deepEqual(await data.attachments.countByService([s1.id, s2.id]), { [s1.id]: 2 });
         assert.deepEqual(await data.attachments.countByService([]), {});
+        await data.attachments.create({ serviceId: s2.id, kind: 'file', name: 'b.txt', mime: 'text/plain', content: Buffer.from('12345'), addedBy: w.ann.id, createdAt: T });
+        assert.equal(await data.attachments.bytesAddedBy(w.ann.id, '2025-01-12'), bytes.length + 5);
+        assert.equal(await data.attachments.bytesAddedBy(w.ann.id, '2025-01-13'), 5, 'only services from that date');
+        assert.equal(await data.attachments.bytesAddedBy(w.bob.id, '2025-01-01'), 0, 'links take no bytes');
         assert.equal(await data.services.countFrom('2025-01-12'), 2);
         assert.equal(await data.services.countFrom('2025-01-13'), 1);
         assert.equal(await data.services.countFrom('2025-02-01'), 0);

@@ -411,7 +411,7 @@ test('mySchedule: pending and accepted only, 12 weeks from today, coVolunteers a
   assert.deepEqual(fromPast.items.map((i) => i.slotId), [past, p1]);
   assert.equal(fromPast.nextServing.slotId, p1); // the next one from today, not the past one
   const empty = await svc.mySchedule(rae.id);
-  assert.deepEqual(empty, { nextServing: null, items: [], rosters: {} });
+  assert.deepEqual(empty, { nextServing: null, items: [], rosters: {}, recent: [] });
   await rejectsWith(svc.mySchedule(pat.id, { from: '2025-02-30' }), ValidationError);
 });
 
@@ -461,7 +461,7 @@ test('mySchedule rosters: the whole day of each day I serve, by service, team an
   assert.doesNotMatch(JSON.stringify(r), /Rae Ray|Other day|personId|@example\.com/);
   // Saying no makes it not my day any more: no roster for it.
   await svc.respond(pat.id, mDrums, 'decline');
-  assert.deepEqual(await svc.mySchedule(pat.id), { nextServing: null, items: [], rosters: {} });
+  assert.deepEqual(await svc.mySchedule(pat.id), { nextServing: null, items: [], rosters: {}, recent: [] });
 });
 
 // ---------- several positions on one service: answering and my schedule (decision 0010) ----------

@@ -1,6 +1,6 @@
 // Files and links on a service (decision 0011): thin HTTP adapters over the
 // attachments service. A file is uploaded as the raw request body (its name in
-// ?name=, its type in Content-Type) and opened at /api/attachments/:id, which
+// ?name=, its type worked out from the name) and opened at /api/attachments/:id, which
 // the phone shows in its own viewer.
 import { v, parse } from '../validate.js';
 import { MAX_FILE_BYTES } from '../services/attachments-service.js';
@@ -50,10 +50,9 @@ export function register(router, ctx) {
     ok(await files().list(user, pathId(params.id)))
   ));
 
-  router.add('POST', '/api/services/:id/files', async ({ params, query, req, body, user }) => (
-    ok(await files().addFile(user, pathId(params.id), {
-      name: query.name, mime: req.headers['content-type'], bytes: body,
-    }), 201)
+  // The type comes from the name (the phone's Content-Type is not trusted).
+  router.add('POST', '/api/services/:id/files', async ({ params, query, body, user }) => (
+    ok(await files().addFile(user, pathId(params.id), { name: query.name, bytes: body }), 201)
   ), { raw: MAX_FILE_BYTES, tooBig: 'Files can be at most 5 MB. For a bigger file, add a link to it instead.' });
 
   router.add('POST', '/api/services/:id/links', async ({ params, body, user }) => (
