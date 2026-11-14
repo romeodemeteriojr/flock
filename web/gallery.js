@@ -245,7 +245,7 @@ function pages(d) {
   const off = (view) => myBlockouts.render({}, { today: d.today, loading: false, ...view });
   const peopleModel = (extra = {}) => ({ people: d.PEOPLE, teams: d.TEAMS, query: '', loading: false, adding: false, newName: '', panel: null, invite: null, error: '', notice: '', me: 1, ...extra });
   const teamsModel = (extra = {}) => ({ teams: d.TEAMS, loading: false, panel: null, error: '', notice: '', ...extra });
-  const svcModel = (extra = {}) => ({ teams: d.TEAMS, services: d.SERVICES, loading: false, panel: null, error: '', notice: '', today: d.today, draft: null, ...extra });
+  const svcModel = (extra = {}) => ({ teams: d.TEAMS, services: d.SERVICES, recent: d.SERVICES, loading: false, panel: null, error: '', notice: '', today: d.today, draft: null, adding: false, startKey: null, openTeams: new Set(), ...extra });
   const schedModel = (extra = {}) => ({ services: d.SERVICES, teams: d.TEAMS, loading: false, error: '', notice: '', today: d.today, from: d.today, to: addDays(d.today, 55), ...extra });
   const gapsModel = (extra = {}) => ({ loading: false, error: '', notice: '', summary: d.GAPS.summary, items: d.GAPS.items,
     reminders: { weekOf: d.sunday, list: d.REMINDERS, loading: false, error: '', notice: '' }, ...extra });
@@ -304,7 +304,9 @@ function pages(d) {
     ${frame('Rename a position', screen('Teams', teams.renderScreen(teamsModel({ open: new Set([1]), selected: 11, panel: { kind: 'rename-position', id: 11 } }))))}
     ${frame('No teams yet', screen('Teams', teams.renderScreen(teamsModel({ teams: [] }))))}`)}
   ${section('p-services', 'Services', html`
-    ${frame('Add and list', screen('Services', services.renderScreen(svcModel())))}
+    ${frame('The list, with the add button', screen('Services', services.renderScreen(svcModel())))}
+    ${frame('Add a service, teams folded', screen('Services', services.renderScreen(svcModel({ adding: true }))))}
+    ${frame('Add a service, one team open', screen('Services', services.renderScreen(svcModel({ adding: true, openTeams: new Set([d.TEAMS[0].id]) }))))}
     ${frame('A service tapped: its buttons', screen('Services', services.renderScreen(svcModel({ selected: 2 }))))}
     ${frame('Delete?', screen('Services', services.renderScreen(svcModel({ selected: 1, panel: { kind: 'delete', id: 1, count: 3 } }))))}
     ${frame('Repeat', screen('Services', services.renderScreen(svcModel({ selected: 2, panel: { kind: 'repeat', id: 2 } }))))}
