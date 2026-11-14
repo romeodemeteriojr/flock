@@ -1350,6 +1350,7 @@ html.viewer-open, html.viewer-open body { overflow: hidden; }
 .candidate-name { margin: 0; }
 .reasons { margin: var(--s-1) 0 0; padding-left: 1rem; }
 .candidate-actions { margin: 0; }
+.candidate-actions .btn:disabled { cursor: not-allowed; }
 
 /* ---------- wider screens ---------- */
 @media (min-width: 720px) {
