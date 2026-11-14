@@ -48,6 +48,27 @@ test('files panel: lists files and links that open in a new view, names escaped,
   assert.match(out, /accept="\.pdf,\.jpg,\.mov"/, 'the picker shows only what the server keeps');
 });
 
+test('files panel: a PDF opens in Flock\'s viewer (it has a Close button); a link does not', async () => {
+  const files = createFiles({ api: fakeApi() });
+  await files.open(7);
+  const out = String(files.render(7, 'k'));
+  assert.match(out, /href="\/api\/attachments\/1" target="_blank" rel="noopener noreferrer" data-view="frame" data-name="Setlist &lt;b&gt;\.pdf"/);
+  assert.match(out, /href="https:\/\/video\.example\/v" target="_blank" rel="noopener noreferrer">/, 'links leave Flock as before');
+});
+
+test('viewer: shows what a phone can show itself; the rest opens in the phone', async () => {
+  const { viewKind, createViewer } = await import('../web/lib/viewer.js');
+  assert.equal(viewKind('application/pdf'), 'frame');
+  assert.equal(viewKind('text/plain'), 'frame');
+  for (const m of ['image/jpeg', 'image/png', 'image/heic', 'IMAGE/WEBP']) assert.equal(viewKind(m), 'image', m);
+  assert.equal(viewKind('audio/mpeg'), 'audio');
+  assert.equal(viewKind('video/quicktime'), 'video');
+  for (const m of ['application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/html', 'image/svg+xml', 'application/octet-stream', null, undefined]) {
+    assert.equal(viewKind(m), null, String(m));
+  }
+  assert.equal(createViewer(undefined), null, 'no DOM: nothing to build');
+});
+
 test('files panel: a type the server does not keep is never sent; the link form opens', async () => {
   const api = fakeApi();
   const files = createFiles({ api });

@@ -142,6 +142,7 @@ const NEW_ICONS = [
   ['add-square', "iOS's Add to Home Screen"],
   ['offline', "can't reach the server"],
   ['chevron-left', 'back, the month before'],
+  ['bell-off', 'notifications are off on this device'],
 ];
 
 // ---------- gallery pieces ----------
@@ -218,6 +219,8 @@ function components(d) {
   ${section('nav', 'Top bar and menu', html`
     ${frame('Volunteer', html`<header class="top">${raw(nav.render({ user: { id: 3, name: 'Priya Demo', role: 'member' } }, '#/'))}</header>`)}
     ${frame('Scheduler', html`<header class="top">${raw(nav.render({ user: { id: 1, name: 'Morgan Fictional', role: 'admin' } }, '#/schedule'))}</header>`)}
+    ${frame('Notifications off on this device: a crossed-out bell', html`<header class="top">${raw(nav.render({ user: { id: 3, name: 'Priya Demo', role: 'member' }, push: { enabled: true, status: 'off' } }, '#/'))}</header>`)}
+    ${frame('Notifications on: a solid bell', html`<header class="top">${raw(nav.render({ user: { id: 3, name: 'Priya Demo', role: 'member' }, push: { enabled: true, status: 'on' } }, '#/'))}</header>`)}
     ${frame('Scrolled: the page title takes the place of "Flock"', html`<header class="top is-scrolled">${raw(nav.render({ user: { id: 3, name: 'Priya Demo', role: 'member' } }, '#/', 'My schedule'))}</header>`)}
     ${frame('Counts on the tabs (2 to answer, 7 gaps)', html`<header class="top">${raw(nav.render({ user: { id: 1, name: 'Morgan Fictional', role: 'admin' }, counts: { answer: 2, gaps: 7 } }, '#/schedule'))}</header>`)}
     ${frame('More, open (a sheet from behind the tab bar)', html`<header class="top">${raw(nav.render({ user: { id: 1, name: 'Morgan Fictional', role: 'admin' }, counts: { answer: 1, gaps: 7 } }, '#/schedule')

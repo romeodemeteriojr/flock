@@ -103,8 +103,10 @@ Everyone sees:
   names only) and **I can't make it after all**. The numbers on the tab (and
   on an installed app's icon) count the asks waiting for you.
 - **Files**: under the next time you serve (and in **Details** on each card),
-  **Files** lists that service's files and links. Tap one to open it in your
-  phone's own viewer. **Add a file** takes anything up to 5 MB (a setlist, a
+  **Files** lists that service's files and links. Tap one to open it: PDFs,
+  photos, text, audio and video open full screen in Flock, with an **X** at
+  the top left to close; Word, Excel and PowerPoint files and links open in
+  your phone. **Add a file** takes anything up to 5 MB (a setlist, a
   run sheet, a photo); for something bigger, put it on Google Drive, Dropbox
   or YouTube and use **Add a link**. Only the people serving at that service
   and the schedulers can see them, and they are gone a week after the service.

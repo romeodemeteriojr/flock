@@ -1,5 +1,5 @@
 // The files and links of one service (decision 0011), as a small panel any
-// view can show: the list (each opens in the phone's own viewer), "Add a file"
+// view can show: the list (each opens in Flock's viewer, web/lib/viewer.js, or the phone's), "Add a file"
 // (up to 5 MB), "Add a link" (for anything bigger), and Remove for who added it.
 // A file over 5 MB, or of a type the server does not keep, is never sent: the
 // panel says so and offers the link form.
@@ -11,6 +11,7 @@
 import { html } from './html.js';
 import { iconSlot } from './icons.js';
 import { formatDate } from './dates.js';
+import { viewKind } from './viewer.js';
 
 export const MAX_BYTES = 5 * 1024 * 1024;
 // A web address: http or https, then the site (spelled so no URL sits in this file).
@@ -46,8 +47,11 @@ function row(f, s, serviceId) {
         <button type="button" class="btn btn-sm" data-action="files-remove-no" data-id="${serviceId}" ${busy}>No, keep it</button>
       </div></div></li>`;
   }
+  // PDF, photos, text, audio and video open in Flock's viewer (with a Close
+  // button); other files and links open as before.
+  const view = f.kind === 'file' ? viewKind(f.mime) : null;
   return html`<li class="file-row" data-file="${f.id}">
-    <a class="file-open" href="${f.href}" target="_blank" rel="noopener noreferrer">${iconSlot(f.kind === 'file' ? 'file' : 'link', 'file-icon')}<span class="file-text"><span class="file-name">${f.name}</span><span class="hint file-meta">${meta}</span></span></a>
+    <a class="file-open" href="${f.href}" target="_blank" rel="noopener noreferrer"${view ? html` data-view="${view}" data-name="${f.name}"` : ''}>${iconSlot(f.kind === 'file' ? 'file' : 'link', 'file-icon')}<span class="file-text"><span class="file-name">${f.name}</span><span class="hint file-meta">${meta}</span></span></a>
     ${f.canRemove ? html`<button type="button" class="btn btn-sm btn-quiet" data-action="files-remove" data-id="${f.id}" data-service="${serviceId}" ${busy}>${iconSlot('trash')}<span class="visually-hidden">Remove ${f.name}</span></button>` : ''}
   </li>`;
 }

@@ -25,6 +25,8 @@ const PATHS = {
   lock: '<rect x="4.75" y="10.25" width="14.5" height="10.25" rx="3"/><path d="M8.25 10.25V7.5a3.75 3.75 0 0 1 7.5 0v2.75" fill="none"/><path d="M12 14.4v2"/>',
   warning: '<path d="M10.45 4.4a1.8 1.8 0 0 1 3.1 0l7.2 12.6a1.8 1.8 0 0 1-1.55 2.7H4.8a1.8 1.8 0 0 1-1.55-2.7z"/><path d="M12 9.5v4.25M12 16.75v.01"/>',
   bell: '<path d="M12 3.5v1.25"/><path d="M6.75 10.9a5.25 5.25 0 0 1 10.5 0v2.6c0 1.9.5 3.4 1.5 4.75H5.25c1-1.35 1.5-2.85 1.5-4.75z"/><path d="M10 20.5a2.1 2.1 0 0 0 4 0" fill="none"/>',
+  // The bell crossed out: notifications are off on this device.
+  'bell-off': '<path d="M12 3.5v1.25"/><path d="M6.75 10.9a5.25 5.25 0 0 1 10.5 0v2.6c0 1.9.5 3.4 1.5 4.75H5.25c1-1.35 1.5-2.85 1.5-4.75z" fill="none"/><path d="M10 20.5a2.1 2.1 0 0 0 4 0" fill="none"/><path d="M3.75 3.75l16.5 16.5"/>',
   logout: '<path d="M9.75 19.5h-2.5a2.75 2.75 0 0 1-2.75-2.75v-9.5A2.75 2.75 0 0 1 7.25 4.5h2.5" fill="none"/><path d="M14.5 16.25L18.75 12 14.5 7.75M18.75 12H9.5" fill="none"/>',
   home: '<path d="M4 10.4l8-6.65 8 6.65v8.35a1.75 1.75 0 0 1-1.75 1.75H5.75A1.75 1.75 0 0 1 4 18.75z"/><path d="M9.75 20.5v-5A1.25 1.25 0 0 1 11 14.25h2a1.25 1.25 0 0 1 1.25 1.25v5" fill="none"/>',
   grid: '<rect x="3.5" y="3.5" width="7" height="7" rx="2"/><rect x="13.5" y="3.5" width="7" height="7" rx="2"/><rect x="3.5" y="13.5" width="7" height="7" rx="2"/><rect x="13.5" y="13.5" width="7" height="7" rx="2"/>',

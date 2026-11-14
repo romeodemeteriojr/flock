@@ -8,7 +8,9 @@ Status: proposed (built; accept when merged)
   Anything over 5 MB must be a link (for example a shared Drive or YouTube link).
 - Only the **people serving at that service** (asked or confirmed) and
   **schedulers** can see them. Someone who said no cannot.
-- Files open in the **phone's own viewer**: Flock has no viewer of its own.
+- PDF, photos, text, audio and video open in **Flock's viewer**: full screen,
+  with a Close (X) button, so the installed app never strands you on a file.
+  Everything else opens in the **phone's own viewer**.
 - Files and links **expire 7 days after the service date**. From the 8th day
   nobody can open them or add new ones. If the service moves, the expiry moves too.
 - Nothing deletes them on a timer. A scheduler runs the clean-up: **Clear
@@ -56,6 +58,15 @@ SQLite file, with no packages and no background jobs.
   HTML, SVG, XML and scripts are always sent as `application/octet-stream`,
   so an uploaded file can never run as a page on Flock's address. Non-PDF
   files are sandboxed (PDF viewers refuse a sandbox; a PDF cannot script the site).
+- **The viewer** (`web/lib/viewer.js`). Opened in the installed app, a file
+  link used to replace Flock's own window with no browser bar and so no way
+  to close it (only a back swipe). Now a file the phone can show opens in a
+  full-screen layer with Close, Download, Escape and Back. Photos, audio and
+  video use their own tags; PDF and plain text sit in a frame, so those two
+  (and only those) may be framed by Flock itself (`frame-ancestors 'self'`,
+  `X-Frame-Options: SAMEORIGIN`); every other file and response still refuses
+  any frame. Office files download as before; the phone shows them with its
+  own Done button.
 - **Links** must be `http(s)` without a user name or password; `javascript:`
   and `data:` are refused.
 - A file nobody can see answers 404, the same as one that does not exist.

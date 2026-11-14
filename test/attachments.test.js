@@ -289,3 +289,18 @@ test('downloads: page-like types are never sent as themselves; others are sandbo
   const docx = downloadHeaders({ ...base, name: 'Plan ü "1".docx', mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' }, 1);
   assert.match(docx['Content-Disposition'], /^attachment; filename="Plan _ _1_.docx"; filename\*=UTF-8''Plan%20%C3%BC%20%221%22.docx$/);
 });
+
+test('downloads: only PDF and text may be framed, and only by Flock (its viewer)', () => {
+  const base = { name: 'x', size: 1 };
+  for (const mime of ['application/pdf', 'text/plain']) {
+    const h = downloadHeaders({ ...base, mime }, 1);
+    assert.match(h['Content-Security-Policy'], /frame-ancestors 'self'/, mime);
+    assert.equal(h['X-Frame-Options'], 'SAMEORIGIN', mime);
+  }
+  assert.match(downloadHeaders({ ...base, mime: 'text/plain' }, 1)['Content-Security-Policy'], /^sandbox;/);
+  for (const mime of ['image/jpeg', 'video/mp4', 'text/html', 'application/vnd.ms-excel', undefined]) {
+    const h = downloadHeaders({ ...base, mime }, 1);
+    assert.match(h['Content-Security-Policy'], /frame-ancestors 'none'/, String(mime));
+    assert.equal(h['X-Frame-Options'], 'DENY', String(mime));
+  }
+});

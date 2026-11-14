@@ -295,10 +295,23 @@ test('top bar: the bell shows only when the church turned notifications on, and 
   const user = { id: 2, name: 'Mary Member', role: 'member' };
   assert.doesNotMatch(nav.render({ user }, '#/'), /#\/notifications/);
   assert.doesNotMatch(nav.render({ user, push: { enabled: false } }, '#/'), /#\/notifications/);
-  const off = nav.render({ user, push: { enabled: true, status: 'off' } }, '#/');
-  assert.match(off, /href="#\/notifications" aria-label="Notifications"/);
+  // Off (or blocked): a plain button with a crossed-out bell. On: a solid bell. No dot either way.
+  for (const status of ['off', 'blocked', 'unsupported']) {
+    const off = nav.render({ user, push: { enabled: true, status } }, '#/');
+    assert.match(off, /<a class="icon-btn is-off" href="#\/notifications" aria-label="Notifications: off for this device"/, status);
+    assert.match(off, /data-icon="bell-off"/, status);
+  }
   const on = nav.render({ user, push: { enabled: true, status: 'on' } }, '#/');
-  assert.match(on, /aria-label="Notifications \(on for this device\)"/);
+  assert.match(on, /<a class="icon-btn is-on" href="#\/notifications" aria-label="Notifications: on for this device"/);
+  assert.match(on, /data-icon="bell"/);
+  assert.doesNotMatch(on, /bell-off/);
+});
+
+test('the bell has no dot: on and off differ by the icon and the fill', async () => {
+  const css = (await import('node:fs')).readFileSync(new URL('../web/style.css', import.meta.url), 'utf8');
+  assert.doesNotMatch(css, /\.icon-btn\.is-on::after/);
+  const { icon } = await import('../web/lib/icons.js');
+  assert.match(icon('bell-off'), /M3\.75 3\.75l16\.5 16\.5/);
 });
 
 test('logging out stops this device and tells the server which one', async () => {

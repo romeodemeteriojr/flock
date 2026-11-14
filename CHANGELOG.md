@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+No database changes.
+
+### Easier to close a file, clearer bell
+
+- **Files open with a Close button.** PDFs, photos, text, audio and video now open in Flock's own viewer, full screen, with a big **X** at the top left (and a download button). Back and Escape close it too. Before, a file filled the installed app with no way out but swiping back. Word, Excel and PowerPoint files, and links, still open in the phone.
+- **The bell says on or off at a glance.** Notifications on: a solid, coloured bell. Off: a plain bell with a line through it. The small dot that looked like "something unread" is gone.
+
 ## 0.13.0
 
 No database changes.

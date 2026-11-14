@@ -1,7 +1,7 @@
 // Files and links on a service (decision 0011): thin HTTP adapters over the
 // attachments service. A file is uploaded as the raw request body (its name in
 // ?name=, its type worked out from the name) and opened at /api/attachments/:id, which
-// the phone shows in its own viewer.
+// Flock's viewer shows (or the phone downloads, for types it cannot show).
 import { v, parse } from '../validate.js';
 import { MAX_FILE_BYTES } from '../services/attachments-service.js';
 
@@ -26,11 +26,15 @@ const INLINE = new Set([
   'video/mp4', 'video/quicktime',
 ]);
 const ACTIVE = /html|xml|svg|javascript|ecmascript|x-shockwave/;
+// Shown in a frame inside Flock's own viewer (web/lib/viewer.js), so Flock,
+// and only Flock, may frame them.
+const FRAMED = new Set(['application/pdf', 'text/plain']);
 
 export function downloadHeaders(a, length) {
   const inline = INLINE.has(a.mime);
   const type = !a.mime || ACTIVE.test(a.mime) ? 'application/octet-stream' : a.mime;
   const ascii = a.name.replace(/[^\x20-\x7e]|["\\]/g, '_');
+  const ancestors = FRAMED.has(a.mime) ? "frame-ancestors 'self'" : "frame-ancestors 'none'";
   return {
     'Content-Type': type === 'text/plain' ? 'text/plain; charset=utf-8' : type,
     'Content-Length': length,
@@ -38,8 +42,9 @@ export function downloadHeaders(a, length) {
     'Cache-Control': 'private, no-store',
     // A PDF viewer will not run in a sandbox; a PDF cannot script this site anyway.
     'Content-Security-Policy': a.mime === 'application/pdf'
-      ? "frame-ancestors 'none'"
-      : "sandbox; default-src 'none'; img-src 'self'; media-src 'self'; style-src 'unsafe-inline'; frame-ancestors 'none'",
+      ? ancestors
+      : `sandbox; default-src 'none'; img-src 'self'; media-src 'self'; style-src 'unsafe-inline'; ${ancestors}`,
+    'X-Frame-Options': FRAMED.has(a.mime) ? 'SAMEORIGIN' : 'DENY',
   };
 }
 
