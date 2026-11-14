@@ -159,14 +159,16 @@ Use the laptop. Keep the terminal window open.
 3. Clear the name and click the **Add person** button inside the form. You should
    see **Please type a name.**
 4. Type `Pat Example` again (and the email) and click **Add person** (try double-clicking it).
-5. You should see **Invite for Pat Example**, a message containing Pat's
+5. The add sheet should turn into Pat's sheet, showing **Invite for Pat Example**, a message containing Pat's
    email and a one-time link, and **Copy message**. Click it and save the
    message privately. Only one Pat Example should have been added; their row
    says **Not joined yet**. A localhost warning means this link only works on
    the laptop: use the laptop's network address from A3, tap Pat's row and
-   choose **Copy new invite** before sending the message to a phone.
-6. Click **Done**. The invite box should disappear. Making another invite
-   cancels the previous link.
+   choose **Copy new invite** (it first warns that the old link stops working)
+   before sending the message to a phone.
+6. Click **Done**. Pat's sheet should close and the invite is gone. Scroll to
+   the bottom of the list, open someone marked **Not joined yet** and choose
+   **Copy new invite**: the invite shows in their sheet, right where you are.
 7. Add `Quinn Example` (`quinn.example@example.com`) the same way and save
    their invite message privately.
 8. Try adding a third person named `Someone Else` but with the email

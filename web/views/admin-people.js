@@ -72,11 +72,13 @@ function roleConfirmPanel(p, target) {
     </div></div>`;
 }
 
-// Share (the phone's share sheet) comes first where there is one; Copy is always there.
-function inviteBox(invite, sharing = false) {
+// The one-time invite, shown in that person's sheet (after adding them, Copy
+// new invite or Reset login). Share (the phone's share sheet) comes first
+// where there is one; Copy is always there.
+function invitePanel(invite, sharing = false) {
   return html`
-    <section class="card secret-box" id="invite-box" role="alert" aria-labelledby="invite-head">
-      <h2 id="invite-head">${iconSlot('send', 'icon-sm')} Invite for ${invite.name}</h2>
+    <section class="confirm secret-box" id="invite-box" role="alert" aria-labelledby="invite-head">
+      <h3 id="invite-head">${iconSlot('send', 'icon-sm')} Invite for ${invite.name}</h3>
       <p class="lead" data-invite-text>${inviteMessage(invite)}</p>
       ${invite.localOnly ? html`<p class="notice">This link uses localhost, so it only works on this computer. Set FLOCK_PUBLIC_URL, or open Flock using this computer's network address, then copy a new invite.</p>` : ''}
       <div class="btn-row">
@@ -88,9 +90,17 @@ function inviteBox(invite, sharing = false) {
 }
 
 function confirmPanel(p, kind) {
+  if (kind === 'invite') {
+    return html`<div class="confirm" role="alertdialog" aria-label="Confirm">
+      <p>Make a new invite for <strong>${p.name}</strong>? Any invite link sent to them before stops working right away. Only the new link will work.</p>
+      <div class="btn-row">
+        <button type="button" class="btn btn-primary" data-action="invite" data-id="${p.id}">Yes, make a new invite</button>
+        <button type="button" class="btn" data-action="cancel">No, go back</button>
+      </div></div>`;
+  }
   if (kind === 'reset') {
     return html`<div class="confirm" role="alertdialog" aria-label="Confirm">
-      <p>Reset the login of <strong>${p.name}</strong>? Their password and any linked sign-in (such as Google) stop working right away, they are logged out everywhere, and you get a new invite link for them.</p>
+      <p>Reset the login of <strong>${p.name}</strong>? Their password and any linked sign-in (such as Google) stop working right away, they are logged out everywhere, and you get a new invite link for them.${p.joined ? '' : ' Any invite link sent to them before stops working.'}</p>
       <div class="btn-row">
         <button type="button" class="btn btn-primary" data-action="reset-yes" data-id="${p.id}">Yes, reset login</button>
         <button type="button" class="btn" data-action="cancel">No, go back</button>
@@ -185,14 +195,16 @@ const row = ({ icon, label, sub = '', end = '', action, id, danger = false }) =>
     ${iconSlot(icon, 'menu-icon')}<span class="menu-text">${label}${sub ? html`<span class="menu-sub">${sub}</span>` : ''}</span>${danger ? '' : html`<span class="menu-end">${end}${iconSlot('chevron', 'icon-sm')}</span>`}</button></li>`;
 
 // One person's sheet: who they are, then everything you can do for them. A
-// confirm step, the name form or the positions list takes the rows' place.
+// confirm step, the name form, the positions list or a new invite takes the
+// rows' place.
 function personSheet(p, m, { pane = false } = {}) {
   const panel = m.panel && m.panel.id === p.id ? m.panel : null;
   let body;
   if (panel) {
-    if (panel.kind === 'reset' || panel.kind === 'active') body = confirmPanel(p, panel.kind);
+    if (panel.kind === 'reset' || panel.kind === 'active' || panel.kind === 'invite-ask') body = confirmPanel(p, panel.kind === 'invite-ask' ? 'invite' : panel.kind);
     else if (panel.kind === 'role') body = roleConfirmPanel(p, panel.role);
     else if (panel.kind === 'edit') body = editPanel(p);
+    else if (panel.kind === 'invite') body = invitePanel(m.invite, m.canShare);
     else body = checklistPanel(p, m.teams, panel.checked);
     body = html`<div class="sheet-body person-panel">${body}</div>`;
   } else {
@@ -202,7 +214,7 @@ function personSheet(p, m, { pane = false } = {}) {
       ${row({ icon: 'puzzle', label: 'Positions', end: can.length ? can.join(', ') : 'None yet', action: 'positions', id: p.id })}
       ${row({ icon: 'edit', label: 'Change name', action: 'edit', id: p.id })}
       ${p.active && !isMe ? row({ icon: 'shield', label: nextRole(p) === 'admin' ? 'Make a scheduler' : 'Make a volunteer', sub: nextRole(p) === 'admin' ? 'Can change the schedule and people' : 'Sees only their own schedule', action: 'role-ask', id: p.id }) : ''}
-      ${p.email && !p.joined && p.active ? row({ icon: 'mail', label: 'Copy new invite', action: 'invite', id: p.id }) : ''}
+      ${p.email && !p.joined && p.active ? row({ icon: 'mail', label: 'Copy new invite', sub: 'The old link stops working', action: 'invite-ask', id: p.id }) : ''}
       ${p.email ? row({ icon: 'key', label: 'Reset login', action: 'reset-ask', id: p.id }) : ''}
       ${isMe ? '' : html`<li class="menu-sep" role="separator"></li>
       ${p.active ? row({ icon: 'user-off', label: 'Deactivate', action: 'active-ask', id: p.id, danger: true }) : row({ icon: 'user-check', label: 'Reactivate', action: 'active-ask', id: p.id })}`}
@@ -267,7 +279,6 @@ export function renderScreen(m) {
   const open = m.selected !== null && m.selected !== undefined ? m.people.find((p) => p.id === m.selected) : null;
   return String(html`
     ${toasts([[m.notice, 'ok'], [m.error, 'error']])}
-    ${m.invite ? inviteBox(m.invite, m.canShare) : ''}
     <div class="people-tools">
       <div class="field search-field">
         <label for="people-search" class="visually-hidden">Search by name or email</label>
@@ -299,22 +310,20 @@ export function createScreen({ api, root, ctx = {}, win = globalThis }) {
   let busy = false;
 
   const notices = createNoticeClock();
-  let invitePainted = null;
   const paint = () => {
+    // An invite panel only lives in its person's sheet: closing it drops the link.
+    if (m.panel?.kind !== 'invite') m.invite = null;
     personSheet.before();
     addSheetFocus.before();
     m.notice = notices.keep(m.notice);
     root.innerHTML = renderScreen(m);
     notices.resume(root);
     m.entered = m.selected !== null || m.adding;
-    personSheet.update();
-    addSheetFocus.update();
+    // The sheet that closes goes first, so it can hand its Back step to the
+    // one that opens (adding a person opens their sheet with the invite).
+    if (m.adding) { personSheet.update(); addSheetFocus.update(); } else { addSheetFocus.update(); personSheet.update(); }
     const open = root.querySelector?.('[data-person-panel], [data-add-panel]');
     if (open) swipeToDismiss(open, { win, onDismiss: () => (m.adding ? actions['add-cancel']() : actions['person-close']()) });
-    // A new invite box opens at the top of the page: bring it into view (after
-    // the closing sheet has handed focus back, which scrolls too).
-    if (m.invite && m.invite !== invitePainted) root.querySelector?.('#invite-box')?.scrollIntoView?.({ block: 'start', behavior: 'smooth' });
-    invitePainted = m.invite;
   };
   const personSheet = createSheet({
     root, isOpen: () => m.selected !== null && !m.adding, close: () => actions['person-close'](), modal: () => !m.wide,
@@ -368,7 +377,7 @@ export function createScreen({ api, root, ctx = {}, win = globalThis }) {
     'add-open': () => { m.adding = true; m.selected = null; m.panel = null; m.entered = false; m.error = ''; m.notice = ''; addSheetFocus.opened('add'); paint(); },
     'add-cancel': () => { if (!m.adding) return; m.adding = false; m.newName = ''; paint(); },
     cancel: () => { m.panel = null; paint(); },
-    done: () => { m.invite = null; paint(); },
+    done: () => { if (m.panel?.kind === 'invite') actions['person-close'](); },
     select: (id) => {
       if (!find(id)) return;
       m.selected = id; m.panel = null; m.adding = false; m.entered = false;
@@ -383,6 +392,7 @@ export function createScreen({ api, root, ctx = {}, win = globalThis }) {
     },
     edit: (id) => openPanel({ kind: 'edit', id }),
     'reset-ask': (id) => openPanel({ kind: 'reset', id }),
+    'invite-ask': (id) => openPanel({ kind: 'invite-ask', id }),
     'active-ask': (id) => openPanel({ kind: 'active', id }),
     positions: (id) => {
       const p = find(id);
@@ -412,11 +422,11 @@ export function createScreen({ api, root, ctx = {}, win = globalThis }) {
     },
     invite: (id) => attempt(async () => {
       const p = find(id);
+      if (m.panel?.kind !== 'invite-ask' || m.panel.id !== Number(id)) return;
       if (!p || p.joined || !p.active || !p.email) return;
       const r = await api.post(`/api/people/${p.id}/invite`, {});
       m.invite = { name: r.person.name, email: r.person.email, ...r.invite };
-      m.panel = null;
-      m.selected = null; // the sheet makes way for the invite box
+      m.panel = { kind: 'invite', id: p.id };
     }),
     'reset-yes': (id) => attempt(async () => {
       const p = find(id);
@@ -424,8 +434,7 @@ export function createScreen({ api, root, ctx = {}, win = globalThis }) {
       const r = await api.post(`/api/people/${p.id}/reset-login`, {});
       m.invite = { name: r.person.name, email: r.person.email, ...r.invite };
       m.people = m.people.map((person) => person.id === p.id ? r.person : person);
-      m.panel = null;
-      m.selected = null; // the sheet makes way for the invite box
+      m.panel = { kind: 'invite', id: p.id };
     }),
     'role-ask': (id) => {
       const p = find(id);
@@ -474,11 +483,20 @@ export function createScreen({ api, root, ctx = {}, win = globalThis }) {
       if (email) body.email = email;
       if (form.elements.scheduler.checked) body.role = 'admin';
       const r = await api.post('/api/people', body);
-      m.invite = r.invite ? { name: r.person.name, email: r.person.email, ...r.invite } : null;
-      if (!r.invite) m.notice = `${r.person.name} is added. Without an email they cannot log in, but you can schedule them.`;
       m.adding = false;
       m.newName = '';
       await reload();
+      if (r.invite) {
+        // The add sheet turns into the new person's sheet, showing their invite.
+        m.invite = { name: r.person.name, email: r.person.email, ...r.invite };
+        m.selected = r.person.id;
+        m.panel = { kind: 'invite', id: r.person.id };
+        addSheetFocus.opened(null); // focus goes to the new sheet, not back to Add
+        addSheetFocus.handOff();
+        personSheet.opened(r.person.id);
+      } else {
+        m.notice = `${r.person.name} is added. Without an email they cannot log in, but you can schedule them.`;
+      }
     }),
     'edit-name': (form) => attempt(async () => {
       const id = Number(form.dataset.id);
