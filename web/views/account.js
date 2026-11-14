@@ -65,7 +65,8 @@ export async function logout(ctx, btn) {
 
 /**
  * Wires the layer once (the sheet inside is painted again on each open).
- * A link row closes the sheet and the browser follows the link.
+ * A link row closes the sheet, then goes to its page (closing first takes the
+ * sheet's Back step off, which would undo a link the browser followed itself).
  */
 export function mount(layer, ctx) {
   layer.addEventListener('click', (e) => {
@@ -75,7 +76,7 @@ export function mount(layer, ctx) {
     if (action === 'account-close') ctx.closeAccount();
     else if (action === 'logout') return logout(ctx, el);
     else if (action === 'install') { ctx.closeAccount({ focus: false }); return ctx.install?.(); }
-    else if (el.getAttribute?.('href')) ctx.closeAccount({ focus: false });
+    else if (el.getAttribute?.('href')) { e.preventDefault?.(); ctx.closeAccount({ focus: false, to: el.getAttribute('href') }); }
     return undefined;
   });
 }

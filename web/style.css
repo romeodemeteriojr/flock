@@ -327,6 +327,9 @@ h2:focus-visible { outline: 3px solid var(--focus); }
 .nav-user { margin-left: auto; display: flex; align-items: center; gap: 0; min-width: 0; }
 .nav-user .icon-btn { background: transparent; }
 .nav-user .icon-btn:hover { background: var(--surface-3); }
+/* The bell: a hint, not a button. Same size and quiet colour as an icon
+   button, but nothing to press. Off adds the slash (the bell-off icon). */
+.top-hint { display: inline-flex; align-items: center; justify-content: center; flex: none; width: var(--control-size); height: var(--control-size); color: var(--muted); }
 /* The avatar is the account button: a 48px target around a 32px avatar. */
 .avatar-btn {
   display: inline-flex; align-items: center; justify-content: center; flex: none;
@@ -620,9 +623,6 @@ input[type="checkbox"], input[type="radio"] { width: 1.4rem; height: 1.4rem; acc
 .icon-btn-danger { color: var(--danger); background: var(--danger-bg); }
 .icon-btn-danger:hover { background: color-mix(in srgb, var(--danger-bg) 88%, var(--danger)); }
 .icon-btn:disabled { opacity: 0.55; cursor: wait; transform: none; }
-/* The bell looks the same on and off: a quiet outline. Off adds the slash
-   (the bell-off icon). Being on is the normal state, so it asks for nothing. */
-.icon-btn.is-on, .icon-btn.is-off { color: var(--muted); }
 
 /* ---------- segmented control: a track with one raised choice ---------- */
 .segmented {

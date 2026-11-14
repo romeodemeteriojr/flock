@@ -64,6 +64,7 @@ export function createSheet({
   const back = backStep(win, root, isOpen, close);
   let wasOpen = false;
   let keep = null; // the control inside the panel that had focus before a repaint
+  let leaveTo = null; // a link tapped in the sheet: where to go once it closes
 
   // Call just before root.innerHTML is replaced.
   function before() {
@@ -81,7 +82,8 @@ export function createSheet({
   function update() {
     const open = !!isOpen();
     if (open && !wasOpen) back.opened();
-    else if (!open && wasOpen) back.closed();
+    else if (!open && wasOpen) back.closed(leaveTo);
+    leaveTo = null;
     if (open && !wasOpen) {
       const h = pick(root, `${PANEL} h2`);
       if (canFocus(h)) h.focus();
@@ -123,6 +125,8 @@ export function createSheet({
 
   return {
     opened(id) { openerId = id; },
+    /** A link in the sheet was tapped: once the sheet closes, go there (call before the paint that closes it). */
+    goTo(href) { leaveTo = href; },
     before,
     update,
     get openerId() { return openerId; },
@@ -133,10 +137,15 @@ export function createSheet({
  * Back closes an open sheet. Opening adds a history step at the same address;
  * Back takes it off again and we close the sheet. Closing the sheet any other
  * way takes our step off, so the next Back leaves the page as usual.
+ * closed(to): closed by a link to another page. Our step becomes that page
+ * (location.replace), so Back from there returns to the page under the sheet.
+ * Stepping back and then following the link would lose the link: the step
+ * back lands after it and undoes it.
  */
 export function backStep(win, root, isOpen, close) {
   const h = win?.history;
-  if (typeof h?.pushState !== 'function' || typeof win.addEventListener !== 'function') return { opened() {}, closed() {} };
+  const follow = (to) => { if (to && win?.location) win.location.hash = to; };
+  if (typeof h?.pushState !== 'function' || typeof win.addEventListener !== 'function') return { opened() {}, closed: follow };
   const mark = `sheet-${Math.random().toString(36).slice(2)}`;
   let pushed = false; // our step is in the history
   let skip = false; // the popstate after our own history.back()
@@ -154,11 +163,13 @@ export function backStep(win, root, isOpen, close) {
       if (pushed) return;
       try { h.pushState({ ...(h.state ?? {}), flockSheet: mark }, '', win.location?.href); pushed = true; } catch { /* no history: Back leaves the page */ }
     },
-    closed() {
-      if (!pushed) return;
+    closed(to = null) {
+      if (!pushed) return follow(to);
       pushed = false;
-      // Only step back if we are still on our own step (not after a link to another page).
-      if (h.state?.flockSheet === mark) { skip = true; h.back(); }
+      // Only touch the history if we are still on our own step (not after a link to another page).
+      if (h.state?.flockSheet !== mark) return follow(to);
+      if (to) win.location.replace(to);
+      else { skip = true; h.back(); }
     },
   };
 }

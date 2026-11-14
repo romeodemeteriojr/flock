@@ -10,8 +10,9 @@ Status: proposed (being built; accept when merged)
   no offline caching).
 - **Off until the church sets two keys** (`FLOCK_VAPID_PUBLIC_KEY`,
   `FLOCK_VAPID_PRIVATE_KEY`, made by `node bin/flock.js push-keys`). Then each
-  person turns it on **per device**, from a card on My schedule or the bell
-  button in the top bar.
+  person turns it on **per device**, from a card on My schedule or
+  **Notifications** in the account sheet. The bell in the top bar shows whether
+  they are on here; until 0.14.3 it was a button that opened the page too.
 - **iPhone:** push only works from the Home Screen web app, iOS 16.4 or newer.
   In Safari, Flock shows the steps (Share, Add to Home Screen, open, log in,
   Turn on). Android and desktop browsers turn it on in place.
