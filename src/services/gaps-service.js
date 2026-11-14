@@ -172,10 +172,11 @@ export function createGapsService(deps) {
      * reason. Ranked by not serving there first, then fewest services (not
      * slots) in the last 8 weeks plus the next 4 weeks, then longest since last
      * served (never first), then name.
-     * away: the people the same rules would list but for a blockout covering
-     * the date, so the scheduler sees who is trained but off that day. Each
-     * has the blockout's dates (startDate, endDate, reason) and a reason line,
-     * sorted by name. Assigning one of them still asks first ("blocked").
+     * unavailable: people who could not be asked, so the scheduler sees why
+     * they are missing. First whoever said no to this slot (why: 'declined',
+     * shown whatever their training), then, by name, the people the rules
+     * above would list but for a day off covering the date (why: 'away', with
+     * the blockout's startDate, endDate and reason). Each has reason lines.
      */
     async suggest({ slotId, includeUnqualified = false } = {}) {
       if (!isInt(slotId)) throw new ValidationError('Slot id must be a whole number.');
@@ -220,21 +221,27 @@ export function createGapsService(deps) {
         }
 
         const candidates = [];
+        const declined = [];
         const away = [];
+        const notSetUp = `Not set up for ${slot.positionName}`;
         for (const p of await d.people.list()) {
-          if (!p.active || leaveOut.has(p.id)) continue;
+          if (!p.active) continue;
           const qualified = p.positionIds.includes(slot.positionId);
-          if (!qualified && !includeUnqualified) continue;
           const off = blockouts.get(p.id);
+          if (slot.status === 'declined' && slot.personId === p.id) {
+            declined.push({
+              personId: p.id, name: p.name, qualified, why: 'declined',
+              reasons: ['Said no to this', ...(off ? [awayReason(off)] : []), ...(qualified ? [] : [notSetUp])],
+            });
+            continue;
+          }
+          if (leaveOut.has(p.id)) continue;
+          if (!qualified && !includeUnqualified) continue;
           if (off) {
             away.push({
-              personId: p.id,
-              name: p.name,
-              qualified,
-              startDate: off.startDate,
-              endDate: off.endDate,
-              reason: off.reason ?? '',
-              reasons: [awayReason(off), ...(qualified ? [] : [`Not set up for ${slot.positionName}`])],
+              personId: p.id, name: p.name, qualified, why: 'away',
+              startDate: off.startDate, endDate: off.endDate, reason: off.reason ?? '',
+              reasons: [awayReason(off), ...(qualified ? [] : [notSetUp])],
             });
             continue;
           }
@@ -243,7 +250,7 @@ export function createGapsService(deps) {
           const alsoOn = (onService.get(p.id) ?? []).map((s) => s.positionName);
           const reasons = [];
           if (alsoOn.length) reasons.push(`Already serving as ${joinList(alsoOn)} at this service`);
-          if (!qualified) reasons.push(`Not set up for ${slot.positionName}`);
+          if (!qualified) reasons.push(notSetUp);
           // "Has never served" says it all; "not in 8 weeks" as well would repeat it.
           if (h.lastServed || h.past8) reasons.push(h.past8 === 0 ? 'Has not served in 8 weeks' : `Served ${plural(h.past8, 'time')} in the last 8 weeks`);
           reasons.push(lastServedReason(h.lastServed, now));
@@ -266,7 +273,7 @@ export function createGapsService(deps) {
           || byName(a.name, b.name)
           || a.personId - b.personId);
         away.sort((a, b) => byName(a.name, b.name) || a.personId - b.personId);
-        return { candidates: candidates.map(({ _load, ...c }) => c), away };
+        return { candidates: candidates.map(({ _load, ...c }) => c), unavailable: [...declined, ...away] };
       });
     },
 

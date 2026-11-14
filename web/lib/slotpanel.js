@@ -76,7 +76,7 @@ const errText = (err) => String(err?.message || 'Something went wrong. Please tr
 // ---------- the panel ----------
 
 export function createSlotPanel({ api, paint, changed = () => {} }) {
-  let p = null; // { slot, loading, candidates, away, showAll, conflict, removeAsk, error, busy, seq }
+  let p = null; // { slot, loading, candidates, unavailable, showAll, conflict, removeAsk, error, busy, seq }
 
   async function loadSuggestions() {
     if (!p) return;
@@ -89,11 +89,11 @@ export function createSlotPanel({ api, paint, changed = () => {} }) {
       const r = await api.get(q);
       if (p !== mine || seq !== mine.seq) return;
       mine.candidates = Array.isArray(r?.candidates) ? r.candidates : [];
-      mine.away = Array.isArray(r?.away) ? r.away : [];
+      mine.unavailable = Array.isArray(r?.unavailable) ? r.unavailable : [];
     } catch (err) {
       if (p !== mine || seq !== mine.seq) return;
       mine.candidates = [];
-      mine.away = [];
+      mine.unavailable = [];
       mine.error = errText(err);
     }
     mine.loading = false;
@@ -101,14 +101,14 @@ export function createSlotPanel({ api, paint, changed = () => {} }) {
   }
 
   function open(slot) {
-    p = { slot, loading: true, candidates: [], away: [], showAll: false, conflict: null, removeAsk: false, swapAsk: null, error: '', busy: false, seq: 0 };
+    p = { slot, loading: true, candidates: [], unavailable: [], showAll: false, conflict: null, removeAsk: false, swapAsk: null, error: '', busy: false, seq: 0 };
     paint();
     return loadSuggestions();
   }
 
   function close() { p = null; paint(); }
 
-  const nameOf = (personId) => [...(p?.candidates ?? []), ...(p?.away ?? [])].find((c) => c.personId === personId)?.name ?? '';
+  const nameOf = (personId) => p?.candidates.find((c) => c.personId === personId)?.name ?? '';
 
   async function assign(personId, force) {
     if (!p || p.busy) return;
@@ -233,16 +233,18 @@ export function createSlotPanel({ api, paint, changed = () => {} }) {
             </div></div>` : ''}`
       : html`<div class="slot-current is-empty"><p class="sheet-who"><span class="chip chip-plain chip-open">${iconSlot('plus', 'chip-icon')}Nobody yet</span></p></div>`;
     let list;
-    let awayList = '';
-    if (!p.loading && p.away.length) {
-      // Trained (or, with Everyone, not) but off that day: shown so the scheduler
-      // knows why they are missing. Assign still asks first (the "blocked" conflict).
-      awayList = html`<h3 class="team-title" id="slot-away-title">Away on this date (${p.away.length})</h3>
-      <ul class="list candidates" data-away aria-labelledby="slot-away-title">${p.away.map((c) => html`<li class="candidate" data-candidate="${c.personId}">
+    let unavailableList = '';
+    if (!p.loading && p.unavailable.length) {
+      // Who said no to this, and who would fit but is away that day: shown so the
+      // scheduler knows why they are missing. They can't be assigned from here.
+      unavailableList = html`<h3 class="team-title" id="slot-unavailable-title">Not available (${p.unavailable.length})</h3>
+      <ul class="list candidates" data-unavailable aria-labelledby="slot-unavailable-title">${p.unavailable.map((c) => html`<li class="candidate" data-candidate="${c.personId}" data-why="${c.why}">
         <div class="candidate-main">${avatar(c.name)}<div class="candidate-text">
-        <p class="candidate-name"><strong>${c.name}</strong> <span class="chip chip-plain chip-away">${iconSlot('calendar', 'chip-icon')}Away</span>${c.qualified === false ? html` <span class="chip chip-plain">Not trained</span>` : ''}</p>
+        <p class="candidate-name"><strong>${c.name}</strong> ${c.why === 'declined'
+    ? html`<span class="chip chip-bad">${iconSlot('x', 'chip-icon')}Said no</span>`
+    : html`<span class="chip chip-away">${iconSlot('calendar', 'chip-icon')}Away</span>`}${c.qualified === false ? html` <span class="chip chip-plain">Not trained</span>` : ''}</p>
         <ul class="hint reasons">${(c.reasons ?? []).map((r) => html`<li>${r}</li>`)}</ul></div></div>
-        <div class="btn-row candidate-actions"><button type="button" class="btn" data-action="slot-assign" data-id="${c.personId}" aria-label="Assign ${c.name} anyway">Assign</button></div>
+        <div class="btn-row candidate-actions"><button type="button" class="btn" disabled aria-label="Can't assign ${c.name}: ${c.why === 'declined' ? 'said no' : 'away'}">Assign</button></div>
       </li>`)}</ul>`;
     }
     if (p.loading) list = html`<p class="hint">Looking for people…</p>${skeleton('Loading…', 'list', 3)}`;
@@ -282,7 +284,7 @@ export function createSlotPanel({ api, paint, changed = () => {} }) {
         ${seg(p.showAll, 'Everyone', 'Show people not trained for this')}
       </div>
       ${list}
-      ${awayList}
+      ${unavailableList}
       </div>
       <div class="sheet-foot"><button type="button" class="btn btn-block" data-action="slot-close">Close</button></div>
     </section>`;
