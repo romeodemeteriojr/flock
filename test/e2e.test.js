@@ -70,7 +70,7 @@ async function story(app, { adminEmail, adminToken }) {
   const raeJoined = note('rae joined', await phone.welcome(raeToken, 'rae-own-password-1'));
   assert.equal(raeJoined.status, 200);
   assert.equal(raeJoined.json.person.hasPassword, true);
-  assert.deepEqual(note('rae empty schedule', await phone.get('/api/me/schedule')).json, { nextServing: null, items: [], rosters: {} });
+  assert.deepEqual(note('rae empty schedule', await phone.get('/api/me/schedule')).json, { nextServing: null, items: [], rosters: {}, recent: [] });
 
   // The scheduler qualifies and schedules them on a new service.
   assert.deepEqual(note('qualify', await admin.put(`/api/people/${rae.id}/positions`, { positionIds: [vocals.id] })).json, { positionIds: [vocals.id] });

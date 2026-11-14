@@ -175,6 +175,29 @@ function card(item, view) {
   </li>`;
 }
 
+// A service of the past week that still has files (kept a week after it).
+// Nothing to answer any more: just when, what, and the files.
+function recentCard(item, view) {
+  return html`<li class="card serve-card is-compact is-past" data-recent="${item.serviceId}">
+    <div class="serve-head">
+      ${tile(item.date)}
+      <div class="serve-text">
+        <h3 class="serve-title">${item.positions.join(', ')}<span class="visually-hidden">, ${formatDate(item.date)}</span></h3>
+        <p class="serve-meta">${item.serviceTitle ? html`${item.serviceTitle} · ` : ''}<span class="num">${formatTime(item.time)}</span></p>
+      </div>
+    </div>
+    ${filesBlock(item, view)}
+  </li>`;
+}
+
+function lastWeek(view) {
+  const recent = view.data?.recent ?? [];
+  if (!recent.length) return '';
+  return html`<h2 class="section-title">Last week</h2>
+    <p class="hint section-hint">Files stay for a week after the service.</p>
+    <ul class="cards">${recent.map((i) => recentCard(i, view))}</ul>`;
+}
+
 // The invitation to turn on notifications (decision 0008), until they are on or dismissed.
 function pushInvite(state, view) {
   if (!view.showPush) return '';
@@ -243,6 +266,7 @@ export function render(state, view = { loading: true }) {
     ${pushInvite(state, view)}
     ${installCard(view)}
     ${body}
+    ${view.data && !view.error && !view.loading ? lastWeek(view) : ''}
   `);
 }
 
@@ -318,7 +342,7 @@ export function mount(main, ctx) {
     if (action === 'files') {
       if (!view.openFiles.delete(id)) {
         view.openFiles.add(id);
-        const item = view.data?.items?.find((i) => i.slotId === id);
+        const item = [...(view.data?.items ?? []), ...(view.data?.recent ?? [])].find((i) => i.slotId === id);
         if (item?.serviceId) view.files.open(item.serviceId);
       }
       paint();

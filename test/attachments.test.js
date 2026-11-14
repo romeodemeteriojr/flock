@@ -6,7 +6,9 @@ import { startTestApp } from './helpers/app.js';
 import { addPerson } from './helpers/seed.js';
 import { createClient } from './helpers/client.js';
 import { run } from '../src/cli/commands.js';
-import { MAX_FILE_BYTES, cleanName, cleanUrl, cleanMime, expiresOn } from '../src/services/attachments-service.js';
+import {
+  MAX_FILE_BYTES, MAX_ADDS_PER_HOUR, MAX_LIVE_BYTES, cleanName, cleanUrl, typeFor, expiresOn,
+} from '../src/services/attachments-service.js';
 import { downloadHeaders } from '../src/routes/attachments.js';
 
 const SERVICE_DAY = '2025-01-12';
@@ -105,9 +107,9 @@ test('files: anyone signed in can add one; only who added it or a scheduler can 
 }));
 
 test('files: at most 5 MB; bigger is refused with a pointer to links', () => withBoot(async ({ svc, who, upload }) => {
-  const exact = await upload(who.on, Buffer.alloc(MAX_FILE_BYTES, 1), { name: 'big.bin', type: 'application/octet-stream' });
+  const exact = await upload(who.on, Buffer.alloc(MAX_FILE_BYTES, 1), { name: 'big.mp4', type: 'application/octet-stream' });
   assert.equal(exact.status, 201, 'exactly 5 MB is fine');
-  const over = await upload(who.on, Buffer.alloc(MAX_FILE_BYTES + 1, 1), { name: 'huge.bin', type: 'application/octet-stream' });
+  const over = await upload(who.on, Buffer.alloc(MAX_FILE_BYTES + 1, 1), { name: 'huge.mp4', type: 'application/octet-stream' });
   assert.equal(over.status, 413);
   assert.match(over.json.error, /5 MB.*link/);
   const empty = await upload(who.on, '', { name: 'empty.txt' });
@@ -115,6 +117,59 @@ test('files: at most 5 MB; bigger is refused with a pointer to links', () => wit
   const noName = await upload(who.on, 'x', { name: '' });
   assert.equal(noName.status, 400);
   assert.equal((await who.on.get(`/api/services/${svc.id}/files`)).json.files.length, 1);
+}));
+
+test('files: only a short list of types; the type comes from the name, not the phone', () => withBoot(async ({ app, svc, who, upload }) => {
+  for (const name of ['app.apk', 'app.ipa', 'setup.exe', 'wifi.mobileconfig', 'page.html', 'logo.svg', 'songs.zip', 'old.doc', 'notes']) {
+    const r = await upload(who.on, 'x', { name, type: 'application/pdf' });
+    assert.equal(r.status, 400, name);
+    assert.equal(r.json.code, 'file_type', name);
+    assert.match(r.json.error, /link/);
+  }
+  assert.equal(await app.data.attachments.countForService(svc.id), 0, 'nothing refused was kept');
+  // A phone that says text/html for a PDF does not get it sent back as a page.
+  const lying = await upload(who.on, '%PDF-1.4', { name: 'plan.pdf', type: 'text/html' });
+  assert.equal(lying.status, 201);
+  assert.equal(lying.json.mime, 'application/pdf');
+  const photo = await upload(who.on, 'jpeg bytes', { name: 'Stage.JPG', type: '' });
+  assert.equal(photo.json.mime, 'image/jpeg');
+  assert.equal((await who.on.get(photo.json.href)).headers['content-type'], 'image/jpeg');
+}));
+
+test('files: each person can add 30 an hour; removing one does not give the try back', () => withBoot(async ({ svc, who, upload, setNow }) => {
+  // 20 files and links fit on one service; use a second for the rest.
+  const other = (await who.admin.post('/api/services', { date: '2025-01-19' })).json;
+  const add = (i) => who.off.post(`/api/services/${i < 15 ? svc.id : other.id}/links`, { url: `https://x.example/${i}` });
+  for (let i = 0; i < MAX_ADDS_PER_HOUR - 1; i++) assert.equal((await add(i)).status, 201, `add ${i}`);
+  const last = (await add(29)).json;
+  assert.equal((await who.off.del(`/api/attachments/${last.id}`)).status, 200);
+  const over = await add(30);
+  assert.equal(over.status, 429);
+  assert.equal(over.json.code, 'too_many_adds');
+  assert.ok(Number(over.headers['retry-after']) > 0);
+  assert.equal((await upload(who.off, 'x', { name: 'a.txt', serviceId: other.id })).status, 429, 'files count too');
+  assert.equal((await upload(who.on, 'x', { name: 'a.txt', serviceId: other.id })).status, 201, 'others are not affected');
+  assert.equal((await who.admin.post(`/api/services/${other.id}/links`, { url: 'https://x.example/a' })).status, 201);
+  setNow('2025-01-10T13:01:00');
+  assert.equal((await add(31)).status, 201, 'an hour later it is fine again');
+}));
+
+test('files: each person can keep 50 MB on services not yet expired; schedulers have no cap', () => withBoot(async ({ svc, who, upload, setNow }) => {
+  const other = (await who.admin.post('/api/services', { date: '2025-01-19' })).json;
+  const five = Buffer.alloc(MAX_FILE_BYTES, 1);
+  const n = MAX_LIVE_BYTES / MAX_FILE_BYTES;
+  for (let i = 0; i < n; i++) {
+    assert.equal((await upload(who.off, five, { name: `${i}.mp4`, serviceId: i < 5 ? svc.id : other.id })).status, 201, `file ${i}`);
+  }
+  const over = await upload(who.off, 'one more byte', { name: 'x.txt', serviceId: other.id });
+  assert.equal(over.status, 409);
+  assert.equal(over.json.code, 'quota');
+  assert.match(over.json.error, /50 MB/);
+  assert.equal((await who.off.post(`/api/services/${other.id}/links`, { url: 'https://x.example/big' })).status, 201, 'links take no room');
+  assert.equal((await upload(who.admin, five, { name: 'slides.pdf', serviceId: other.id })).status, 201, 'schedulers have no cap');
+  // Once the first service's week is over, its files stop counting.
+  setNow('2025-01-20T08:00:00');
+  assert.equal((await upload(who.off, five, { name: 'later.mp4', serviceId: other.id })).status, 201);
 }));
 
 test('links: an https address, named by the person or by its site; nothing that runs code', () => withBoot(async ({ svc, who }) => {
@@ -156,6 +211,25 @@ test('expiry: a week after the service nobody can open or add them; the clean-up
   assert.equal(await app.data.attachments.countForService(svc.id), 0);
 }));
 
+test('my schedule: last week\'s services with files stay in reach until they expire', () => withBoot(async ({ svc, who, upload, setNow }) => {
+  const bare = (await who.admin.post('/api/services', { date: '2025-01-11' })).json; // no files: never listed
+  assert.ok(bare.id);
+  assert.deepEqual((await who.on.get('/api/me/schedule')).json.recent, [], 'nothing before the service');
+  await upload(who.on, '%PDF-1.4', { name: 'setlist.pdf' });
+  setNow('2025-01-14T09:00:00');
+  const mine = (await who.on.get('/api/me/schedule')).json;
+  assert.deepEqual(mine.recent, [{
+    slotId: mine.recent[0].slotId, serviceId: svc.id, files: 1, date: SERVICE_DAY, time: mine.recent[0].time,
+    serviceTitle: mine.recent[0].serviceTitle, positions: ['Vocals'],
+  }]);
+  assert.ok(!mine.items.some((i) => i.serviceId === svc.id), 'it is no longer in what is coming up');
+  for (const b of [who.no, who.off]) assert.deepEqual((await b.get('/api/me/schedule')).json.recent, [], 'not for who said no or never served');
+  setNow('2025-01-19T09:00:00');
+  assert.equal((await who.on.get('/api/me/schedule')).json.recent.length, 1, 'the 7th day after: still there');
+  setNow('2025-01-20T09:00:00');
+  assert.deepEqual((await who.on.get('/api/me/schedule')).json.recent, [], 'gone once the files expire');
+}));
+
 test('expiry follows the service date when the service moves', () => withBoot(async ({ app, svc, who, upload, setNow }) => {
   const f = (await upload(who.on, 'moving', { name: 'm.txt', type: 'text/plain' })).json;
   await app.container.services.calendar.updateService({ id: 1 }, svc.id, { date: '2025-01-26' });
@@ -190,9 +264,13 @@ test('attachments: names, types and addresses are cleaned', () => {
   const long = cleanName(`${'x'.repeat(300)}.pdf`);
   assert.equal(long.length, 120);
   assert.ok(long.endsWith('….pdf'));
-  assert.equal(cleanMime('Image/JPEG; q=1'), 'image/jpeg');
-  assert.equal(cleanMime('nonsense'), 'application/octet-stream');
-  assert.equal(cleanMime(undefined), 'application/octet-stream');
+  assert.equal(typeFor('Setlist.PDF'), 'application/pdf');
+  assert.equal(typeFor('stage.jpeg'), 'image/jpeg');
+  assert.equal(typeFor('song.chopro'), 'text/plain');
+  for (const bad of ['app.apk', 'app.ipa', 'setup.exe', 'wifi.mobileconfig', 'page.html', 'pic.svg', 'run.sh', 'x.js',
+    'songs.zip', 'old.doc', 'macro.docm', 'sheet.xlsm', 'pdf', 'noext', '.pdf.exe', 'a.pdf ', undefined, 'constructor', 'x.__proto__']) {
+    assert.equal(typeFor(bad), null, String(bad));
+  }
   assert.equal(cleanUrl(' https://x.example/a b '), 'https://x.example/a%20b');
   assert.equal(cleanUrl('javascript:alert(1)'), null);
   assert.equal(expiresOn('2025-12-28'), '2026-01-04');

@@ -14,6 +14,18 @@ Status: proposed (built; accept when merged)
 - Nothing deletes them on a timer. A scheduler runs the clean-up: **Clear
   expired files** on the Services page, or `flock purge-files` on the server.
 - Who added a file can remove it; a scheduler can remove any.
+- **Only a short list of file types** is kept, by extension (`FILE_TYPES`):
+  PDF, images, text and chord charts, audio, video, and macro-free office
+  files. The stored type comes from the extension; the phone's
+  `Content-Type` is ignored. Anything else is refused (`400 file_type`) and
+  the phone offers a link instead.
+- **Per person** (not schedulers): at most **30 files and links an hour**
+  (`429 too_many_adds`, counted from the audit log, so removing one does not
+  give the try back) and **50 MB of files** on services not yet expired
+  (`409 quota`).
+- **My schedule** lists the past week's services the person served at that
+  still have files, under **Last week**, so the files stay in reach until
+  they expire.
 - There can be at most **10 upcoming services** (today or later). Creating an
   11th is refused (`409 too_many_services`); **Repeat** makes as many as fit and
   lists the rest in `overLimit`. With at most 20 files of 5 MB on each, what
@@ -35,7 +47,7 @@ SQLite file, with no packages and no background jobs.
   checks it on every list, open and add. A purge deletes the rows of services
   dated on or before today − 8, then runs `VACUUM` so the space goes back to the disk.
 - **Upload is the raw request body** (`POST /api/services/:id/files?name=...`,
-  type in `Content-Type`), not multipart. The router got a per-route `raw` body
+  type worked out from the name), not multipart. The router got a per-route `raw` body
   limit; a declared `Content-Length` over 5 MB is refused (413) before reading.
   The phone checks the size first and offers the link form instead.
 - **Opening** is `GET /api/attachments/:id` with `Content-Disposition` and a
@@ -72,18 +84,18 @@ reach the app, its data or people's phones. Still to do:
   trusted. Read the first bytes (PDF, JPEG, PNG and so on), refuse files whose
   content and name disagree, and refuse polyglots (a file that is both an
   image and a page).
-- **Allow a short list of types only.** PDF, images, text, audio, video and
-  office documents. Refuse apps and installers (`.apk`, `.ipa`, `.exe`),
-  iPhone settings profiles (`.mobileconfig`), scripts, archives and anything
-  with macros. Today any type can be uploaded; unusual ones download only.
+- ~~**Allow a short list of types only.**~~ Done (see the TL;DR). Office
+  files are allowed only in their macro-free forms (`docx`, `xlsx`, `pptx`,
+  OpenDocument); a renamed `docm` still passes, which the content check
+  above would catch.
 - **Remove hidden data.** Photos carry location (EXIF GPS) and documents
   carry author names. Strip it on upload, or warn.
 - **Scan in a separate process.** Run checks (and any virus scanner) in a
   separate process or machine with no access to the database, and store the
   file only once it passes.
-- **Limits per person.** Any signed-in person can add files to any service
-  today. Add an upload rate limit and a quota per person, and consider
-  allowing uploads only by the people serving and schedulers.
+- ~~**Limits per person.**~~ Done: an hourly limit and a quota (see the
+  TL;DR). Still open: anyone signed in can add to any service, by choice;
+  allowing uploads only by the people serving and schedulers would close it.
 - **Backups.** Backups keep files after they expire. Leave files out of
   backups, or keep files in a store of their own with its own clean-up.
 - **Links.** Show the site's name next to every link, and warn about

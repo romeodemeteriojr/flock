@@ -5,11 +5,30 @@
 // src/container.js.
 import { ValidationError, ConflictError, NotFoundError } from '../errors.js';
 import { isValidDate, addDays, todayStr } from '../dates.js';
+import { KEEP_DAYS } from './attachments-service.js';
 
 /** How far ahead "my schedule" looks, in days (12 weeks). */
 export const SCHEDULE_DAYS = 84;
 /** Statuses that mean "this person holds the slot". */
 const HOLDING = ['pending', 'accepted'];
+
+// Past-week services I served at that have files, newest first, one per service.
+async function recentWithFiles(d, personId, today) {
+  const past = await d.slots.listForPerson(personId, addDays(today, -KEEP_DAYS), addDays(today, -1), HOLDING);
+  if (!past.length) return [];
+  const counts = await d.attachments.countByService([...new Set(past.map((s) => s.serviceId))]);
+  const by = new Map();
+  for (const s of past) {
+    if (!counts[s.serviceId]) continue;
+    const r = by.get(s.serviceId);
+    if (r) { r.positions.push(s.positionName); continue; }
+    by.set(s.serviceId, {
+      slotId: s.id, serviceId: s.serviceId, files: counts[s.serviceId], date: s.serviceDate,
+      time: s.serviceTime, serviceTitle: s.serviceTitle, positions: [s.positionName],
+    });
+  }
+  return [...by.values()].reverse();
+}
 /** The most positions one person may hold on one service (decision 0010). Never overridable. */
 export const MAX_POSITIONS_PER_SERVICE = 3;
 
@@ -189,6 +208,9 @@ export function createAssignmentsService(deps) {
      * 12 weeks, each with the other people serving on the same service (names
      * and positions only). nextServing is the first item on or after today.
      * rosters: { [date]: dayRoster } for each of those days, and no other day.
+     * recent: the services of the past week (before today) the person served
+     * at that still have files or links, newest first, one per service, so
+     * those files stay in reach until they expire (decision 0011).
      */
     async mySchedule(personId, { from } = {}) {
       const start = from === undefined || from === null || from === '' ? today() : from;
@@ -225,7 +247,7 @@ export function createAssignmentsService(deps) {
         const now = today();
         const nextServing = items.find((i) => i.date >= now) ?? null;
         const rosters = Object.fromEntries([...byDate].map(([date, slots]) => [date, dayRoster(slots, personId)]));
-        return { nextServing, items, rosters };
+        return { nextServing, items, rosters, recent: await recentWithFiles(d, personId, now) };
       });
     },
 

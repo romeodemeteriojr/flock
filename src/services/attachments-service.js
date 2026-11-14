@@ -1,10 +1,11 @@
 // Files and links on a service (decision 0011).
 // Anyone signed in may add one; only the people serving at that service (asked
 // or confirmed) and schedulers can see them. A file is at most 5 MB; anything
-// bigger is shared as a link. Both expire 7 days after the service date: from
+// bigger is shared as a link. Only a short list of file types is kept, and
+// each person (not schedulers) has an hourly limit and a total. Both expire 7 days after the service date: from
 // then on nobody can open them, and a scheduler's clean-up (a button, or
 // `flock purge-files`) deletes them. Nothing deletes them on a timer.
-import { ValidationError, NotFoundError, ForbiddenError, ConflictError } from '../errors.js';
+import { ValidationError, NotFoundError, ForbiddenError, ConflictError, TooManyRequestsError } from '../errors.js';
 import { addDays, todayStr } from '../dates.js';
 
 export const MAX_FILE_BYTES = 5 * 1024 * 1024;
@@ -12,9 +13,42 @@ export const KEEP_DAYS = 7;
 export const MAX_PER_SERVICE = 20;
 export const MAX_NAME = 120;
 export const MAX_URL = 2000;
+// Per person (schedulers are exempt: they upload for every week).
+export const MAX_ADDS_PER_HOUR = 30;
+export const MAX_LIVE_BYTES = 50 * 1024 * 1024;
 
 const HOLDING = new Set(['pending', 'accepted']);
-const MIME_RE = /^[a-z0-9][a-z0-9!#$&^_.+-]*\/[a-z0-9][a-z0-9!#$&^_.+-]*$/;
+const ADD_ACTIONS = ['attachment.add_file', 'attachment.add_link'];
+const OOXML = 'application/vnd.openxmlformats-officedocument';
+const ODF = 'application/vnd.oasis.opendocument';
+
+/**
+ * The only files Flock keeps, by extension, and the type each is sent as.
+ * The type the phone sends is ignored. Apps and installers (apk, ipa, exe),
+ * iPhone profiles (mobileconfig), pages (html, svg), scripts, archives and
+ * office files that can carry macros (doc, docm, xls, ...) are not on it.
+ */
+export const FILE_TYPES = Object.freeze({
+  pdf: 'application/pdf',
+  jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', gif: 'image/gif',
+  webp: 'image/webp', heic: 'image/heic', heif: 'image/heif',
+  txt: 'text/plain', md: 'text/plain', cho: 'text/plain', chopro: 'text/plain', chordpro: 'text/plain',
+  csv: 'text/csv',
+  mp3: 'audio/mpeg', m4a: 'audio/mp4', aac: 'audio/aac', wav: 'audio/wav',
+  mp4: 'video/mp4', m4v: 'video/mp4', mov: 'video/quicktime',
+  docx: `${OOXML}.wordprocessingml.document`,
+  xlsx: `${OOXML}.spreadsheetml.sheet`,
+  pptx: `${OOXML}.presentationml.presentation`,
+  odt: `${ODF}.text`, ods: `${ODF}.spreadsheet`, odp: `${ODF}.presentation`,
+});
+
+/** The type to keep a file as, from its name; null when it is not allowed. */
+export function typeFor(name) {
+  const m = /\.([a-z0-9]{1,10})$/i.exec(String(name ?? ''));
+  return (m && Object.hasOwn(FILE_TYPES, m[1].toLowerCase())) ? FILE_TYPES[m[1].toLowerCase()] : null;
+}
+
+const ALLOWED_WORDS = 'PDF, photos, text, chord charts, audio, video, and Word, Excel or PowerPoint files';
 
 /** The last day a service's files can be opened. */
 export const expiresOn = (serviceDate) => addDays(serviceDate, KEEP_DAYS);
@@ -33,11 +67,6 @@ export function cleanName(raw) {
   const dot = s.lastIndexOf('.');
   const ext = dot > 0 && s.length - dot <= 10 ? s.slice(dot) : '';
   return `${s.slice(0, MAX_NAME - ext.length - 1).trimEnd()}…${ext}`;
-}
-
-export function cleanMime(raw) {
-  const m = String(raw ?? '').split(';')[0].trim().toLowerCase();
-  return MIME_RE.test(m) ? m : 'application/octet-stream';
 }
 
 /** An http(s) address, or null. */
@@ -100,6 +129,22 @@ export function createAttachmentsService(deps) {
     }
   }
 
+  // Per person, so one account cannot fill the disk or flood the server.
+  // Counted from the audit log, so removing a file does not give the try back.
+  async function checkPerson(d, user, size) {
+    if (isAdmin(user)) return;
+    const since = new Date(clock.now().getTime() - 60 * 60 * 1000);
+    const recent = await d.audit.countSince({ actorId: user.id, actions: ADD_ACTIONS, since });
+    if (recent >= MAX_ADDS_PER_HOUR) {
+      throw new TooManyRequestsError(`You can add at most ${MAX_ADDS_PER_HOUR} files and links an hour. Please try again later.`, 60 * 60, { code: 'too_many_adds' });
+    }
+    if (!size) return;
+    const live = await d.attachments.bytesAddedBy(user.id, addDays(today(), -KEEP_DAYS));
+    if (live + size > MAX_LIVE_BYTES) {
+      throw new ConflictError(`Your files on upcoming services already take ${sizeWords(live)}, and each person can have at most ${sizeWords(MAX_LIVE_BYTES)}. Remove one, or add a link instead.`, { code: 'quota' });
+    }
+  }
+
   async function added(d, user, a, svc) {
     await d.audit.log({ at: clock.now(), actorId: user.id, action: `attachment.add_${a.kind}`, detail: `service ${svc.id}: ${a.name}` });
     return view(a, user);
@@ -113,14 +158,18 @@ export function createAttachmentsService(deps) {
         if (!(await canSee(d, user, svc.id))) throw new ForbiddenError('Only the people serving at this service can see its files');
         const expired = isExpired(svc.date);
         const files = expired ? [] : (await d.attachments.listForService(svc.id)).map((a) => view(a, user));
-        return { serviceId: svc.id, expiresOn: expiresOn(svc.date), expired, maxBytes: MAX_FILE_BYTES, files };
+        return { serviceId: svc.id, expiresOn: expiresOn(svc.date), expired, maxBytes: MAX_FILE_BYTES, types: Object.keys(FILE_TYPES), files };
       });
     },
 
     /** bytes: a Buffer of the whole file. */
-    async addFile(user, serviceId, { name, mime, bytes }) {
+    async addFile(user, serviceId, { name, bytes }) {
       const clean = cleanName(name);
       if (!clean) throw new ValidationError('The file needs a name');
+      const mime = typeFor(clean);
+      if (!mime) {
+        throw new ValidationError(`Flock keeps ${ALLOWED_WORDS}. For anything else, add a link to it instead.`, { code: 'file_type' });
+      }
       if (!bytes?.length) throw new ValidationError('That file is empty');
       if (bytes.length > MAX_FILE_BYTES) {
         throw new ValidationError(`That file is ${sizeWords(bytes.length)}. Files can be at most 5 MB, so add a link to it instead.`, { code: 'too_big' });
@@ -128,8 +177,9 @@ export function createAttachmentsService(deps) {
       return data.tx(async (d) => {
         const svc = await serviceOr404(d, serviceId);
         await checkRoom(d, svc);
+        await checkPerson(d, user, bytes.length);
         const a = await d.attachments.create({
-          serviceId: svc.id, kind: 'file', name: clean, mime: cleanMime(mime), content: bytes,
+          serviceId: svc.id, kind: 'file', name: clean, mime, content: bytes,
           addedBy: user.id, createdAt: clock.now().toISOString(),
         });
         return added(d, user, a, svc);
@@ -143,6 +193,7 @@ export function createAttachmentsService(deps) {
       return data.tx(async (d) => {
         const svc = await serviceOr404(d, serviceId);
         await checkRoom(d, svc);
+        await checkPerson(d, user, 0);
         const a = await d.attachments.create({
           serviceId: svc.id, kind: 'link', name: clean, url: href,
           addedBy: user.id, createdAt: clock.now().toISOString(),

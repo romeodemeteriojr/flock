@@ -3,9 +3,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createFiles, sizeWords, tooBigWords, filesLabel, MAX_BYTES } from '../web/lib/files.js';
 import { createApi } from '../web/api.js';
+import { render } from '../web/views/my-schedule.js';
 
 const LIST = {
-  serviceId: 7, expiresOn: '2025-01-19', expired: false, maxBytes: MAX_BYTES,
+  serviceId: 7, expiresOn: '2025-01-19', expired: false, maxBytes: MAX_BYTES, types: ['pdf', 'jpg', 'mov'],
   files: [
     { id: 1, kind: 'file', name: 'Setlist <b>.pdf', mime: 'application/pdf', size: 1258291, href: '/api/attachments/1', addedByName: 'Max Member', canRemove: true },
     { id: 2, kind: 'link', name: 'Video', mime: null, size: 0, href: 'https://video.example/v', addedByName: 'Ada Admin', canRemove: false },
@@ -44,6 +45,24 @@ test('files panel: lists files and links that open in a new view, names escaped,
   assert.equal((out.match(/data-action="files-remove"/g) ?? []).length, 1, 'only the file this person may remove');
   assert.match(out, /Kept until/);
   assert.match(out, /type="file"/);
+  assert.match(out, /accept="\.pdf,\.jpg,\.mov"/, 'the picker shows only what the server keeps');
+});
+
+test('files panel: a type the server does not keep is never sent; the link form opens', async () => {
+  const api = fakeApi();
+  const files = createFiles({ api });
+  await files.open(7);
+  for (const name of ['Setup.apk', 'songs.zip', 'noext']) {
+    files.change({ target: { dataset: { filesPick: '7' }, files: [{ name, size: 10, type: '' }] } });
+    await settle();
+    const out = String(files.render(7));
+    assert.ok(out.includes(`Flock can&#39;t keep ${name}.`) || out.includes(`Flock can't keep ${name}.`), out);
+    assert.match(out, /data-form="files-link"/);
+  }
+  assert.ok(!api.calls.some((c) => c[0] === 'UPLOAD'));
+  files.change({ target: { dataset: { filesPick: '7' }, files: [{ name: 'Stage.JPG', size: 10, type: 'image/jpeg' }] } });
+  await settle(); await settle();
+  assert.ok(api.calls.some((c) => c[0] === 'UPLOAD'), 'the extension is matched without caring about case');
 });
 
 test('files panel: a file over 5 MB is never sent; the link form opens with its name', async () => {
@@ -108,6 +127,21 @@ test('files panel: expired services say so and offer nothing to add', async () =
   const out = String(files.render(7));
   assert.match(out, /these are gone/);
   assert.doesNotMatch(out, /type="file"|files-link/);
+});
+
+test('my schedule: "Last week" lists past services with files, with nothing to answer', () => {
+  const recent = [{ slotId: 40, serviceId: 9, files: 2, date: '2025-01-12', time: '09:00', serviceTitle: 'Sunday <i>', positions: ['Vocals', 'Sound'] }];
+  const view = { data: { items: [], nextServing: null, rosters: {}, recent }, today: '2025-01-14', openFiles: new Set(), fileCounts: new Map() };
+  const out = render({}, view);
+  assert.match(out, /<h2 class="section-title">Last week<\/h2>/);
+  assert.match(out, /data-recent="9"/);
+  assert.match(out, /Vocals, Sound/);
+  assert.ok(out.includes('Sunday &lt;i&gt;'));
+  assert.match(out, /Files \(2\)/);
+  const card = out.slice(out.indexOf('data-recent'));
+  assert.doesNotMatch(card, /data-action="(accept|decline-ask)"/, 'nothing to answer for a past service');
+  assert.match(out, /nothing coming up/, 'still says nothing is coming up');
+  assert.doesNotMatch(render({}, { ...view, data: { ...view.data, recent: [] } }), /Last week/);
 });
 
 test('files words', () => {

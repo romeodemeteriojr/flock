@@ -271,6 +271,7 @@ function pages(d) {
     ${frame('After saying yes', sched({ message: 'Thank you! You are confirmed.', data: { nextServing: d.ITEMS[1], items: [d.ITEMS[1]], rosters: d.ROSTERS } }))}
     ${frame('Are you sure?', sched({ confirmId: 102, data: { nextServing: d.ITEMS[1], items: [d.ITEMS[1]], rosters: d.ROSTERS } }))}
     ${frame('A problem', sched({ problem: 'Someone else took it.', data: { nextServing: d.ITEMS[0], items: [d.ITEMS[0]], rosters: d.ROSTERS } }))}
+    ${frame('Last week, its files still there', sched({ data: { nextServing: d.ITEMS[1], items: [d.ITEMS[1]], rosters: d.ROSTERS, recent: [{ slotId: 140, serviceId: 40, files: 3, date: addDays(d.today, -3), time: '10:00', serviceTitle: 'Sunday service', positions: ['Vocals', 'Acoustic guitar'] }] } }))}
     ${frame('Nothing yet', sched({ data: { nextServing: null, items: [] } }))}
     ${frame('Could not load', sched({ error: "Can't reach the server. Check your internet and try again." }))}`)}
   ${section('p-off', "Days I can't serve", html`
