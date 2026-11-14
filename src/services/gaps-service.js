@@ -47,6 +47,13 @@ function joinList(parts) {
   return `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`;
 }
 
+/** 'Away Sun 8 Nov' or 'Away Sun 8 Nov to Sun 15 Nov', then ': their reason' if they gave one. */
+export function awayReason({ startDate, endDate, reason }) {
+  const when = startDate === endDate ? shortDate(startDate) : `${shortDate(startDate)} to ${shortDate(endDate)}`;
+  const why = String(reason ?? '').trim();
+  return `Away ${when}${why ? `: ${why}` : ''}`;
+}
+
 const firstName = (name) => String(name).trim().split(/\s+/)[0] || String(name);
 
 function blockoutIndex(blockouts) {
@@ -165,6 +172,10 @@ export function createGapsService(deps) {
      * reason. Ranked by not serving there first, then fewest services (not
      * slots) in the last 8 weeks plus the next 4 weeks, then longest since last
      * served (never first), then name.
+     * away: the people the same rules would list but for a blockout covering
+     * the date, so the scheduler sees who is trained but off that day. Each
+     * has the blockout's dates (startDate, endDate, reason) and a reason line,
+     * sorted by name. Assigning one of them still asks first ("blocked").
      */
     async suggest({ slotId, includeUnqualified = false } = {}) {
       if (!isInt(slotId)) throw new ValidationError('Slot id must be a whole number.');
@@ -187,7 +198,10 @@ export function createGapsService(deps) {
         for (const [id, mine] of onService) {
           if (mine.length >= MAX_POSITIONS_PER_SERVICE || mine.some((s) => s.positionId === slot.positionId)) leaveOut.add(id);
         }
-        const blocked = await d.blockouts.blockedPersonIds(slot.serviceDate);
+        const blockouts = new Map(); // personId -> the first blockout covering the date
+        for (const b of await d.blockouts.listRange(slot.serviceDate, slot.serviceDate)) {
+          if (b.startDate <= slot.serviceDate && b.endDate >= slot.serviceDate && !blockouts.has(b.personId)) blockouts.set(b.personId, b);
+        }
 
         // Counted per service, not per slot: two positions on one morning is serving once.
         const history = new Map();
@@ -206,10 +220,24 @@ export function createGapsService(deps) {
         }
 
         const candidates = [];
+        const away = [];
         for (const p of await d.people.list()) {
-          if (!p.active || blocked.has(p.id) || leaveOut.has(p.id)) continue;
+          if (!p.active || leaveOut.has(p.id)) continue;
           const qualified = p.positionIds.includes(slot.positionId);
           if (!qualified && !includeUnqualified) continue;
+          const off = blockouts.get(p.id);
+          if (off) {
+            away.push({
+              personId: p.id,
+              name: p.name,
+              qualified,
+              startDate: off.startDate,
+              endDate: off.endDate,
+              reason: off.reason ?? '',
+              reasons: [awayReason(off), ...(qualified ? [] : [`Not set up for ${slot.positionName}`])],
+            });
+            continue;
+          }
           const h = history.get(p.id) ?? { load: 0, past8: 0, lastServed: null };
           const upcoming = h.load - h.past8;
           const alsoOn = (onService.get(p.id) ?? []).map((s) => s.positionName);
@@ -237,7 +265,8 @@ export function createGapsService(deps) {
           || (a.lastServed === b.lastServed ? 0 : a.lastServed === null ? -1 : b.lastServed === null ? 1 : a.lastServed < b.lastServed ? -1 : 1)
           || byName(a.name, b.name)
           || a.personId - b.personId);
-        return { candidates: candidates.map(({ _load, ...c }) => c) };
+        away.sort((a, b) => byName(a.name, b.name) || a.personId - b.personId);
+        return { candidates: candidates.map(({ _load, ...c }) => c), away };
       });
     },
 

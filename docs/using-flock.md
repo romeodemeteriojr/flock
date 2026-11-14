@@ -154,8 +154,10 @@ Schedulers also see:
   position and how many are confirmed. Tap a position to open it: it shows who
   is in it now (with **Remove**) and who could do it, either those
   **Trained** for it or **Everyone**. The first trained person, who has served
-  least, is marked **Best match**. Flock warns about clashes (away that day,
-  not trained for it); you can still go ahead if you really mean to.
+  least, is marked **Best match**. People who would fit but have that day off
+  are listed under **Away on this date**, with their days off and reason.
+  Flock warns about clashes (away that day, not trained for it); you can still
+  go ahead if you really mean to.
 - **Several positions for one person.** Someone can hold up to 3 positions on
   one service, for example Vocals and Keys. People already serving at that
   service show **Already serving** in the list, after everyone else. A 4th

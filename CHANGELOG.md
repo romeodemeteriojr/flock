@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+No database changes.
+
+- **See who is away when you fill a position.** On the Schedule page, people trained for a position who have that day off used to just be missing from "Who could do this", so you couldn't tell if they were away or not trained. They now show under **Away on this date**, after everyone who is free, with their days off and reason (for example "Away Sat 7 Nov to Sun 15 Nov: Family visit"). **Assign** still asks first.
+
 ## 0.16.1
 
 No database changes.

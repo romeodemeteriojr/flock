@@ -664,6 +664,7 @@ input[type="checkbox"], input[type="radio"] { width: 1.4rem; height: 1.4rem; acc
 .chip-bad::before { content: "✗"; }
 .chip-plain { color: var(--muted); background: var(--surface-3); }
 /* An empty place: a dashed outline, the same sign as an empty position button. */
+.chip-away { color: var(--warning); background: var(--warning-bg); }
 .chip-open { background: transparent; border-style: dashed; border-color: currentColor; }
 .chip-open::before { content: "○"; }
 .chip-info { color: var(--on-accent-soft); background: var(--accent-soft); }
