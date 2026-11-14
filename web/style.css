@@ -611,13 +611,9 @@ input[type="checkbox"], input[type="radio"] { width: 1.4rem; height: 1.4rem; acc
 .icon-btn-danger { color: var(--danger); background: var(--danger-bg); }
 .icon-btn-danger:hover { background: color-mix(in srgb, var(--danger-bg) 88%, var(--danger)); }
 .icon-btn:disabled { opacity: 0.55; cursor: wait; transform: none; }
-/* Switched on (the bell, when this device gets notifications): solid accent.
-   Off is a plain button with a crossed-out bell, so on and off never look alike
-   and neither looks like "something unread". */
-.icon-btn.is-on { color: var(--on-accent); background: var(--accent); }
-.icon-btn.is-on:hover { background: color-mix(in srgb, var(--accent) 88%, var(--text)); }
-.icon-btn.is-on .icon-svg { fill: currentColor; fill-opacity: 1; }
-.icon-btn.is-off { color: var(--muted); }
+/* The bell looks the same on and off: a quiet outline. Off adds the slash
+   (the bell-off icon). Being on is the normal state, so it asks for nothing. */
+.icon-btn.is-on, .icon-btn.is-off { color: var(--muted); }
 
 /* ---------- segmented control: a track with one raised choice ---------- */
 .segmented {
