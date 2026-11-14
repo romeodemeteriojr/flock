@@ -7,7 +7,7 @@ For schedulers and volunteers. Setting Flock up is in
 
 On **People**, tap the **+** button, enter their name and email, and choose
 **Add person**. The email is how
-they log in. Saving opens an invite message: choose **Share** (on a phone) or
+they log in. Saving opens their sheet with an invite message: choose **Share** (on a phone) or
 **Copy message** and send it privately through your usual messages app. The
 person taps the link, sees the email they log in with and chooses a password,
 which also logs them in. The link works once, for 7 days.
@@ -22,8 +22,9 @@ Tap a person to open their sheet with everything you can do for them:
 - **Positions**: mark which positions they can do.
 - **Change name**.
 - **Make a scheduler** or **Make a volunteer**.
-- **Copy new invite** (for someone marked **Not joined yet**): makes a new link
-  and cancels their previous one.
+- **Copy new invite** (for someone marked **Not joined yet**): asks first,
+  because the new link cancels any link you sent them before. The new invite
+  message shows in their sheet.
 - **Reset login**, for a forgotten password: it immediately stops their
   current password and any linked Google sign-in, logs them out everywhere,
   then shows a new invite message.

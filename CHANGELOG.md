@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+No database changes.
+
+- **Invites open in the person's sheet.** Adding someone, **Copy new invite** and **Reset login** used to put the invite at the very top of the People page, far from where you were if you had scrolled down the list. The invite now slides up in that person's sheet, like everything else you do for them.
+- **A warning before a new invite.** **Copy new invite** now asks first: any invite link you sent that person before stops working, and only the new one works. **Reset login** says the same for someone who hasn't joined yet.
+
 ## 0.16.0
 
 No database changes.

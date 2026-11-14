@@ -27,7 +27,7 @@ const flush = () => new Promise((r) => setImmediate(r));
 
 // The open person sheet (everything after the list).
 const sheetOf = (root) => { const h = root.innerHTML; const i = h.indexOf('data-person-sheet'); return i < 0 ? '' : h.slice(i); };
-const sheetActions = (root) => [...sheetOf(root).matchAll(/data-action="(edit|positions|reset-ask|active-ask|role-ask|invite)" data-id="(\d+)"/g)].map((x) => `${x[1]} ${x[2]}`);
+const sheetActions = (root) => [...sheetOf(root).matchAll(/data-action="(edit|positions|reset-ask|active-ask|role-ask|invite-ask)" data-id="(\d+)"/g)].map((x) => `${x[1]} ${x[2]}`);
 
 test('list shows name, email, role and Deactivated marker', async () => {
   const { root } = await setup();
@@ -107,9 +107,12 @@ test('hostile names stay text', async () => {
   assert.ok(!root.innerHTML.includes('<script>'));
 });
 
-test('adding a person posts, then shows the one-time invite box', async () => {
+test('adding a person posts, then the add sheet becomes their sheet with the one-time invite', async () => {
+  const sam = P(9, 'Sam <b>', 'sam@example.com', { joined: false });
+  let added = false;
   const { api, root } = await setup({
-    'POST /api/people': { person: P(9, 'Sam <b>', 'sam@example.com', { joined: false }), invite: INVITE },
+    'GET /api/people': () => (added ? [...PEOPLE, sam] : PEOPLE),
+    'POST /api/people': () => { added = true; return { person: sam, invite: INVITE }; },
   });
   root.click('add-open');
   assert.match(root.innerHTML, /Make this person a scheduler/);
@@ -119,8 +122,21 @@ test('adding a person posts, then shows the one-time invite box', async () => {
   assert.match(root.innerHTML, /Invite for Sam &lt;b&gt;/);
   assert.match(root.innerHTML, /You will log in with sam@example\.com\. The link works for 7 days/);
   assert.match(root.innerHTML, /data-action="copy"/);
+  assert.ok(!root.innerHTML.includes('data-add-sheet'), 'the add sheet is gone');
+  assert.match(sheetOf(root), /data-person-panel="9"[^]*id="invite-box"/, 'the invite is in the new person\'s sheet');
   root.click('done');
   assert.ok(!root.innerHTML.includes(INVITE.link));
+  assert.equal(sheetOf(root), '', 'Done closes the sheet');
+});
+
+test('closing the sheet any way drops the invite link', async () => {
+  const { root } = await setup({ 'POST /api/people/2/reset-login': { person: P(2, 'Sam Ortiz', 'sam.ortiz@example.com', { joined: false }), invite: INVITE } });
+  root.click('reset-ask', 2); root.click('reset-yes', 2); await flush();
+  assert.match(sheetOf(root), /id="invite-box"/);
+  root.click('person-close');
+  assert.ok(!root.innerHTML.includes(INVITE.link));
+  root.click('select', 2);
+  assert.ok(!root.innerHTML.includes(INVITE.link), 'opening the sheet again shows the actions, not the old link');
 });
 
 test('add person sends the email when given and nothing when name is empty', async () => {
@@ -303,13 +319,19 @@ test('unjoined rows offer a new invite and local-only links explain the limitati
   });
   assert.match(root.innerHTML, /chip-wait"><span class="icon chip-icon" data-icon="clock" aria-hidden="true"><\/span>Not joined yet/);
   root.click('select', 2);
-  assert.match(sheetOf(root), /data-action="invite" data-id="2">[^]*?Copy new invite<\/span>/);
+  assert.match(sheetOf(root), /data-action="invite-ask" data-id="2">[^]*?Copy new invite<span class="menu-sub">The old link stops working<\/span>/);
+  root.click('invite', 2); // no confirm step yet
+  await flush();
+  assert.deepEqual(api.calls, []);
+  root.click('invite-ask', 2);
+  assert.match(sheetOf(root), /Any invite link sent to them before stops working right away/);
+  assert.deepEqual(api.calls, [], 'asking sends nothing');
   root.click('invite', 2);
   await flush();
   assert.deepEqual(api.calls, ['POST /api/people/2/invite {}']);
   assert.match(root.innerHTML, /This link uses localhost/);
   assert.match(root.innerHTML, /FLOCK_PUBLIC_URL/);
-  assert.equal(sheetOf(root), '', 'the sheet makes way for the invite box');
+  assert.match(sheetOf(root), /data-person-panel="2"[^]*id="invite-box"/, 'the invite shows in the same sheet');
 });
 
 test('joined rows offer neither the pending label nor an invite action', async () => {
