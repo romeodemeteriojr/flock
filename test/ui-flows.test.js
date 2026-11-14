@@ -359,6 +359,8 @@ test('UAT 3 to 8: scheduler adds people, a team, positions, a service, assigns, 
   const openBefore = gapCount(page, 'open');
   assert.ok(openBefore >= 1, page.text());
   said(page, /Nobody yet/);
+  notSaid(page, /Door \(Ushers\)/); // a later service: folded to one line
+  await tapOpen(page, 'toggle-gaps', `${SERVICE_DATE}T19:00`);
   said(page, /Door \(Ushers\)/);
   wellBuilt(page, 'gaps');
   await page.click('slot-open', slotB);
@@ -737,6 +739,7 @@ test('UAT 20 (odd text): hostile and odd text is shown as plain text on every pa
   wellBuilt(admin, 'schedule');
 
   await admin.goto('#/gaps');
+  await tapOpen(admin, 'toggle-gaps', `${SERVICE_DATE}T20:00`);
   said(admin, /"><script>alert\(2\)<\/script> \(<img src=x onerror=alert\(1\)>Team\)/);
   wellBuilt(admin, 'gaps');
   await admin.click('slot-open', slotB);

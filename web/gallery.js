@@ -251,6 +251,7 @@ function pages(d) {
   const svcModel = (extra = {}) => ({ teams: d.TEAMS, services: d.SERVICES, recent: d.SERVICES, loading: false, panel: null, error: '', notice: '', today: d.today, draft: null, adding: false, startKey: null, openTeams: new Set(), ...extra });
   const schedModel = (extra = {}) => ({ services: d.SERVICES, teams: d.TEAMS, loading: false, error: '', notice: '', today: d.today, from: d.today, to: addDays(d.today, 55), ...extra });
   const gapsModel = (extra = {}) => ({ loading: false, error: '', notice: '', summary: d.GAPS.summary, items: d.GAPS.items,
+    open: gaps.openGroups(gaps.groupGaps(d.GAPS.items), new Set()),
     reminders: { weekOf: d.sunday, list: d.REMINDERS, loading: false, error: '', notice: '' }, ...extra });
   const screen = (h1, body) => html`<h1 tabindex="-1">${h1}</h1>${raw(String(body))}`;
   return html`
@@ -321,7 +322,8 @@ function pages(d) {
     ${frame('Fill open positions (sheet)', screen('Schedule', schedule.renderScreen(schedModel({ autofill: { open: true, entered: true, weekOf: d.today, weeks: 2, result: { assigned: [], unfilled: [] } } }))))}
     ${frame('No services', screen('Schedule', schedule.renderScreen(schedModel({ services: [] }))))}`)}
   ${section('p-gaps', 'Gaps', html`
-    ${frame('Gaps', screen('Gaps', gaps.renderScreen(gapsModel())))}
+    ${frame('Gaps: the nearest service open, the rest folded', screen('Gaps', gaps.renderScreen(gapsModel())))}
+    ${frame('Gaps, all folded', screen('Gaps', gaps.renderScreen(gapsModel({ open: new Set() }))))}
     ${frame('Gaps, only "Said no"', screen('Gaps', gaps.renderScreen(gapsModel({ filter: 'declined' }))))}
     ${frame('Reminders', screen('Gaps', gaps.renderScreen(gapsModel({ tab: 'reminders' }))))}
     ${frame('Reminders on a phone that can share', screen('Gaps', gaps.renderScreen(gapsModel({ tab: 'reminders', canShare: true }))))}

@@ -12,7 +12,7 @@ import { canShare, share } from '../lib/share.js';
 import { iconSlot } from '../lib/icons.js';
 import { avatar } from '../lib/avatar.js';
 import { toasts, createNoticeClock, dropProblem } from '../lib/toast.js';
-import { skeleton, emptyState, pageHead } from '../lib/ui.js';
+import { skeleton, emptyState, pageHead, disclosure, refocus, dateTile } from '../lib/ui.js';
 
 export const title = 'Gaps';
 export const NEVER_SENDS = 'Flock never sends messages. Copy these into your usual messages app.';
@@ -64,6 +64,16 @@ export function gapSlot(it) {
     // The gaps list does not say if a now-away person had answered: show the gap instead.
     statusLabel: status ? null : GAP_LABELS[it.type],
   };
+}
+
+// Which services start open: the ones still open from before, or else the
+// nearest one, so the page opens on what is left for this Sunday. Once the
+// scheduler has folded everything away, that is respected.
+export function openGroups(groups, open, foldedAll = false) {
+  const keys = new Set((groups ?? []).map((g) => g.key));
+  const kept = [...(open ?? [])].filter((k) => keys.has(k));
+  if (kept.length || foldedAll || !groups?.length) return new Set(kept);
+  return new Set([groups[0].key]);
 }
 
 export function allRemindersText(reminders) {
@@ -159,12 +169,25 @@ function gapsTab(m) {
   if (!groups.length) return emptyState('No gaps. Every position has someone.', 'art-done');
   const kind = m.filter && m.filter !== 'all' ? m.filter : null;
   const shown = groups.map((g) => ({ ...g, items: kind ? g.items.filter((i) => i.type === kind) : g.items })).filter((g) => g.items.length);
+  // A filter is a question ("who said no?"): show every answer, unfolded.
+  // The service holding the open slot panel never folds away under it.
+  const isOpen = (g) => !!kind || (m.open?.has(g.key) ?? false) || g.items.some((i) => i.slotId === m.current);
   return html`${summary(m, groups)}
-    ${shown.map((g) => html`<section class="card gap-card gap-group" data-gap-service="${g.key}">
-      <h3 class="gap-title"><span class="gap-label num">${formatDate(g.date)} at ${formatTime(g.time)}</span> <span class="gap-count" role="img" data-gap-count="${g.key}" aria-label="${gapWords(g.items.length)}">${g.items.length}</span></h3>
-      <p class="hint gap-sub">${g.serviceTitle}</p>
-      <ul class="list gap-list">${g.items.map((it) => gapItem(it, m.current))}</ul>
-    </section>`)}`;
+    ${shown.map((g) => {
+      const open = isOpen(g);
+      const label = html`<span class="service-main">
+        ${dateTile(g.date)}
+        <span class="service-text">
+          <span class="service-title"><span class="visually-hidden">${formatDate(g.date)}: </span>${g.serviceTitle}</span>
+          <span class="disclosure-sub num">${formatTime(g.time)}</span>
+        </span>
+        <span class="gap-count" role="img" data-gap-count="${g.key}" aria-label="${gapWords(g.items.length)}">${g.items.length}</span>
+      </span>`;
+      return html`<section class="card gap-card gap-group" data-gap-service="${g.key}">
+      <h3 class="gap-head">${kind ? html`<span class="disclosure gap-static">${label}</span>` : disclosure({ action: 'toggle-gaps', id: g.key, open, label })}</h3>
+      ${open ? html`<ul class="list gap-list">${g.items.map((it) => gapItem(it, m.current))}</ul>` : ''}
+    </section>`;
+    })}`;
 }
 
 /**
@@ -190,7 +213,7 @@ export function renderScreen(m, panelHtml = '', paneHtml = '') {
 /** onGaps(n): told the number of gaps after every load (the Gaps tab's badge). */
 export function createScreen({ api, root, today = todayString(), win = globalThis, onGaps = () => {} }) {
   const m = {
-    loading: true, error: '', notice: '', summary: {}, items: [], tab: 'gaps', filter: 'all',
+    loading: true, error: '', notice: '', summary: {}, items: [], tab: 'gaps', filter: 'all', open: new Set(), foldedAll: false,
     reminders: { weekOf: today, list: null, loading: false, error: '', notice: '', push: false, sent: new Set(), sending: false },
     canShare: canShare(win),
   };
@@ -211,6 +234,7 @@ export function createScreen({ api, root, today = todayString(), win = globalThi
     const r = await api.get('/api/admin/gaps');
     m.summary = r?.summary ?? {};
     m.items = Array.isArray(r?.items) ? r.items : [];
+    m.open = openGroups(groupGaps(m.items), m.open, m.foldedAll);
     onGaps(m.items.length);
   };
   const panel = createSlotPanel({
@@ -311,6 +335,14 @@ export function createScreen({ api, root, today = todayString(), win = globalThi
       m.tab = el.dataset.tab === 'reminders' ? 'reminders' : 'gaps';
       paint();
       root.querySelector?.(`[data-action="tab"][data-tab="${m.tab}"]`)?.focus?.();
+      return undefined;
+    }
+    if (action === 'toggle-gaps') {
+      const key = String(el.dataset.id);
+      if (!m.open.delete(key)) m.open.add(key);
+      m.foldedAll = m.open.size === 0;
+      paint();
+      refocus(root, action, key);
       return undefined;
     }
     if (action === 'filter') {

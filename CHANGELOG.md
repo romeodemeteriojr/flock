@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+No database changes.
+
+### Gaps opens on this week
+
+- **Each service is one line**: a date tile, its title and time, and a red count of its gaps. Tap it to see its gaps; tap again to fold it.
+- **The nearest service with gaps starts open**, so the page opens on what is left for this Sunday. Fill its last gap and the next one opens.
+- **A filter** (Nobody yet, Said no, …) still shows every match, with every service open.
+
 ## 0.13.2
 
 No database changes.
