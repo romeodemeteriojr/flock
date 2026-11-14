@@ -466,3 +466,13 @@ test('login and welcome: branded and centred; "or" only when there is a provider
     assert.doesNotMatch(s, /Choose a password and you/, 'no lead before we know who it is');
   }
 });
+
+test('focus rings: shown for the keyboard, hidden after a tap (except text fields)', async () => {
+  const { readFileSync } = await import('node:fs');
+  const css = readFileSync(new URL('../web/style.css', import.meta.url), 'utf8');
+  assert.match(css, /:root\[data-input="pointer"\] :focus-visible:not\(input, select, textarea\) \{ outline: none; \}/);
+  assert.match(css, /^:focus-visible \{\s*outline: 3px solid var\(--focus\)/m, 'the keyboard ring stays');
+  const app = readFileSync(new URL('../web/app.js', import.meta.url), 'utf8');
+  assert.match(app, /addEventListener\('pointerdown', \(\) => \{ docEl\.dataset\.input = 'pointer'; \}, true\)/);
+  assert.match(app, /addEventListener\('keydown', \(\) => \{ docEl\.dataset\.input = 'keyboard'; \}, true\)/);
+});
