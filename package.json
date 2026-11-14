@@ -1,6 +1,6 @@
 {
   "name": "flock",
-  "version": "0.14.4",
+  "version": "0.15.0",
   "private": true,
   "license": "PolyForm-Noncommercial-1.0.0",
   "type": "module",
