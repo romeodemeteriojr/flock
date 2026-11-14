@@ -126,6 +126,16 @@ test('UAT 1: join with the printed invite, then change a password voluntarily', 
   await logIn(other, 'demo-admin@example.com', NEW_PASSWORD);
   assert.equal(other.hash(), '#/');
 
+  // Pages that are not tabs have a way back to the tab they came from.
+  await page.goto('#/teams');
+  await page.goto('#/notifications');
+  assert.match(page.html(), /<a class="page-back" href="#\/teams" data-back>.*?<span>Teams<\/span><\/a>/, 'Notifications: back to Teams');
+  await page.goto('#/gaps');
+  await page.goto('#/password');
+  assert.match(page.html(), /<a class="page-back" href="#\/gaps" data-back>.*?<span>Gaps<\/span><\/a>/, 'Password: back to Gaps');
+  assert.equal(page.has('[data-back]'), true);
+  await page.goto('#/schedule');
+  assert.equal(page.has('[data-back]'), false, 'a tab page has no back link');
   await page.goto('#/password');
   said(page, /Change my password/);
   const changed = 'my changed password 2';

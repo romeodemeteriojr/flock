@@ -60,7 +60,7 @@ function body(p, view, isAdmin) {
 // view: { busy, message, problem }
 export function render(state, view = {}) {
   return String(html`
-    ${pageHead(title)}
+    ${pageHead(title, '', state?.back)}
     ${toasts([[view.message, 'ok', 'data-note'], [view.problem, 'error']])}
     <section class="card push-card">
       ${body(state?.push, view, state?.user?.role === 'admin')}

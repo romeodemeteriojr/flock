@@ -1,5 +1,6 @@
 import { html } from '../lib/html.js';
 import { iconSlot } from '../lib/icons.js';
+import { backLink } from '../lib/ui.js';
 
 export const title = 'Change my password';
 export const MIN_LENGTH = 8;
@@ -18,6 +19,7 @@ export function render(state, opts = {}) {
   const error = opts.error ?? '';
   return String(html`
     <section class="auth">
+      ${backLink(state?.back)}
       <div class="auth-card">
         <span class="auth-mark">${iconSlot('lock', 'icon-lg')}</span>
         <h1 tabindex="-1">Change my password</h1>

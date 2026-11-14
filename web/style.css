@@ -209,6 +209,15 @@ strong { font-weight: 700; }
 }
 .page-head { margin: var(--s-2) 0 var(--s-5); }
 .page-head h1 { margin-bottom: var(--s-1); }
+/* "‹ Gaps": back from a page that is not a tab. A big enough target, with the
+   chevron sitting just outside the text edge like the phone's own. */
+.page-back {
+  display: inline-flex; align-items: center; gap: 2px; min-height: 44px;
+  margin: 0 0 0 -6px; padding-right: var(--s-2);
+  color: var(--accent); font-weight: 650; text-decoration: none;
+}
+.page-back .icon { width: 1.35em; height: 1.35em; }
+.page-back:hover { text-decoration: underline; }
 .page-lead { color: var(--muted); font-size: var(--fs-md); margin: 0; }
 .section-title { font-size: var(--fs-lg); letter-spacing: -0.015em; margin: var(--s-8) 0 var(--s-3); }
 .card-title { font-size: var(--fs-lg); letter-spacing: -0.015em; margin: 0 0 var(--s-4); display: flex; align-items: center; gap: var(--s-2); }

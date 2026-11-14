@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+No database changes.
+
+- **A way back from Notifications and Password.** These pages aren't tabs, so in the installed app they had no way out but the tab bar. They now start with a back link to the page you came from, such as **‹ Gaps**, or **‹ My schedule** when opened directly. It goes back like the phone's own Back, so Back afterwards doesn't land on them again.
+
 ## 0.14.2
 
 No database changes.
