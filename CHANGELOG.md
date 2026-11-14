@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+No database changes.
+
+- **Closing a PDF works again.** Closing a PDF showed "Something went wrong" and left the page behind stuck, so it could not scroll (which is why a file added again seemed impossible to open). Closing now always finishes cleanly, even while the file is still loading.
+
 ## 0.14.3
 
 No database changes.
