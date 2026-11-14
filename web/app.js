@@ -6,7 +6,8 @@ import * as nav from './views/nav.js';
 import * as account from './views/account.js';
 import * as offline from './views/offline.js';
 import * as installSteps from './views/install-steps.js';
-import { createInstall, canInstall, isIosSafari } from './lib/install.js';
+import { createInstall, canInstall, installKind, hasSteps } from './lib/install.js';
+import { flashCopied } from './lib/copyflash.js';
 import { errorFromEvent, reasonFromEvent } from './lib/stray-error.js';
 import { createSheet, host, watchHost } from './lib/sheet.js';
 import { watchScroll } from './lib/topbar.js';
@@ -148,8 +149,8 @@ export function createApp({ root, win = globalThis.window, api = createApi() }) 
     opener: () => '[data-action="install"]',
     openerRoot: root,
   });
-  function openInstallSteps() {
-    state.installSteps = true;
+  function openInstallSteps(kind) {
+    state.installSteps = kind; // which steps: this phone and browser
     stepsSheet.opened('install');
     paintLayer();
   }
@@ -159,18 +160,32 @@ export function createApp({ root, win = globalThis.window, api = createApi() }) 
     if (!focus) stepsSheet.opened(null);
     paintLayer();
   }
-  // The browser's own prompt where there is one; the three steps on an iPhone.
+  // The browser's own prompt where there is one; otherwise the steps for this
+  // phone and browser (web/views/install-steps.js).
   // From the account sheet: the steps take its place (and its Back step).
   async function install() {
     if (installer.canPrompt()) { closeAccount({ focus: false }); return installer.prompt(); }
-    if (isIosSafari(win)) { closeAccount({ focus: false, handOff: true }); openInstallSteps(); return 'steps'; }
+    const kind = installKind(win);
+    if (hasSteps(kind)) { closeAccount({ focus: false, handOff: true }); openInstallSteps(kind); return 'steps'; }
     closeAccount({ focus: false });
     return 'unavailable';
   }
   layer.addEventListener('click', (e) => {
     const el = e.target?.closest?.('[data-action]');
     if (state.installSteps && el?.dataset?.action === 'install-close') closeInstallSteps();
+    if (state.installSteps && el?.dataset?.action === 'install-copy') copyAppLink(el, layer);
   });
+  // In another app's browser: the link to open in Safari or Chrome instead.
+  const copyHold = { timer: null, key: null };
+  async function copyAppLink(el, where) {
+    const link = `${win.location.origin}/`;
+    try {
+      await win.navigator.clipboard.writeText(link);
+      flashCopied(win, where, el, 'Copy link', copyHold, 'install-link');
+    } catch {
+      showError(`Couldn't copy. Type this in the address bar instead: ${link}`);
+    }
+  }
 
   // ----- the numbers on the tabs and the app icon (web/lib/counts.js) -----
   let countsFor = null;
@@ -192,7 +207,7 @@ export function createApp({ root, win = globalThis.window, api = createApi() }) 
   const ctx = {
     api, state, win, navigate, showError, showMessage, setUser, paintTop, rerender: () => render(),
     openAccount, closeAccount, toggleAccount, setCounts, refreshCounts, afterLogin: takeReturn,
-    install, installer, canInstall: () => canInstall(installer, win),
+    install, installer, canInstall: () => canInstall(installer, win), copyAppLink,
   };
   account.mount(layer, ctx);
   // Wide screens show the account sheet as a small menu: redraw it when the window crosses that width.

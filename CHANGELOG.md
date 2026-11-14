@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+No database changes.
+
+- **Install steps for every phone.** "Show me how" now gives steps for the phone and browser you're on:
+  - **iPhone in Safari:** Share, or **•••** then Share when there's no Share button (newer iOS hides it), then Add to Home Screen, with **Open as Web App** left on.
+  - **iPhone in Chrome, Edge or Firefox:** their own Share menu.
+  - **A link opened inside another app** (Facebook, Instagram, Gmail…): open it in Safari or Chrome first, with a **Copy link** button.
+  - **Android without an Install prompt** (Samsung Internet, Firefox, or Chrome after a "no"): the **⋮** menu, then Add to Home screen.
+- **One thing at a time.** On a phone that isn't installed, My schedule asks only to put Flock on the Home Screen. Notifications come after. The install card no longer mentions them.
+- **Notifications on an iPhone** start with "First, put Flock on your Home Screen" and the same steps. They no longer say to tap the bell, which isn't a button.
+
 ## 0.15.2
 
 No database changes.

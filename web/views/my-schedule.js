@@ -12,7 +12,7 @@ import { skeleton, emptyState, pageHead, disclosure, refocus, dateTile as tile }
 import { showCard, dismissCard } from '../lib/push.js';
 import { turnOn } from './notifications.js';
 import { answerCount } from '../lib/counts.js';
-import { isIosSafari, laterChosen, chooseLater } from '../lib/install.js';
+import { laterChosen, chooseLater } from '../lib/install.js';
 import { avatar } from '../lib/avatar.js';
 import { host, watchHost } from '../lib/sheet.js';
 import { createFiles, filesLabel } from '../lib/files.js';
@@ -193,36 +193,36 @@ function lastWeek(view) {
     <ul class="cards">${recent.map((i) => recentCard(i, view))}</ul>`;
 }
 
-// The invitation to turn on notifications (decision 0008), until they are on or dismissed.
+// The invitation to turn on notifications (decision 0008), until they are on or
+// dismissed. One invitation at a time, and installing goes first: on an iPhone
+// notifications only work from the Home Screen (showCard leaves that case out).
 function pushInvite(state, view) {
-  if (!view.showPush) return '';
-  const ios = state?.push?.support === 'ios-install';
+  if (!view.showPush || view.showInstall) return '';
   return html`<section class="notice notice-info push-invite" aria-label="Notifications">
     ${iconSlot('bell', 'notice-icon')}
     <div class="notice-body">
       <p><strong>Get a notification when you're asked to serve</strong></p>
       <div class="btn-row">
-        ${ios
-          ? html`<a class="btn btn-primary" href="#/notifications">Show me how</a>`
-          : html`<button type="button" class="btn btn-primary" data-action="push-on" ${view.busy ? 'disabled' : ''}>Turn on</button>`}
+        <button type="button" class="btn btn-primary" data-action="push-on" ${view.busy ? 'disabled' : ''}>Turn on</button>
         <button type="button" class="btn btn-quiet" data-action="push-later">Not now</button>
       </div>
     </div>
   </section>`;
 }
 
-// "Put Flock on your Home Screen", when this device can and the notifications
-// card is not showing (one invitation at a time), until installed or "Not now".
+// "Put Flock on your Home Screen", when this device can, until installed or
+// "Not now". It goes before the notifications card (one invitation at a time).
+// Install: the browser's own prompt. Show me how: the steps for this phone.
 function installCard(view) {
-  if (!view.showInstall || view.showPush) return '';
+  if (!view.showInstall) return '';
   return html`<section class="card install-card" aria-label="Install Flock" data-install-card>
     ${iconSlot('install', 'menu-icon')}
-    <div class="install-text"><p><strong>Put Flock on your Home Screen</strong></p><p class="hint">Opens like an app, and you can get notifications.</p>
-    <div class="btn-row"><button type="button" class="btn btn-primary" data-action="install" ${view.busy ? 'disabled' : ''}>${view.iosSteps ? 'Show me how' : 'Install'}</button><button type="button" class="btn btn-quiet" data-action="install-later">Not now</button></div></div>
+    <div class="install-text"><p><strong>Put Flock on your Home Screen</strong></p><p class="hint">It opens like an app, one tap away.</p>
+    <div class="btn-row"><button type="button" class="btn btn-primary" data-action="install" ${view.busy ? 'disabled' : ''}>${view.steps ? 'Show me how' : 'Install'}</button><button type="button" class="btn btn-quiet" data-action="install-later">Not now</button></div></div>
   </section>`;
 }
 
-// view: { loading, error, data, message, confirmId, busy, today, openRosters, openCards, celebrate, keep, showPush, showInstall, iosSteps }
+// view: { loading, error, data, message, confirmId, busy, today, openRosters, openCards, celebrate, keep, showPush, showInstall, steps }
 export function render(state, view = { loading: true }) {
   const today = view.today ?? todayString();
   let body;
@@ -362,7 +362,7 @@ export function mount(main, ctx) {
   // The install prompt can arrive after the page has painted (or go, once installed).
   function checkInstall() {
     view.showInstall = !!ctx.canInstall?.() && !laterChosen(ctx.win);
-    view.iosSteps = isIosSafari(ctx.win);
+    view.steps = !ctx.installer?.canPrompt?.(); // no browser prompt: show the steps
   }
   checkInstall();
   const stopWide = watchHost(ctx.win, () => {

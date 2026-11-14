@@ -1,24 +1,58 @@
 // Putting Flock on the Home Screen. Two ways, depending on the browser:
-//  - Chrome, Edge, Samsung Internet (Android, desktop): the browser offers an
-//    install prompt (beforeinstallprompt). We keep it and show it when the
-//    person taps Install.
-//  - iPhone and iPad in Safari: there is no prompt; we show the three steps
-//    (Share, Add to Home Screen, Add).
+//  - Where the browser offers an install prompt (beforeinstallprompt: Chrome,
+//    Edge, Samsung Internet), we keep it and show it when the person taps Install.
+//  - Everywhere else on a phone we show steps for that phone and browser
+//    (installKind below, the steps in web/views/install-steps.js).
 // Every browser part comes from `win`; nothing runs at import.
-import { isIos, isStandalone } from './push.js';
+import { isIos, isStandalone, iosVersion } from './push.js';
 
 const LATER_KEY = 'flock.install.later';
+
+// Browsers inside other apps (a link tapped in Facebook, Instagram, Gmail…).
+// They cannot add to the Home Screen: the page must be opened in the real browser first.
+const IN_APP = /FBAN|FBAV|FBIOS|Instagram|Line\/|LinkedInApp|Twitter|Snapchat|TikTok|musical_ly|MicroMessenger|GSA\/|Messenger|Pinterest/;
+// iPhone browsers other than Safari. They can add to the Home Screen from iOS 16.4.
+const IOS_OTHER = /CriOS|FxiOS|EdgiOS|OPiOS|DuckDuckGo|YaBrowser/;
 
 /** Already opened from the Home Screen (or installed as an app window). */
 export function isInstalled(win) {
   return isStandalone(win);
 }
 
+/**
+ * Which steps put Flock on this device's Home Screen:
+ *   'installed'      opened from the Home Screen already
+ *   'ios-safari'     iPhone or iPad in Safari: Share (or ••• → Share), Add to Home Screen
+ *   'ios-browser'    Chrome, Edge, Firefox… on an iPhone (iOS 16.4+): their Share menu
+ *   'ios-inapp'      inside another app, or an older iPhone browser: open in Safari first
+ *   'android'        Android browser with no install prompt: its menu, Add to Home screen
+ *   'android-inapp'  inside another app on Android: open in Chrome first
+ *   'other'          a computer: no steps (the browser's own prompt, if any)
+ */
+export function installKind(win) {
+  if (isInstalled(win)) return 'installed';
+  const nav = win?.navigator;
+  const ua = String(nav?.userAgent ?? '');
+  if (isIos(nav)) {
+    if (IN_APP.test(ua)) return 'ios-inapp';
+    if (IOS_OTHER.test(ua)) {
+      const v = iosVersion(nav);
+      return v && (v[0] < 16 || (v[0] === 16 && v[1] < 4)) ? 'ios-inapp' : 'ios-browser';
+    }
+    return 'ios-safari';
+  }
+  if (/Android/.test(ua)) return IN_APP.test(ua) || /; wv\)/.test(ua) ? 'android-inapp' : 'android';
+  return 'other';
+}
+
+/** A phone that is not installed yet: there are steps to show. */
+export function hasSteps(kind) {
+  return kind !== 'installed' && kind !== 'other';
+}
+
 /** iPhone or iPad in Safari itself (other iOS browsers have their own menus). */
 export function isIosSafari(win) {
-  const nav = win?.navigator;
-  if (!isIos(nav) || isInstalled(win)) return false;
-  return !/CriOS|FxiOS|EdgiOS|OPiOS|GSA\//.test(String(nav?.userAgent ?? ''));
+  return installKind(win) === 'ios-safari';
 }
 
 /**
@@ -63,7 +97,7 @@ export function createInstall(win) {
 /** Can this device put Flock on its Home Screen right now? */
 export function canInstall(install, win) {
   if (isInstalled(win)) return false;
-  return !!install?.canPrompt?.() || isIosSafari(win);
+  return !!install?.canPrompt?.() || hasSteps(installKind(win));
 }
 
 /** The person tapped "Not now" on the install card on this device. */

@@ -166,6 +166,7 @@ export function dismissCard(win) {
 /** Whether the My schedule card should invite this person to turn notifications on. */
 export function showCard(push, win) {
   if (!push?.enabled || push.status !== 'off') return false;
-  if (push.support !== 'ok' && push.support !== 'ios-install') return false;
+  // An iPhone in the browser: install first (the install card); the card comes once it's on the Home Screen.
+  if (push.support !== 'ok') return false;
   return !cardDismissed(win);
 }

@@ -36,6 +36,7 @@ const PATHS = {
   chevron: '<path d="M9.25 5.75L15.5 12l-6.25 6.25"/>',
   sparkle: '<path d="M11 3.75c.5 3.9 2.35 5.75 6.25 6.25-3.9.5-5.75 2.35-6.25 6.25-.5-3.9-2.35-5.75-6.25-6.25 3.9-.5 5.75-2.35 6.25-6.25z"/><path d="M18 15.5c.25 1.6.9 2.25 2.5 2.5-1.6.25-2.25.9-2.5 2.5-.25-1.6-.9-2.25-2.5-2.5 1.6-.25 2.25-.9 2.5-2.5z"/>',
   more: '<g fill="currentColor" fill-opacity="1" stroke="none"><circle cx="5.5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="18.5" cy="12" r="1.6"/></g>',
+  'more-vertical': '<g fill="currentColor" fill-opacity="1" stroke="none"><circle cx="12" cy="5.5" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="18.5" r="1.6"/></g>',
   info: '<circle cx="12" cy="12" r="8.75"/><path d="M12 11.25v5M12 7.75v.01"/>',
   key: '<circle cx="8.25" cy="15.75" r="4.5"/><path d="M11.5 12.5l8.25-8.25M16.75 7.25l2.75 2.75M14 10l2 2" fill="none"/>',
   shield: '<path d="M12 3.25l7.25 2.6v5.4c0 4.5-2.9 7.9-7.25 9.5-4.35-1.6-7.25-5-7.25-9.5v-5.4z"/><path d="M8.75 12.1l2.3 2.3 4.2-4.4" fill="none"/>',
