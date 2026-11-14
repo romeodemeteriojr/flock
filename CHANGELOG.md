@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+No database changes.
+
+- **Schedule on a computer:** with many positions, the page no longer scrolls sideways. Hidden screen-reader text in the wide table was widening the page.
+
 ## 0.11.1
 
 No database changes.

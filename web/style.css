@@ -677,7 +677,8 @@ input[type="checkbox"], input[type="radio"] { width: 1.4rem; height: 1.4rem; acc
 .card-list > li:last-child { border-bottom: 1px solid var(--line); }
 table { border-collapse: separate; border-spacing: 0; width: 100%; }
 th, td { text-align: left; padding: var(--s-2) var(--s-3); border-bottom: 1px solid var(--line); vertical-align: top; }
-.table-wrap { overflow-x: auto; }
+/* position: relative keeps the screen-reader-only text inside a wide table (it is absolute) from widening the page. */
+.table-wrap { overflow-x: auto; position: relative; }
 
 /* ---------- show/hide: closed parts, and rows that show their buttons once tapped ----------
    One button (aria-expanded) per part; the chevron turns when it is open. The
