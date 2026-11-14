@@ -8,7 +8,7 @@ import { makeHost, isAlive } from '../lib/host.js';
 import { iconSlot } from '../lib/icons.js';
 import { toasts } from '../lib/toast.js';
 import { statusChip } from '../lib/slotpanel.js';
-import { skeleton, emptyState, pageHead, disclosure, refocus } from '../lib/ui.js';
+import { skeleton, emptyState, pageHead, disclosure, refocus, dateTile as tile } from '../lib/ui.js';
 import { showCard, dismissCard } from '../lib/push.js';
 import { turnOn } from './notifications.js';
 import { answerCount } from '../lib/counts.js';
@@ -21,11 +21,6 @@ export const title = 'My schedule';
 
 const NONE = "You're not scheduled yet. Your scheduler will let you know.";
 
-// '2026-11-08' -> { day: '8', month: 'Nov', dow: 'Sun' } for the date tile.
-function tile(date) {
-  const [dow = '', day = '', month = ''] = formatDate(date).split(' ');
-  return html`<span class="date-tile" aria-hidden="true"><span class="date-tile-dow">${dow}</span><span class="date-tile-day num">${day}</span><span class="date-tile-mon">${month}</span></span>`;
-}
 
 // The full roster of the card's day (every service, team and position), shown
 // when the volunteer opens it. Rosters come from the server for their days only.

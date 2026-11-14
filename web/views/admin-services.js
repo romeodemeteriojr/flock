@@ -6,7 +6,7 @@ import { html } from '../lib/html.js';
 import { formatDate, formatTime, todayString } from '../lib/dates.js';
 import { iconSlot } from '../lib/icons.js';
 import { toasts, createNoticeClock, dropProblem } from '../lib/toast.js';
-import { skeleton, emptyState, pageHead, disclosure, refocus } from '../lib/ui.js';
+import { skeleton, emptyState, pageHead, disclosure, refocus, dateTile } from '../lib/ui.js';
 import { takenOffText, peopleFrom } from '../lib/taken-off.js';
 import { createFiles, filesLabel, sizeWords } from '../lib/files.js';
 
@@ -169,6 +169,12 @@ export function positionsSummary(svc, order = []) {
   return [...teams].map(([team, pos]) => `${team}: ${[...pos].map(([n, c]) => (c > 1 ? `${n} x${c}` : n)).join(', ')}`).join('. ');
 }
 
+// '8 spots', '1 spot', or 'No positions yet': how big a service is, in a word.
+export function spotsWords(svc) {
+  const n = svc?.slots?.length ?? 0;
+  return n === 0 ? 'No positions yet' : n === 1 ? '1 spot' : `${n} spots`;
+}
+
 export function sortServices(list) {
   return [...list].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0)
     || (a.time < b.time ? -1 : a.time > b.time ? 1 : 0) || a.id - b.id);
@@ -205,12 +211,12 @@ function positionPicker(teams, d, prefix = '', open = new Set()) {
 function startFrom(m) {
   const choices = startChoices(m.recent);
   if (!choices.length) return '';
-  const chip = (id, on, main, sub) => html`<button type="button" class="btn start-choice" data-action="start-from" data-id="${id}" aria-pressed="${on ? 'true' : 'false'}"><span class="start-main">${main}</span>${sub ? html`<span class="start-sub">${sub}</span>` : ''}</button>`;
+  const chip = (id, on, text) => html`<button type="button" class="btn btn-sm start-choice" data-action="start-from" data-id="${id}" aria-pressed="${on ? 'true' : 'false'}">${text}</button>`;
   return html`<div class="field" data-start-from>
     <h3 id="start-from-head">Start from</h3>
     <div class="start-row" role="group" aria-labelledby="start-from-head">
-      ${choices.map((c, i) => chip(i, m.startKey === startKeyOf(c), `${c.title} · ${formatTime(c.time)}`, positionsSummary(c, m.teams)))}
-      ${chip(-1, m.startKey === null, 'Blank', '')}
+      ${choices.map((c, i) => chip(i, m.startKey === startKeyOf(c), `${c.title} · ${formatTime(c.time)}`))}
+      ${chip(-1, m.startKey === null, 'Blank')}
     </div>
   </div>`;
 }
@@ -286,16 +292,19 @@ function serviceCard(svc, m) {
   }
   const n = scheduledCount(svc);
   const selected = m.selected === svc.id;
+  // A row is a date, a title and a size. The roster is on Schedule; the
+  // positions show here once the row is tapped, next to Edit.
   const label = html`<span class="service-main">
-      <span class="service-icon">${iconSlot('calendar')}</span>
+      ${dateTile(svc.date)}
       <span class="service-text">
-        <span class="service-title"><strong class="num">${formatDate(svc.date)} at ${formatTime(svc.time)}</strong>: ${svc.title}</span>
-        <span class="disclosure-sub">${svc.slots?.length ? `${positionsSummary(svc, m.teams)}.` : 'No positions yet.'}${n ? html` ${peopleWords(n)}.` : ''}</span>
+        <span class="service-title"><span class="visually-hidden">${formatDate(svc.date)}: </span>${svc.title}</span>
+        <span class="disclosure-sub num">${formatTime(svc.time)} · ${spotsWords(svc)}</span>
       </span>
     </span>`;
   return html`<li class="service-row" data-service="${svc.id}">
     ${disclosure({ action: 'select', id: svc.id, open: selected, label, cls: 'row-select' })}
-    ${selected ? html`<div class="btn-row btn-row-compact row-actions">
+    ${selected ? html`<p class="service-detail" data-detail>${svc.slots?.length ? `${positionsSummary(svc, m.teams)}.` : 'No positions yet.'}${n ? html` ${peopleWords(n)}.` : ''}</p>
+    <div class="btn-row btn-row-compact row-actions">
       <button type="button" class="btn btn-sm" data-action="repeat" data-id="${svc.id}">Repeat for more weeks</button>
       <button type="button" class="btn btn-sm" data-action="files" data-id="${svc.id}" aria-expanded="${mine?.kind === 'files' ? 'true' : 'false'}">${iconSlot('paperclip')} ${filesLabel(svc.files)}</button>
       <button type="button" class="btn btn-sm" data-action="edit" data-id="${svc.id}">${iconSlot('edit')} Edit</button>
@@ -311,7 +320,7 @@ export function renderScreen(m) {
     ${toasts([[m.notice, 'ok'], [m.error, 'error']])}
     ${m.adding ? createForm(m) : html`<div class="btn-row"><button type="button" class="btn btn-primary" data-action="add-open">${iconSlot('plus')} Add a service</button></div>`}
     <h2 class="section-title">Upcoming services</h2>
-    ${m.services.length ? html`<ul class="list card-list" data-services>${m.services.map((s) => serviceCard(s, m))}</ul>`
+    ${m.services.length ? html`<ul class="list card service-list" data-services>${m.services.map((s) => serviceCard(s, m))}</ul>`
     : emptyState('No upcoming services yet. Tap Add a service above.', 'art-calendar')}
     <section class="card purge-card" aria-label="Expired files">
       <h2 class="section-title">Expired files</h2>

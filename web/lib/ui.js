@@ -1,6 +1,7 @@
 // Small shared pieces of page markup: loading skeletons and friendly empty states.
 import { html } from './html.js';
 import { iconSlot } from './icons.js';
+import { formatDate } from './dates.js';
 
 /**
  * Shimmering grey placeholders while a page loads. The words stay in the page
@@ -42,4 +43,10 @@ export function refocus(root, action, id) {
 /** A page heading block: the h1 (focused on navigation) and an optional line under it. */
 export function pageHead(title, lead = '') {
   return html`<div class="page-head"><h1 tabindex="-1">${title}</h1>${lead ? html`<p class="page-lead">${lead}</p>` : ''}</div>`;
+}
+
+/** The calendar tile: SUN / 8 / NOV. Hidden from screen readers: say the date in the text too. */
+export function dateTile(date) {
+  const [dow = '', day = '', month = ''] = formatDate(date).split(' ');
+  return html`<span class="date-tile" aria-hidden="true"><span class="date-tile-dow">${dow}</span><span class="date-tile-day num">${day}</span><span class="date-tile-mon">${month}</span></span>`;
 }

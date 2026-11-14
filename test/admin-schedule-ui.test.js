@@ -111,13 +111,21 @@ test('conflict messages are plain, and inactive/past and the position limits are
 
 // ---------- services page ----------
 
-test('services: list sorted by date, grouped positions, people count; empty state', async () => {
+test('services: slim rows (date, title, time, size); positions and people once tapped; empty state', async () => {
   const { root } = await svcSetup();
   const h = root.innerHTML;
   assert.ok(h.indexOf('data-service="1"') < h.indexOf('data-service="2"'));
-  assert.match(h, /Sun 8 Nov at 9:00 am/);
-  assert.match(h, /Band: Drums x2, Keys\. Sound: Mixer/);
-  assert.match(h, /3 people are scheduled on this date/); // like the server: anyone in a slot
+  assert.match(h, /<span class="date-tile-dow">Sun<\/span><span class="date-tile-day num">8<\/span><span class="date-tile-mon">Nov<\/span>/);
+  assert.match(h, /<span class="visually-hidden">Sun 8 Nov: <\/span>Sunday service/, 'the tile is hidden from screen readers, so the date is said in the text');
+  assert.match(h, /9:00 am · 4 spots/);
+  assert.match(h, /9:00 am · 1 spot</);
+  assert.doesNotMatch(h, /Band: Drums/, 'no roster in the list');
+  assert.doesNotMatch(h, /people are scheduled/);
+  root.click('select', 1);
+  const open = root.innerHTML;
+  assert.match(open, /data-detail>Band: Drums x2, Keys\. Sound: Mixer\. 3 people are scheduled on this date\./); // like the server: anyone in a slot
+  assert.equal((open.match(/data-detail/g) ?? []).length, 1, 'only the tapped row shows its positions');
+  root.click('select', 1);
   assert.doesNotMatch(h, /id="svc-date"/, 'the page opens on the list, not the form');
   assert.match(h, /data-action="add-open"/);
   root.click('add-open');
@@ -1048,6 +1056,13 @@ test('add service: teams with no positions are one line, not one box each', asyn
 
 const hist = (id, date, time, title, positions) => ({ id, date, time, title, slots: positions.map((p, i) => slot(id * 10 + i, p)) });
 
+test('spotsWords: a service\'s size in a word', () => {
+  assert.equal(services.spotsWords({ slots: [] }), 'No positions yet');
+  assert.equal(services.spotsWords({ slots: [{}] }), '1 spot');
+  assert.equal(services.spotsWords({ slots: [{}, {}, {}] }), '3 spots');
+  assert.equal(services.spotsWords({}), 'No positions yet');
+});
+
 test('startChoices: latest of each title and time, only with positions, newest first, at most 4', () => {
   const list = [
     hist(1, '2026-10-04', '09:00', 'Sunday service', [10]),
@@ -1088,6 +1103,7 @@ test('add service: Start from copies a recent service onto the next free week; B
   assert.match(h, /Sunday service · 9:00 am/);
   assert.match(h, /Family service · 9:00 am/);
   assert.match(h, /data-action="start-from" data-id="-1" aria-pressed="true"/, 'the form opens on Blank');
+  assert.match(h, /aria-pressed="false">Sunday service · 9:00 am<\/button>/, 'a choice is its title and time, nothing more');
   root.click('start-from', 1);
   h = root.innerHTML;
   assert.match(h, /name="date" type="date" required min="2026-11-04" value="2026-11-22"/, 'Sunday 8 and 15 Nov are taken at 9:00');
