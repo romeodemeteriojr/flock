@@ -12,6 +12,7 @@ import { watchScroll } from './lib/topbar.js';
 import { swipeToDismiss } from './lib/swipe.js';
 import { TOAST_REGION, createToaster } from './lib/toast.js';
 import { watchIcons } from './lib/icons.js';
+import { watchViewer } from './lib/viewer.js';
 import { skeleton } from './lib/ui.js';
 import * as push from './lib/push.js';
 import { registerWorker, applyUpdate, watchUpdates } from './lib/worker.js';
@@ -40,6 +41,7 @@ export function createApp({ root, win = globalThis.window, api = createApi() }) 
   const main = root.querySelector('#main');
   const layer = root.querySelector('#layer');
   watchIcons(root, win);
+  watchViewer(doc, win);
   const checkScroll = watchScroll(win, top, main);
   let pageTitle = '';
   // A new page fades in (its heading rises a little); the same page painted again does not.

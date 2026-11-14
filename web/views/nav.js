@@ -36,10 +36,12 @@ function link(r, current, extra = '') {
   return html`<li class="nav-item"><a href="#${r.path}" ${r.path === current ? html`aria-current="page"` : ''}>${iconSlot(ICONS[r.path] ?? 'chevron', 'nav-icon')}<span class="nav-label">${r.label}</span>${SHORT[r.path] ? html`<span class="nav-label-short">${SHORT[r.path]}</span>` : ''}${extra}</a></li>`;
 }
 
-// The bell (decision 0008): opens the Notifications page; says whether they are on here.
+// The bell (decision 0008): opens the Notifications page. On here: a solid
+// accent bell. Off: a plain, crossed-out bell.
 function bell(push) {
-  const label = push.status === 'on' ? 'Notifications (on for this device)' : 'Notifications';
-  return html`<a class="icon-btn${push.status === 'on' ? ' is-on' : ''}" href="#/notifications" aria-label="${label}" title="${label}">${iconSlot('bell')}</a>`;
+  const on = push.status === 'on';
+  const label = on ? 'Notifications: on for this device' : 'Notifications: off for this device';
+  return html`<a class="icon-btn ${on ? 'is-on' : 'is-off'}" href="#/notifications" aria-label="${label}" title="${label}">${iconSlot(on ? 'bell' : 'bell-off')}</a>`;
 }
 
 /** state.accountOpen marks the avatar button as expanded; title is the page's own name. */
