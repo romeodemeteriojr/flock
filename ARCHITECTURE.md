@@ -1,6 +1,7 @@
 # flock architecture
 
-flock is a small app: one Node process, one SQLite file, no npm packages. The
+flock is a small app: one Node process, one SQLite file, no npm packages
+(one library is copied in: PDF.js, in `web/vendor`, see decision 0011). The
 code is still split into layers so that each part is easy to test on its own
 and can be changed without touching the rest.
 

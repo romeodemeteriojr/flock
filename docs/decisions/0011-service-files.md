@@ -62,11 +62,20 @@ SQLite file, with no packages and no background jobs.
   link used to replace Flock's own window with no browser bar and so no way
   to close it (only a back swipe). Now a file the phone can show opens in a
   full-screen layer with Close, Download, Escape and Back. Photos, audio and
-  video use their own tags; PDF and plain text sit in a frame, so those two
-  (and only those) may be framed by Flock itself (`frame-ancestors 'self'`,
+  video use their own tags. Plain text sits in a frame, so it (and only it)
+  may be framed by Flock itself (`frame-ancestors 'self'`,
   `X-Frame-Options: SAMEORIGIN`); every other file and response still refuses
   any frame. Office files download as before; the phone shows them with its
   own Done button.
+- **PDFs are drawn by PDF.js**, one canvas per page. In a frame an iPhone
+  draws only the first page of a PDF (found in 0.13.1), and no browser can
+  draw PDF pages without a library. PDF.js (Mozilla, Apache-2.0, legacy build
+  for older iPhones) is Flock's first vendored library: two files in
+  `web/vendor/pdfjs`, pinned by hash (`test/vendor.test.js`), licence in
+  `licenses/`. It is about 1.8 MB, so it is loaded only when a PDF opens and
+  is left out of the app shell saved on the phone (`src/static.js`). It runs
+  under the normal `default-src 'self'` policy with `isEvalSupported: false`.
+  Pages are drawn as they come near the screen, so a long file opens fast.
 - **Links** must be `http(s)` without a user name or password; `javascript:`
   and `data:` are refused.
 - A file nobody can see answers 404, the same as one that does not exist.

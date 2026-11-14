@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+No database changes.
+
+### Every page of a PDF, with the Close button
+
+- **PDFs show every page again.** 0.13.1 opened PDFs in Flock's viewer, but an iPhone only drew the first page there. Flock now draws each page itself (with Mozilla's PDF.js), one under the other, as wide as the screen. The **X** and the download button stay.
+- PDF.js loads only when you open a PDF, and is not saved with the installed app, so the app is no bigger to install or update.
+
 ## 0.14.0
 
 No database changes.

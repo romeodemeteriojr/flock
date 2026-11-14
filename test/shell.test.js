@@ -26,6 +26,9 @@ async function webFiles(dir = WEB) {
   return out.sort();
 }
 const rel = (f) => '/' + path.relative(WEB, f).split(path.sep).join('/');
+// Flock's own files: the rules below are for code written here, not for the
+// libraries in web/vendor (pinned by hash in test/vendor.test.js).
+const ownFiles = async () => (await webFiles()).filter((f) => !rel(f).startsWith('/vendor/'));
 
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.woff2': 'font/woff2', '.svg': 'image/svg+xml', '.png': 'image/png', '.webmanifest': 'application/manifest+json' };
 
@@ -76,7 +79,7 @@ test('index.html has lang, viewport, title, #app, module script and stylesheet',
 });
 
 test('no external URLs, inline scripts, inline handlers or inline styles in web files', async () => {
-  for (const f of (await webFiles()).filter((p) => !/\.(woff2|png)$/.test(p))) {
+  for (const f of (await ownFiles()).filter((p) => !/\.(woff2|png)$/.test(p))) {
     // The SVG namespace is an identifier, never fetched.
     const s = (await readFile(f, 'utf8')).replace('xmlns="http://www.w3.org/2000/svg"', '');
     const name = rel(f);
@@ -426,7 +429,7 @@ test('stub views say Coming soon and mount does nothing', async () => {
 });
 
 test('every web module imports in Node without touching document or window', async () => {
-  const files = (await webFiles()).filter((f) => f.endsWith('.js'));
+  const files = (await ownFiles()).filter((f) => f.endsWith('.js'));
   const touched = [];
   const had = { document: Object.getOwnPropertyDescriptor(globalThis, 'document'), window: Object.getOwnPropertyDescriptor(globalThis, 'window') };
   for (const k of ['document', 'window']) {

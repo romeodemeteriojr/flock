@@ -27,8 +27,8 @@ const INLINE = new Set([
 ]);
 const ACTIVE = /html|xml|svg|javascript|ecmascript|x-shockwave/;
 // Shown in a frame inside Flock's own viewer (web/lib/viewer.js), so Flock,
-// and only Flock, may frame them.
-const FRAMED = new Set(['application/pdf', 'text/plain']);
+// and only Flock, may frame it. (PDFs are drawn by PDF.js, not framed.)
+const FRAMED = new Set(['text/plain']);
 
 export function downloadHeaders(a, length) {
   const inline = INLINE.has(a.mime);

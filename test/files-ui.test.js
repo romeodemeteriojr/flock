@@ -52,13 +52,13 @@ test('files panel: a PDF opens in Flock\'s viewer (it has a Close button); a lin
   const files = createFiles({ api: fakeApi() });
   await files.open(7);
   const out = String(files.render(7, 'k'));
-  assert.match(out, /href="\/api\/attachments\/1" target="_blank" rel="noopener noreferrer" data-view="frame" data-name="Setlist &lt;b&gt;\.pdf"/);
+  assert.match(out, /href="\/api\/attachments\/1" target="_blank" rel="noopener noreferrer" data-view="pdf" data-name="Setlist &lt;b&gt;\.pdf"/);
   assert.match(out, /href="https:\/\/video\.example\/v" target="_blank" rel="noopener noreferrer">/, 'links leave Flock as before');
 });
 
 test('viewer: shows what a phone can show itself; the rest opens in the phone', async () => {
   const { viewKind, createViewer } = await import('../web/lib/viewer.js');
-  assert.equal(viewKind('application/pdf'), 'frame');
+  assert.equal(viewKind('application/pdf'), 'pdf', 'drawn by PDF.js: every page, also on an iPhone');
   assert.equal(viewKind('text/plain'), 'frame');
   for (const m of ['image/jpeg', 'image/png', 'image/heic', 'IMAGE/WEBP']) assert.equal(viewKind(m), 'image', m);
   assert.equal(viewKind('audio/mpeg'), 'audio');

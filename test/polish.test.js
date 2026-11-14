@@ -333,7 +333,8 @@ test('every view still escapes: no raw tags from hostile data, and no SVG in vie
 // ---------- web files ----------
 
 test('no style= attribute, no on* attribute and no inline script in any web file', () => {
-  for (const f of webFiles().filter((p) => !p.endsWith('.woff2'))) {
+  // web/vendor holds libraries, not Flock's code (pinned in test/vendor.test.js).
+  for (const f of webFiles().filter((p) => !p.endsWith('.woff2') && !rel(p).startsWith('vendor/'))) {
     const s = readFileSync(f, 'utf8');
     assert.doesNotMatch(s, /\sstyle\s*=/i, `${rel(f)} has a style attribute`);
     assert.doesNotMatch(s, /<[a-z][^>]*\son[a-z]+\s*=/i, `${rel(f)} has an on* attribute`);
