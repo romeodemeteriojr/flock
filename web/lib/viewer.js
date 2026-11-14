@@ -1,8 +1,13 @@
 // Flock's file viewer (decision 0011): a full-screen layer over the page with
 // a big Close (X) button, so a file opened in the installed app never leaves
 // you stuck without a way back. It shows the types a phone can show itself:
-// PDF and plain text in a frame, photos, audio and video. Anything else keeps
-// opening in the phone's own viewer (the server sends it as a download).
+// PDF (every page, drawn by PDF.js), plain text in a frame, photos, audio and
+// video. Anything else keeps opening in the phone's own viewer (the server
+// sends it as a download).
+//
+// Why PDF.js: an iPhone draws only the first page of a PDF in a frame. PDF.js
+// (web/vendor/pdfjs, Apache-2.0, licenses/) is loaded only when a PDF opens,
+// and is not part of the app saved on the phone (src/static.js).
 //
 // A file link opts in with data-view (web/lib/files.js); watchViewer(doc, win)
 // opens those links here instead. Escape, the phone's Back and the X close it,
@@ -10,14 +15,15 @@
 import { icon } from './icons.js';
 import { backStep } from './sheet.js';
 
-const FRAME = new Set(['application/pdf', 'text/plain']);
+const FRAME = new Set(['text/plain']);
 const IMAGE = /^image\/(png|jpeg|gif|webp|heic|heif)$/;
 const AUDIO = /^audio\//;
 const VIDEO = /^video\//;
 
-/** How the viewer shows a type: 'frame', 'image', 'audio', 'video', or null (the phone opens it). */
+/** How the viewer shows a type: 'pdf', 'frame', 'image', 'audio', 'video', or null (the phone opens it). */
 export function viewKind(mime) {
   const m = String(mime ?? '').toLowerCase();
+  if (m === 'application/pdf') return 'pdf';
   if (FRAME.has(m)) return 'frame';
   if (IMAGE.test(m)) return 'image';
   if (AUDIO.test(m)) return 'audio';
@@ -26,6 +32,75 @@ export function viewKind(mime) {
 }
 
 const FOCUSABLE = 'button, [href], audio[controls], video[controls], iframe';
+const PDFJS = '../vendor/pdfjs/pdf.min.js';
+const PDF_WORKER = '/vendor/pdfjs/pdf.worker.min.js';
+const MAX_PIXEL_RATIO = 3;
+
+function note(doc, text, cls = 'hint') {
+  const p = doc.createElement('p');
+  p.className = `viewer-note ${cls}`;
+  p.setAttribute('role', cls === 'form-error' ? 'alert' : 'status');
+  p.textContent = text;
+  return p;
+}
+
+/**
+ * Draws every page of the PDF at href into box, one canvas each, as wide as
+ * the screen. A page is drawn when it comes near the screen, so a long file
+ * opens fast. live() is false once the viewer closed: then it stops.
+ * Returns a function that frees the file.
+ */
+async function showPdf(doc, win, box, href, live) {
+  const wait = note(doc, 'Opening…');
+  box.append(wait);
+  let pdf = null;
+  try {
+    const pdfjs = await import(PDFJS);
+    pdfjs.GlobalWorkerOptions.workerSrc = PDF_WORKER;
+    pdf = await pdfjs.getDocument({ url: href, isEvalSupported: false }).promise;
+  } catch {
+    wait.remove();
+    if (live()) box.append(note(doc, "Couldn't show this file. Use the download button to open it on your phone.", 'form-error'));
+    return () => {};
+  }
+  if (!live()) { pdf.destroy(); return () => {}; }
+  wait.remove();
+  const ratio = Math.min(win?.devicePixelRatio || 1, MAX_PIXEL_RATIO);
+  const width = Math.max(200, box.clientWidth - 16);
+  const pages = [];
+  for (let n = 1; n <= pdf.numPages; n++) {
+    const page = await pdf.getPage(n);
+    if (!live()) break;
+    const base = page.getViewport({ scale: 1 });
+    const css = page.getViewport({ scale: width / base.width });
+    const wrap = doc.createElement('div');
+    wrap.className = 'viewer-page';
+    wrap.style.aspectRatio = `${css.width} / ${css.height}`;
+    wrap.setAttribute('aria-label', `Page ${n} of ${pdf.numPages}`);
+    wrap.setAttribute('role', 'img');
+    box.append(wrap);
+    pages.push({ page, wrap, css, drawn: false });
+  }
+  const draw = (p) => {
+    if (p.drawn || !live()) return;
+    p.drawn = true;
+    const view = p.page.getViewport({ scale: p.css.scale * ratio });
+    const canvas = doc.createElement('canvas');
+    canvas.width = Math.floor(view.width);
+    canvas.height = Math.floor(view.height);
+    p.wrap.append(canvas);
+    p.page.render({ canvas, canvasContext: canvas.getContext('2d'), viewport: view }).promise.catch(() => {});
+  };
+  if (typeof win?.IntersectionObserver === 'function') {
+    const seen = new win.IntersectionObserver((entries) => {
+      for (const e of entries) if (e.isIntersecting) draw(pages.find((p) => p.wrap === e.target));
+    }, { root: box, rootMargin: '100% 0px' });
+    for (const p of pages) seen.observe(p.wrap);
+    return () => { seen.disconnect(); pdf.destroy(); };
+  }
+  pages.forEach(draw);
+  return () => pdf.destroy();
+}
 
 function media(doc, kind, href, name) {
   if (kind === 'image') {
@@ -59,6 +134,7 @@ export function createViewer(doc, win = doc?.defaultView) {
   if (typeof doc?.createElement !== 'function' || !doc.body) return null;
   let layer = null;
   let opener = null;
+  let free = null; // frees an open PDF
   const isOpen = () => !!layer;
   const back = backStep(win, doc, isOpen, () => close());
 
@@ -66,6 +142,8 @@ export function createViewer(doc, win = doc?.defaultView) {
     if (!layer) return;
     layer.remove();
     layer = null;
+    free?.();
+    free = null;
     doc.documentElement?.classList?.remove('viewer-open');
     back.closed();
     if (typeof opener?.focus === 'function' && opener.isConnected !== false) opener.focus();
@@ -116,7 +194,7 @@ export function createViewer(doc, win = doc?.defaultView) {
 
     const body = doc.createElement('div');
     body.className = `viewer-body viewer-body-${kind}`;
-    body.append(media(doc, kind, href, name));
+    if (kind !== 'pdf') body.append(media(doc, kind, href, name));
 
     layer.append(bar, body);
     layer.addEventListener('keydown', trap);
@@ -124,6 +202,12 @@ export function createViewer(doc, win = doc?.defaultView) {
     doc.documentElement?.classList?.add('viewer-open');
     back.opened();
     x.focus();
+    if (kind === 'pdf') {
+      const mine = layer;
+      showPdf(doc, win, body, href, () => layer === mine).then((f) => {
+        if (layer === mine) free = f; else f();
+      });
+    }
   }
 
   return { open, close, isOpen };

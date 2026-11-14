@@ -37,6 +37,9 @@ const KEEP_SECONDS = Object.freeze({ '.woff2': 86400, '.png': 86400, '.svg': 864
 export const WORKER = '/sw.js';
 // Not part of the app people use, so not saved on their phones (decision 0009).
 const NOT_SHELL = new Set([WORKER, '/gallery.html', '/gallery.js', '/privacy.html']);
+// Big libraries loaded only when needed (PDF.js, about 1.8 MB): fetched when a
+// PDF opens, never saved with the app.
+const NOT_SHELL_DIR = '/vendor/';
 
 const brotli = promisify(zlib.brotliCompress);
 const gzip = promisify(zlib.gzip);
@@ -85,7 +88,7 @@ export async function shellOf(root) {
     if (!e.isFile() || !TYPES[path.extname(e.name).toLowerCase()]) return;
     const file = path.join(e.parentPath, e.name);
     const name = '/' + path.relative(base, file).split(path.sep).join('/');
-    if (NOT_SHELL.has(name)) return;
+    if (NOT_SHELL.has(name) || name.startsWith(NOT_SHELL_DIR)) return;
     const entry = await load(file);
     if (entry) found[name] = entry.hash;
   }));
