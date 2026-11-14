@@ -47,59 +47,77 @@ function note(doc, text, cls = 'hint') {
 /**
  * Draws every page of the PDF at href into box, one canvas each, as wide as
  * the screen. A page is drawn when it comes near the screen, so a long file
- * opens fast. live() is false once the viewer closed: then it stops.
- * Returns a function that frees the file.
+ * opens fast. Returns stop(): call it when the viewer closes, at any moment
+ * (even while the file is still loading); it cancels the drawing, frees the
+ * file and never throws. Nothing here rejects: a file that cannot be shown
+ * gets a message in the viewer, not an error.
  */
-async function showPdf(doc, win, box, href, live) {
-  const wait = note(doc, 'Opening…');
-  box.append(wait);
-  let pdf = null;
-  try {
-    const pdfjs = await import(PDFJS);
-    pdfjs.GlobalWorkerOptions.workerSrc = PDF_WORKER;
-    pdf = await pdfjs.getDocument({ url: href, isEvalSupported: false }).promise;
-  } catch {
-    wait.remove();
-    if (live()) box.append(note(doc, "Couldn't show this file. Use the download button to open it on your phone.", 'form-error'));
-    return () => {};
-  }
-  if (!live()) { pdf.destroy(); return () => {}; }
-  wait.remove();
-  const ratio = Math.min(win?.devicePixelRatio || 1, MAX_PIXEL_RATIO);
-  const width = Math.max(200, box.clientWidth - 16);
-  const pages = [];
-  for (let n = 1; n <= pdf.numPages; n++) {
-    const page = await pdf.getPage(n);
-    if (!live()) break;
-    const base = page.getViewport({ scale: 1 });
-    const css = page.getViewport({ scale: width / base.width });
-    const wrap = doc.createElement('div');
-    wrap.className = 'viewer-page';
-    wrap.style.aspectRatio = `${css.width} / ${css.height}`;
-    wrap.setAttribute('aria-label', `Page ${n} of ${pdf.numPages}`);
-    wrap.setAttribute('role', 'img');
-    box.append(wrap);
-    pages.push({ page, wrap, css, drawn: false });
-  }
-  const draw = (p) => {
-    if (p.drawn || !live()) return;
-    p.drawn = true;
-    const view = p.page.getViewport({ scale: p.css.scale * ratio });
-    const canvas = doc.createElement('canvas');
-    canvas.width = Math.floor(view.width);
-    canvas.height = Math.floor(view.height);
-    p.wrap.append(canvas);
-    p.page.render({ canvas, canvasContext: canvas.getContext('2d'), viewport: view }).promise.catch(() => {});
+function showPdf(doc, win, box, href) {
+  const job = { stopped: false, task: null, observer: null, renders: new Set() };
+  const live = () => !job.stopped;
+  const stop = () => {
+    if (job.stopped) return;
+    job.stopped = true;
+    try { job.observer?.disconnect(); } catch { /* already gone */ }
+    for (const r of job.renders) { try { r.cancel(); } catch { /* already done */ } }
+    job.renders.clear();
+    // PDF.js 6: the loading task frees the document (and its worker).
+    try { job.task?.destroy()?.catch?.(() => {}); } catch { /* already freed */ }
   };
-  if (typeof win?.IntersectionObserver === 'function') {
-    const seen = new win.IntersectionObserver((entries) => {
-      for (const e of entries) if (e.isIntersecting) draw(pages.find((p) => p.wrap === e.target));
-    }, { root: box, rootMargin: '100% 0px' });
-    for (const p of pages) seen.observe(p.wrap);
-    return () => { seen.disconnect(); pdf.destroy(); };
-  }
-  pages.forEach(draw);
-  return () => pdf.destroy();
+  const fail = () => {
+    if (!live()) return;
+    box.replaceChildren(note(doc, "Couldn't show this file. Use the download button to open it on your phone.", 'form-error'));
+  };
+
+  (async () => {
+    const wait = note(doc, 'Opening…');
+    box.append(wait);
+    const pdfjs = await import(PDFJS);
+    if (!live()) return;
+    pdfjs.GlobalWorkerOptions.workerSrc = PDF_WORKER;
+    job.task = pdfjs.getDocument({ url: href, isEvalSupported: false });
+    const pdf = await job.task.promise;
+    if (!live()) return;
+    const ratio = Math.min(win?.devicePixelRatio || 1, MAX_PIXEL_RATIO);
+    const width = Math.max(200, box.clientWidth - 16);
+    const pages = [];
+    for (let n = 1; n <= pdf.numPages; n++) {
+      const page = await pdf.getPage(n);
+      if (!live()) return;
+      const base = page.getViewport({ scale: 1 });
+      const css = page.getViewport({ scale: width / base.width });
+      const wrap = doc.createElement('div');
+      wrap.className = 'viewer-page';
+      wrap.style.aspectRatio = `${css.width} / ${css.height}`;
+      wrap.setAttribute('aria-label', `Page ${n} of ${pdf.numPages}`);
+      wrap.setAttribute('role', 'img');
+      pages.push({ page, wrap, css, drawn: false });
+    }
+    wait.remove();
+    box.append(...pages.map((p) => p.wrap));
+    const draw = (p) => {
+      if (!p || p.drawn || !live()) return;
+      p.drawn = true;
+      const view = p.page.getViewport({ scale: p.css.scale * ratio });
+      const canvas = doc.createElement('canvas');
+      canvas.width = Math.floor(view.width);
+      canvas.height = Math.floor(view.height);
+      p.wrap.append(canvas);
+      const task = p.page.render({ canvas, canvasContext: canvas.getContext('2d'), viewport: view });
+      job.renders.add(task);
+      task.promise.catch(() => {}).finally(() => job.renders.delete(task));
+    };
+    if (typeof win?.IntersectionObserver === 'function') {
+      job.observer = new win.IntersectionObserver((entries) => {
+        for (const e of entries) if (e.isIntersecting) draw(pages.find((p) => p.wrap === e.target));
+      }, { root: box, rootMargin: '100% 0px' });
+      for (const p of pages) job.observer.observe(p.wrap);
+    } else {
+      pages.forEach(draw);
+    }
+  })().catch(fail);
+
+  return stop;
 }
 
 function media(doc, kind, href, name) {
@@ -134,20 +152,23 @@ export function createViewer(doc, win = doc?.defaultView) {
   if (typeof doc?.createElement !== 'function' || !doc.body) return null;
   let layer = null;
   let opener = null;
-  let free = null; // frees an open PDF
+  let free = null; // stops and frees an open PDF
   const isOpen = () => !!layer;
   const back = backStep(win, doc, isOpen, () => close());
 
+  // Closing always finishes: freeing the file comes last and cannot throw.
   function close() {
     if (!layer) return;
+    const stop = free;
+    const from = opener;
     layer.remove();
     layer = null;
-    free?.();
     free = null;
+    opener = null;
     doc.documentElement?.classList?.remove('viewer-open');
     back.closed();
-    if (typeof opener?.focus === 'function' && opener.isConnected !== false) opener.focus();
-    opener = null;
+    if (typeof from?.focus === 'function' && from.isConnected !== false) from.focus();
+    try { stop?.(); } catch { /* stop() never throws; belt and braces */ }
   }
 
   function trap(e) {
@@ -202,12 +223,7 @@ export function createViewer(doc, win = doc?.defaultView) {
     doc.documentElement?.classList?.add('viewer-open');
     back.opened();
     x.focus();
-    if (kind === 'pdf') {
-      const mine = layer;
-      showPdf(doc, win, body, href, () => layer === mine).then((f) => {
-        if (layer === mine) free = f; else f();
-      });
-    }
+    if (kind === 'pdf') free = showPdf(doc, win, body, href);
   }
 
   return { open, close, isOpen };
