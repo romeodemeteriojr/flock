@@ -230,6 +230,11 @@ strong { font-weight: 700; }
 }
 main:focus, h1:focus, h2:focus { outline: none; }
 h2:focus-visible { outline: 3px solid var(--focus); }
+/* After a tap or click, no ring where the app moved focus itself (a sheet's
+   title, the avatar after the sheet closes): Safari on the iPhone draws it
+   anyway. web/app.js sets data-input from the last pointer or key. Text
+   fields keep theirs: it shows where you are typing. */
+:root[data-input="pointer"] :focus-visible:not(input, select, textarea) { outline: none; }
 
 /* ---------- icons ---------- */
 .icon {

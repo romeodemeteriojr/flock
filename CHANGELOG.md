@@ -6,6 +6,7 @@ No database changes.
 
 - **Notifications, Change my password and Install Flock work again from your account.** Since 0.11.1, tapping them in the sheet only closed it (Install Flock's steps on an iPhone flashed and closed): closing the sheet stepped the history back and undid the link. Now the sheet closes and the page (or the install steps) opens, and Back returns to the page you were on.
 - **A way back from Notifications and Password.** These pages aren't tabs, so in the installed app they had no way out but the tab bar. They now start with a back link to the page you came from, such as **‹ Gaps**, or **‹ My schedule** when opened directly. It goes back like the phone's own Back, so Back afterwards doesn't land on them again.
+- **No purple ring after a tap.** Opening your account drew a ring around your name, and closing it one around your initials (on an iPhone). Rings now show only when you use a keyboard; text fields still show where you're typing.
 - **The bell is just a hint now.** It still shows whether notifications are on for this device (crossed out when off), but tapping it does nothing. **Notifications** opens from your account: tap your initials. The card on **My schedule** that invites you to turn them on stays.
 
 ## 0.14.2

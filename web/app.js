@@ -31,6 +31,12 @@ export const SHELL = `
 
 export function createApp({ root, win = globalThis.window, api = createApi() }) {
   const doc = root.ownerDocument;
+  // How the person last used the app (style.css hides focus rings after a tap).
+  const docEl = doc?.documentElement;
+  if (docEl && typeof doc.addEventListener === 'function') {
+    doc.addEventListener('pointerdown', () => { docEl.dataset.input = 'pointer'; }, true);
+    doc.addEventListener('keydown', () => { docEl.dataset.input = 'keyboard'; }, true);
+  }
   const state = { user: null, accountOpen: false, installSteps: false, counts: { answer: 0, gaps: 0 } };
   let pending = null; // message to keep through the next page change
   let renderCount = 0;
