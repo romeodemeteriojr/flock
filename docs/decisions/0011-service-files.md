@@ -56,3 +56,39 @@ SQLite file, with no packages and no background jobs.
 - Moving a service later keeps its files longer; moving it earlier can expire them.
 - No virus scanning: files come from people already in the church's Flock,
   and only the people serving can open them.
+
+## Future work: keep uploads apart from the app
+
+This first version trusts the people in the church's Flock. Uploads should be
+kept apart from the app, as if behind an air gap, so a bad file can never
+reach the app, its data or people's phones. Still to do:
+
+- **Serve files from another address.** Files are served from Flock's own
+  address today, behind `nosniff`, a sandbox (not for PDFs) and download for
+  anything unusual. A separate, cookieless address (or short-lived signed
+  links) would keep a hostile file, or a bug in a phone's viewer, away from
+  the session cookie and the API.
+- **Check what a file really is.** The type comes from the phone and is
+  trusted. Read the first bytes (PDF, JPEG, PNG and so on), refuse files whose
+  content and name disagree, and refuse polyglots (a file that is both an
+  image and a page).
+- **Allow a short list of types only.** PDF, images, text, audio, video and
+  office documents. Refuse apps and installers (`.apk`, `.ipa`, `.exe`),
+  iPhone settings profiles (`.mobileconfig`), scripts, archives and anything
+  with macros. Today any type can be uploaded; unusual ones download only.
+- **Remove hidden data.** Photos carry location (EXIF GPS) and documents
+  carry author names. Strip it on upload, or warn.
+- **Scan in a separate process.** Run checks (and any virus scanner) in a
+  separate process or machine with no access to the database, and store the
+  file only once it passes.
+- **Limits per person.** Any signed-in person can add files to any service
+  today. Add an upload rate limit and a quota per person, and consider
+  allowing uploads only by the people serving and schedulers.
+- **Backups.** Backups keep files after they expire. Leave files out of
+  backups, or keep files in a store of their own with its own clean-up.
+- **Links.** Show the site's name next to every link, and warn about
+  shortened links. Flock never fetches a link itself; keep it that way (no
+  previews), so it cannot be made to call other addresses.
+- **Names.** Control and right-to-left characters are already stripped, so a
+  name cannot hide its real extension. Also look-alike letters and very long
+  names before the extension.

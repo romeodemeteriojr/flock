@@ -185,6 +185,8 @@ test('purge-files: the command-line clean-up', async () => {
 test('attachments: names, types and addresses are cleaned', () => {
   assert.equal(cleanName('  ../../etc/passwd '), '..-..-etc-passwd');
   assert.equal(cleanName('a\u0000b\nc.pdf'), 'abc.pdf');
+  assert.equal(cleanName('invoice\u202Efdp.exe'), 'invoicefdp.exe', 'no hidden right-to-left trick');
+  assert.equal(cleanName('a\u2066b\u2069\u200F.pdf'), 'ab.pdf');
   const long = cleanName(`${'x'.repeat(300)}.pdf`);
   assert.equal(long.length, 120);
   assert.ok(long.endsWith('….pdf'));
