@@ -260,12 +260,15 @@ test('teams service: raw input is checked in the old order and a refused change 
   assert.equal((await data.teams.findById(band)).name, 'Band', 'rename rolled back when sort was bad');
   await assert.rejects(teams.createPosition(admin, 999, { name: '' }), msg(NotFoundError, 'Team not found.'));
   await assert.rejects(teams.createPosition(admin, band, { name: ' ' }), msg(ValidationError, 'Please type a name.'));
-  for (const blank of ['\u0000', '\u200b\u200b', '\u3164', ' \u00a0\u2060 ', '\u202e', '\t\n']) {
+  for (const blank of ['\u0000', '\u200b\u200b', '\u3164', ' \u00a0\u2060 ', '\u202e', '\t\n', '\ufe0f', '\u0301']) {
     await assert.rejects(teams.createTeam(admin, { name: blank }), msg(ValidationError, 'Please type a name.'), JSON.stringify(blank));
     await assert.rejects(teams.createPosition(admin, band, { name: blank }), msg(ValidationError, 'Please type a name.'), JSON.stringify(blank));
   }
   await assert.rejects(teams.createTeam(admin, { name: 'Ba\u0000nd' }), msg(ValidationError, 'The name cannot contain control characters.'));
   await assert.rejects(teams.updatePosition(admin, p, { name: '\u200b' }), msg(ValidationError, 'Please type a name.'));
+  await assert.rejects(teams.createTeam(admin, { name: 'Bad\ud800' }), msg(ValidationError, 'The name cannot contain control characters.'));
+  assert.equal((await teams.createTeam(admin, { name: '🎸'.repeat(60) })).name.length, 120, 'sixty emoji is sixty characters');
+  await assert.rejects(teams.createTeam(admin, { name: '🎸'.repeat(61) }), msg(ValidationError, 'The name must be 60 characters or fewer.'));
   assert.equal((await teams.createTeam(admin, { name: 'Café 🎸' })).name, 'Café 🎸', 'accents and emoji are fine');
   await assert.rejects(teams.updatePosition(admin, 999, { sort: 'x' }), msg(NotFoundError, 'Position not found.'));
   await assert.rejects(teams.updatePosition(admin, p, { name: 'Keys', sort: 'x', teamId: 999 }), msg(ValidationError, 'Sort must be a whole number.'));
