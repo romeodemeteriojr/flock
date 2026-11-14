@@ -205,8 +205,11 @@ export function createAssignmentsService(deps) {
             byDate.get(s.serviceDate).push(s);
           }
         }
+        const fileCounts = await d.attachments.countByService([...new Set(mine.map((s) => s.serviceId))]);
         const items = mine.map((s) => ({
           slotId: s.id,
+          serviceId: s.serviceId,
+          files: fileCounts[s.serviceId] ?? 0,
           date: s.serviceDate,
           time: s.serviceTime,
           serviceTitle: s.serviceTitle,

@@ -126,8 +126,11 @@ test('repeat', async () => {
     assert.equal((await call('POST', '/api/services/repeat', 'admin', { fromServiceId: 999, weeks: 2 })).status, 404);
     const big = await call('POST', '/api/services/repeat', 'admin', { fromServiceId: sid, weeks: 26 });
     assert.equal(big.status, 201);
-    assert.equal(big.json.created.length + big.json.skipped.length, 26);
-    assert.equal(big.json.created.length, 23);
+    assert.equal(big.json.created.length + big.json.skipped.length + big.json.overLimit.length, 26);
+    assert.equal(big.json.created.length, 6, 'only up to 10 upcoming services');
+    const more = await call('POST', '/api/services', 'admin', { date: '2027-12-05' });
+    assert.equal(more.status, 409);
+    assert.equal(more.json.code, 'too_many_services');
   } finally { await app.close(); }
 });
 

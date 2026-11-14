@@ -24,6 +24,7 @@ const NOW = '2025-01-05T12:00:00.000Z'; // a Sunday
 const PUBLIC = new Set(['POST /api/login', 'GET /api/health', 'POST /api/welcome/check', 'POST /api/welcome',
   'GET /api/auth/options', 'GET /api/auth/:provider', 'GET /api/auth/:provider/callback']);
 const key = (r) => `${r.method} ${r.pattern}`;
+const ID_GETS = ['GET /api/services/:id/files', 'GET /api/attachments/:id'];
 
 async function boot(extra = {}) {
   const clock = fixedClock(NOW);
@@ -91,7 +92,8 @@ test('matrix: every admin route is 403 for a member, and nothing changes', () =>
   }
   assert.equal(JSON.stringify((await admin.get('/api/teams')).json), before);
   // And every login-level route really is open to the member.
-  for (const r of ctx.routes.filter((x) => x.auth === 'login' && x.method === 'GET')) {
+  // (Routes that take an id are checked on their own: files are for the people serving.)
+  for (const r of ctx.routes.filter((x) => x.auth === 'login' && x.method === 'GET' && !ID_GETS.includes(key(x)))) {
     assert.equal((await member.get(fillPath(r.pattern))).status, 200, key(r));
   }
 }));
@@ -184,9 +186,11 @@ test('isolation: nothing a volunteer can read leaks another volunteer\'s schedul
   const before = ctx.client.responses.length;
   // Every GET a member may call (none of them takes an id: a member only ever
   // reads their own things), plus date windows over the other people's dates.
-  const memberGets = ctx.routes.filter((x) => x.auth === 'login' && x.method === 'GET');
+  const memberGets = ctx.routes.filter((x) => x.auth === 'login' && x.method === 'GET' && !ID_GETS.includes(key(x)));
   assert.ok(memberGets.length >= 5);
-  assert.deepEqual(memberGets.filter((r) => r.pattern.includes(':')).map(key), []);
+  // The only member reads that take an id are a service's files (decision 0011),
+  // checked by the files isolation test below.
+  assert.deepEqual(ctx.routes.filter((x) => x.auth === 'login' && x.method === 'GET' && x.pattern.includes(':')).map(key), ID_GETS);
   for (const r of memberGets) await s.ann.get(r.pattern);
   for (const from of ['2025-01-19', '2025-01-26', '2025-02-02']) await s.ann.get(`/api/me/schedule?from=${from}`);
   const seen = ctx.client.responses.slice(before).map((r) => r.text).join('\n');

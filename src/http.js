@@ -86,6 +86,35 @@ function readBody(req) {
   });
 }
 
+// The whole body as bytes, for an upload route (opts.raw = its size limit).
+// A Content-Length over the limit is refused before anything is read.
+function readRaw(req, limit, tooBig) {
+  return new Promise((resolve, reject) => {
+    const declared = Number(req.headers['content-length']);
+    if (Number.isFinite(declared) && declared > limit) {
+      reject(new HttpError(413, tooBig));
+      req.resume();
+      return;
+    }
+    const chunks = [];
+    let size = 0;
+    let failed = false;
+    req.on('data', (c) => {
+      if (failed) return;
+      size += c.length;
+      if (size > limit) {
+        failed = true;
+        chunks.length = 0;
+        reject(new HttpError(413, tooBig));
+        return;
+      }
+      chunks.push(c);
+    });
+    req.on('end', () => { if (!failed) resolve(Buffer.concat(chunks)); });
+    req.on('error', (e) => { if (!failed) { failed = true; reject(e); } });
+  });
+}
+
 function compile(pattern) {
   const names = [];
   const parts = pattern.split('/').filter(Boolean).map((seg) => {
@@ -105,7 +134,9 @@ export function createRouter({ logger, clock, random } = {}) {
   function add(method, pattern, handler, opts = {}) {
     const auth = opts.auth ?? 'login';
     if (!['none', 'login', 'admin'].includes(auth)) throw new Error(`Bad auth level: ${auth}`);
-    list.push({ method: method.toUpperCase(), pattern, handler, auth, ...compile(pattern) });
+    const raw = opts.raw === undefined ? null : { limit: opts.raw, tooBig: opts.tooBig ?? 'That request is too big' };
+    if (raw && !(Number.isSafeInteger(raw.limit) && raw.limit > 0)) throw new Error(`Bad raw body limit: ${opts.raw}`);
+    list.push({ method: method.toUpperCase(), pattern, handler, auth, raw, ...compile(pattern) });
   }
 
   function routes() {
@@ -201,7 +232,8 @@ export function createRouter({ logger, clock, random } = {}) {
       if (res.headersSent || res.writableEnded) return;
     }
     let body = {};
-    if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) body = await readBody(req);
+    if (m.route.raw && ['POST', 'PUT'].includes(req.method)) body = await readRaw(req, m.route.raw.limit, m.route.raw.tooBig);
+    else if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) body = await readBody(req);
     const query = Object.fromEntries(url.searchParams);
     const result = await m.route.handler({ req, res, params: m.params, query, body, user, ctx });
     if (res.headersSent || res.writableEnded) return;

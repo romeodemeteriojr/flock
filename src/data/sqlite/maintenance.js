@@ -10,6 +10,11 @@ export function maintenanceRepo({ db, run }) {
       db.prepare('VACUUM INTO ?').run(file);
     }),
 
+    compact: () => run(() => {
+      if (db.isTransaction) throw new Error('The database cannot be compacted inside a transaction');
+      db.exec('VACUUM');
+    }),
+
     personCount: () => run(() => num(db.prepare('SELECT COUNT(*) AS n FROM people').get().n)),
   };
 }

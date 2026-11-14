@@ -51,6 +51,9 @@ const PATHS = {
   puzzle: '<path d="M6.15 8.1H8.6a2.3 2.3 0 1 1 2.6 0h2.45a2.25 2.25 0 0 1 2.25 2.25v2.45a2.3 2.3 0 1 1 0 2.6v2.45a2.25 2.25 0 0 1-2.25 2.25H6.15a2.25 2.25 0 0 1-2.25-2.25V15.4a2.3 2.3 0 1 0 0-2.6v-2.45A2.25 2.25 0 0 1 6.15 8.1z"/>',
   // Installed-app pictures: the share sheet (invites, reminders, iPhone steps),
   // installing Flock, iOS's "Add to Home Screen" square, no connection.
+  paperclip: '<path d="M19.5 11.25l-7.4 7.4a4.75 4.75 0 0 1-6.72-6.72l7.75-7.75a3.15 3.15 0 0 1 4.46 4.46l-7.6 7.6a1.55 1.55 0 0 1-2.2-2.2l7.06-7.06" fill="none"/>',
+  file: '<path d="M13.75 3.5H7.5A2.5 2.5 0 0 0 5 6v12a2.5 2.5 0 0 0 2.5 2.5h9A2.5 2.5 0 0 0 19 18V8.75z" fill="none"/><path d="M13.75 3.5v5.25H19" fill="none"/>',
+  link: '<path d="M10.25 13.75a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1.1 1.1" fill="none"/><path d="M13.75 10.25a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1.1-1.1" fill="none"/>',
   share: '<path d="M12 14.25V3.5M8.25 7.25L12 3.5l3.75 3.75" fill="none"/><path d="M8 10.5h-.75a2.75 2.75 0 0 0-2.75 2.75v4.5a2.75 2.75 0 0 0 2.75 2.75h9.5a2.75 2.75 0 0 0 2.75-2.75v-4.5a2.75 2.75 0 0 0-2.75-2.75H16" fill="none"/>',
   install: '<path d="M12 3.75v10.5M7.75 10.25L12 14.5l4.25-4.25" fill="none"/><path d="M4.5 15.75v2a2.75 2.75 0 0 0 2.75 2.75h9.5a2.75 2.75 0 0 0 2.75-2.75v-2" fill="none"/>',
   'add-square': '<rect x="3.75" y="3.75" width="16.5" height="16.5" rx="4.5"/><path d="M12 8.25v7.5M8.25 12h7.5"/>',

@@ -12,7 +12,7 @@ import { makeContainer } from './helpers/container.js';
 import { startTestApp } from './helpers/app.js';
 import { listJs, analyse } from './helpers/source.js';
 
-const SERVICE_NAMES = ['auth', 'people', 'teams', 'calendar', 'blockouts', 'assignments', 'gaps', 'availability', 'autofill', 'notifications'];
+const SERVICE_NAMES = ['auth', 'people', 'teams', 'calendar', 'blockouts', 'assignments', 'gaps', 'availability', 'autofill', 'notifications', 'attachments'];
 const memConfig = () => ({ ...loadConfig({}), dbPath: ':memory:' });
 
 test('container: defaults are the real system parts', () => {

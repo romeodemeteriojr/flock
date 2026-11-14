@@ -26,7 +26,7 @@ export async function startTestApp({ now, db, config, setup, container: override
       const h = { ...headers };
       let payload;
       if (body !== undefined) {
-        payload = typeof body === 'string' ? body : JSON.stringify(body);
+        payload = typeof body === 'string' || Buffer.isBuffer(body) ? body : JSON.stringify(body);
         h['Content-Type'] ??= 'application/json';
         h['Content-Length'] = Buffer.byteLength(payload);
       }

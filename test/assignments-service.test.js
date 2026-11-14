@@ -397,7 +397,7 @@ test('mySchedule: pending and accepted only, 12 weeks from today, coVolunteers a
   const r = await svc.mySchedule(pat.id);
   assert.deepEqual(r.items.map((i) => i.slotId), [p1, acc]);
   assert.deepEqual(r.items[0], {
-    slotId: p1, date: '2025-01-12', time: '09:00', serviceTitle: s1.title, positionName: 'Drums', teamName: 'Band',
+    slotId: p1, serviceId: s1.id, files: 0, date: '2025-01-12', time: '09:00', serviceTitle: s1.title, positionName: 'Drums', teamName: 'Band',
     status: 'pending', alsoOn: [], coVolunteers: [{ name: 'Quinn Quill', positionName: 'Keys' }],
   });
   assert.deepEqual(Object.keys(r.items[0].coVolunteers[0]).sort(), ['name', 'positionName']);

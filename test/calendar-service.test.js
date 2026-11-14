@@ -109,8 +109,14 @@ test('calendar: repeat copies structure weekly, skips existing, caps at 26 weeks
   await rejectsWith(svc.repeat(admin, { fromServiceId: 999, weeks: 2 }), NotFoundError, 'Service not found.');
   await rejectsWith(svc.repeat(admin, { fromServiceId: 'x', weeks: 2 }), NotFoundError);
   const big = await svc.repeat(admin, { fromServiceId: src.id, weeks: 26 });
-  assert.equal(big.created.length + big.skipped.length, 26);
-  assert.equal(big.created.length, 23);
+  // At most 10 upcoming services (decision 0011): 5 are there, so 5 more fit.
+  assert.equal(big.created.length + big.skipped.length + big.overLimit.length, 26);
+  assert.equal(big.skipped.length, 3);
+  assert.equal(big.created.length, 5);
+  assert.equal(big.overLimit[0], '2027-02-28');
+  assert.equal(await data.services.countFrom('2026-01-01'), 10);
+  await assert.rejects(svc.repeat(admin, { fromServiceId: src.id, weeks: 26 }), (e) => e.code === 'too_many_services' && /at most 10 upcoming/.test(e.message));
+  await assert.rejects(svc.createService(admin, { date: '2027-12-01' }), (e) => e.code === 'too_many_services');
 });
 
 test('calendar: repeat rolls back every copy on failure', async () => {

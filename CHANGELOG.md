@@ -1,5 +1,28 @@
 # Changelog
 
+## Unreleased
+
+Database change: migration 0005 adds the `attachments` table. Older versions of Flock cannot open the database after this.
+
+### Files and links on a service
+
+Anyone can attach a **file (up to 5 MB) or a link** to a service, such as a setlist, run sheet or rehearsal video. (Decision 0011.)
+
+- **Who sees them:** only the people serving at that service (asked or confirmed) and schedulers.
+- **Where:** **Files** under the next service on **My schedule** and in each card's **Details**; schedulers also get **Files** on each service on **Services**.
+- **Bigger than 5 MB?** Flock says so before sending and opens **Add a link** instead.
+- **Opening** a file uses the phone's own viewer.
+- **They expire a week after the service.** From then on nobody can open them. Nothing is deleted on a timer: a scheduler taps **Clear expired files** on **Services**, or runs `node bin/flock.js purge-files`.
+- Who added a file can remove it; schedulers can remove any.
+
+### At most 10 upcoming services
+
+- **Services** can have at most 10 upcoming services. Adding an 11th says so; **Repeat for more weeks** adds as many as fit and names the weeks it left out. This keeps what files can take in check.
+
+### Faster Fill for big churches
+
+- **Fill open positions** is about 3 times faster with many people and blockouts. A new test checks a church of 1,000 people.
+
 ## 0.11.2
 
 No database changes.

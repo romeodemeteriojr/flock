@@ -122,6 +122,19 @@ cp backups/flock-2026-03-02.db data/restored.db
 FLOCK_DB=data/restored.db npm start
 ```
 
+## Clearing expired files
+
+Files and links on a service can be opened until a week after it (decision
+0011). After that they stay in the database until someone clears them: a
+scheduler taps **Clear expired files** on the Services page, or on the server:
+
+```
+node bin/flock.js purge-files
+```
+
+It deletes only expired files and links and gives the space back to the
+disk. Running it with the weekly backup is a good habit (back up first).
+
 ## Exporting the schedule (CSV)
 
 To open the schedule in a spreadsheet:

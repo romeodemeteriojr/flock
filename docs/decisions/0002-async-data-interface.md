@@ -22,7 +22,7 @@ transaction is safe. Errors are `DuplicateError`, `InUseError` or a plain
 - A PostgreSQL adapter can be added in `src/data/postgres/` without changing
   services or routes; it runs the same contract tests.
 - A small cost: promises around synchronous calls, and the queue serialises
-  database work (fine for a church of about 70 people).
+  database work (fine for a church of 1,000 people: reads take a few milliseconds, see `test/scale.test.js`).
 - Services should use the `d` handed to `data.tx(async (d) => ...)` inside a
   transaction. A top-level call made while a transaction is open (for example
   through another service, as `people` does with `auth.endSessions`) joins that
