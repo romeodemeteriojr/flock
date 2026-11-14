@@ -130,9 +130,9 @@ test('webpush: generated keys are a matching base64url pair; mismatches are foun
 test('webpush: private keys are always 32 bytes, and an old 31-byte key still works', async () => {
   // Node drops a private key's leading zero byte (about 1 key in 256).
   for (let i = 0; i < 3000; i++) assert.equal(b64(generateVapidKeys().privateKey).length, 32);
-  // A key whose first byte is zero, stored the old, short way.
+  // A key whose first byte is zero (and only that byte), stored the old, short way: 31 bytes.
   let ecdh;
-  do { ecdh = crypto.createECDH('prime256v1'); ecdh.generateKeys(); } while (ecdh.getPrivateKey().length === 32);
+  do { ecdh = crypto.createECDH('prime256v1'); ecdh.generateKeys(); } while (ecdh.getPrivateKey().length !== 31);
   const publicKey = ecdh.getPublicKey().toString('base64url');
   const short = ecdh.getPrivateKey().toString('base64url');
   const full = Buffer.concat([Buffer.alloc(32 - ecdh.getPrivateKey().length), ecdh.getPrivateKey()]).toString('base64url');

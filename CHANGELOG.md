@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased
+
+No database changes.
+
+### Fixes found by monkey testing
+
+- **Back** closes an open panel or sheet instead of leaving the page.
+- **Logging back in** after your session ran out takes you to the page you were on, not My schedule.
+- **Deactivating** someone says how many upcoming services they are on, and that Gaps will list those spots. `GET /api/people` gains `upcoming`.
+- **Names** of people, teams and positions that are only invisible characters, control characters or accents are refused ("Please type a name."), and emoji count as one character toward the limit.
+- **Days off** sent twice with the same dates and reason are kept once ("You already have those days off.").
+- **Add service** asks for a time instead of saving at 9:00.
+- Server error messages end with a full stop.
+- Smaller fixes to toasts, "I can't", long names, password forms, suggestions and the Add service form.
+
 ## 0.11.0
 
 No database changes.
