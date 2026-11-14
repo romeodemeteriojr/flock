@@ -186,13 +186,14 @@ export function parse(schema, input, label = 'The request') {
 // A name someone types for a person, team or position: text, trimmed, at most
 // `max` characters, no control characters (a NUL, a line break), and at least
 // one character you can see. Zero-width and other invisible characters on
-// their own (U+200B, U+3164 and friends) would show as a blank name.
+// their own (U+200B, U+3164 and friends), or accents with nothing to sit on,
+// would show as a blank name. Length counts what people see (an emoji is one).
 const CONTROL = /\p{Cc}/u;
-const INVISIBLE = /[\s\p{Cc}\p{Cf}\p{Z}ᅟᅠㅤﾠ⠀]/gu;
+const INVISIBLE = /[\s\p{Cc}\p{Cf}\p{Z}\p{M}ᅟᅠㅤﾠ⠀]/gu;
 export function checkName(value, { max }) {
   if (typeof value !== 'string' || !value.replace(INVISIBLE, '')) throw new ValidationError('Please type a name.');
   const name = value.trim();
-  if (CONTROL.test(name)) throw new ValidationError('The name cannot contain control characters.');
-  if (name.length > max) throw new ValidationError(`The name must be ${max} characters or fewer.`);
+  if (CONTROL.test(name) || !name.isWellFormed()) throw new ValidationError('The name cannot contain control characters.');
+  if ([...name].length > max) throw new ValidationError(`The name must be ${max} characters or fewer.`);
   return name;
 }
