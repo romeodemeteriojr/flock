@@ -11,6 +11,10 @@
 
 const SLOT_PANEL = '[data-slot-panel]';
 
+/** closed(HAND_OFF): the next sheet opens straight away and takes over this one's Back step. */
+export const HAND_OFF = Symbol('hand off');
+let handedOff = null; // the mark of a Back step left for the next sheet
+
 /** Wide screens show a sheet in a pane beside its list; anything narrower, as a layer. */
 export const WIDE = '(min-width: 1024px)';
 export function host(win) {
@@ -127,6 +131,8 @@ export function createSheet({
     opened(id) { openerId = id; },
     /** A link in the sheet was tapped: once the sheet closes, go there (call before the paint that closes it). */
     goTo(href) { leaveTo = href; },
+    /** Another sheet opens in its place: leave it this sheet's Back step (call before the paint that closes it). */
+    handOff() { leaveTo = HAND_OFF; },
     before,
     update,
     get openerId() { return openerId; },
@@ -137,6 +143,9 @@ export function createSheet({
  * Back closes an open sheet. Opening adds a history step at the same address;
  * Back takes it off again and we close the sheet. Closing the sheet any other
  * way takes our step off, so the next Back leaves the page as usual.
+ * closed(HAND_OFF): another sheet opens in its place (Install Flock in the
+ * account sheet). Our step is left for it: stepping back here would land after
+ * the new sheet opened and close it again.
  * closed(to): closed by a link to another page. Our step becomes that page
  * (location.replace), so Back from there returns to the page under the sheet.
  * Stepping back and then following the link would lose the link: the step
@@ -144,7 +153,7 @@ export function createSheet({
  */
 export function backStep(win, root, isOpen, close) {
   const h = win?.history;
-  const follow = (to) => { if (to && win?.location) win.location.hash = to; };
+  const follow = (to) => { if (typeof to === 'string' && win?.location) win.location.hash = to; };
   if (typeof h?.pushState !== 'function' || typeof win.addEventListener !== 'function') return { opened() {}, closed: follow };
   const mark = `sheet-${Math.random().toString(36).slice(2)}`;
   let pushed = false; // our step is in the history
@@ -157,13 +166,23 @@ export function backStep(win, root, isOpen, close) {
   });
   // A new page: our step (if any) now belongs to the page we left. Forget it,
   // so a later Back never closes a sheet of a page that is gone.
-  win.addEventListener('hashchange', () => { pushed = false; skip = false; });
+  win.addEventListener('hashchange', () => { pushed = false; skip = false; handedOff = null; });
   return {
     opened() {
       if (pushed) return;
+      const mine = handedOff !== null && h.state?.flockSheet === handedOff;
+      handedOff = null;
+      if (mine) {
+        try { h.replaceState({ ...h.state, flockSheet: mark }, '', win.location?.href); pushed = true; return; } catch { /* push one instead */ }
+      }
       try { h.pushState({ ...(h.state ?? {}), flockSheet: mark }, '', win.location?.href); pushed = true; } catch { /* no history: Back leaves the page */ }
     },
     closed(to = null) {
+      if (to === HAND_OFF) {
+        if (pushed && h.state?.flockSheet === mark) handedOff = mark;
+        pushed = false;
+        return undefined;
+      }
       if (!pushed) return follow(to);
       pushed = false;
       // Only touch the history if we are still on our own step (not after a link to another page).

@@ -1,7 +1,7 @@
 // The phone's Back button closes an open sheet instead of leaving the page.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { backStep } from '../web/lib/sheet.js';
+import { backStep, HAND_OFF } from '../web/lib/sheet.js';
 
 function fakeWin() {
   const listeners = {};
@@ -18,6 +18,7 @@ function fakeWin() {
     history: {
       get state() { return stack[at].state; },
       pushState(state, _t, href) { stack.splice(at + 1); stack.push({ state, href }); at++; },
+      replaceState(state, _t, href) { stack[at] = { state, href }; },
       back() { at--; win.fire('popstate'); },
     },
     pressBack() { at--; win.fire('popstate'); },
@@ -75,6 +76,21 @@ test('a link in the sheet goes to its page, and Back from there returns to the p
   win.pressBack();
   assert.equal(win.href, 'x/#/schedule');
   assert.equal(s.closes, 0);
+});
+
+test('a sheet opening in place of another (Install Flock) keeps the Back step: no close, no extra step', () => {
+  const win = fakeWin();
+  const account = sheet(win);
+  const steps = sheet(win);
+  account.open();
+  account.closeByLink(HAND_OFF);
+  steps.open();
+  assert.equal(steps.isOpen, true, 'not closed by a late Back from the first sheet');
+  assert.equal(win.depth, 1, 'one step for the two sheets');
+  win.pressBack();
+  assert.equal(steps.isOpen, false, 'Back closes the new sheet');
+  assert.equal(win.depth, 0);
+  assert.equal(steps.closes, 1);
 });
 
 test('without its step (already gone), a link still goes to its page', () => {
