@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.12.0
 
 Database change: migration 0005 adds the `attachments` table. Older versions of Flock cannot open the database after this.
 
