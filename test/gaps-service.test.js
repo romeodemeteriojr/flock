@@ -35,7 +35,7 @@ async function setup({ config = { unansweredDays: 3 } } = {}) {
     await data.slots.assign(slotId, { personId, status: 'pending', assignedAt: at(assignedOn) });
     if (status !== 'pending') await data.slots.respond(slotId, { status, respondedAt: at(assignedOn) });
   }
-  const block = (personId, startDate, endDate = startDate) => data.blockouts.create({ personId, startDate, endDate, createdAt: NOW });
+  const block = (personId, startDate, endDate = startDate, reason = '') => data.blockouts.create({ personId, startDate, endDate, reason, createdAt: NOW });
   return { data, clock, svc, person, deactivate, band, tech, drums, sound, service, put, block };
 }
 
@@ -268,6 +268,40 @@ test('suggest: excludes inactive, unqualified, blocked and the person who declin
   assert.equal(u.reasons[0], 'Not set up for Drums');
   assert.ok(all.candidates.filter((c) => c.personId !== unq.id).every((c) => c.qualified === true));
   for (const p of [gone, blocked, decl]) assert.ok(!all.candidates.some((c) => c.personId === p.id), p.name);
+});
+
+test('suggest: trained people who are away that day are listed under away, with their dates and reason', async () => {
+  const { svc, person, deactivate, drums, sound, service, put, block } = await setup();
+  const fine = await person('Fay Fine', 'fay', { positions: [drums.id] });
+  const bo = await person('Bo Blocked', 'bo', { positions: [drums.id] });
+  await block(bo.id, '2025-01-20', '2025-01-30', 'Holiday');
+  const al = await person('Al Away', 'al', { positions: [drums.id] });
+  await block(al.id, '2025-01-26');
+  const unq = await person('Uma Unq', 'uma', { positions: [sound.id] });
+  await block(unq.id, '2025-01-26');
+  const gone = await person('Gus Gone', 'gus', { positions: [drums.id] });
+  await block(gone.id, '2025-01-26');
+  await deactivate(gone);
+  const dex = await person('Dex Declined', 'dex', { positions: [drums.id] });
+  await block(dex.id, '2025-01-26');
+  const later = await person('Lee Later', 'lee', { positions: [drums.id] });
+  await block(later.id, '2025-01-27', '2025-02-03'); // starts the day after: free
+  const { slots: [target] } = await service('2025-01-26');
+  await put(target, dex.id, { status: 'declined' });
+
+  const r = await svc.suggest({ slotId: target });
+  assert.deepEqual(r.candidates.map((c) => c.personId).sort(), [fine.id, later.id].sort());
+  // Sorted by name; inactive, untrained and the person who said no are left out, as in candidates.
+  assert.deepEqual(r.away, [
+    { personId: al.id, name: 'Al Away', qualified: true, startDate: '2025-01-26', endDate: '2025-01-26', reason: '', reasons: ['Away Sun 26 Jan'] },
+    { personId: bo.id, name: 'Bo Blocked', qualified: true, startDate: '2025-01-20', endDate: '2025-01-30', reason: 'Holiday', reasons: ['Away Mon 20 Jan to Thu 30 Jan: Holiday'] },
+  ]);
+
+  const all = await svc.suggest({ slotId: target, includeUnqualified: true });
+  const u = all.away.find((c) => c.personId === unq.id);
+  assert.equal(u.qualified, false);
+  assert.deepEqual(u.reasons, ['Away Sun 26 Jan', 'Not set up for Drums']);
+  assert.ok(!all.candidates.some((c) => c.personId === unq.id));
 });
 
 test('suggest: validation and not found', async () => {

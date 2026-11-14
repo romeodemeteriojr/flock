@@ -107,7 +107,10 @@ export function demoData(today = todayString()) {
     { personId: 4, name: 'Kit Invented', qualified: true, reasons: ['Served once in the last 8 weeks'] },
     { personId: 11, name: 'Lou Pretend', qualified: false, reasons: ['Not set up for Vocals'] },
   ];
-  return { today, sunday, TEAMS, SERVICES, PEOPLE, ITEMS, ROSTERS, BLOCKOUTS, GAPS, REMINDERS, CANDIDATES };
+  const AWAY = [
+    { personId: 6, name: 'Wren Example', qualified: true, reasons: ['Away Sat 7 Nov to Sun 15 Nov: Family visit'] },
+  ];
+  return { today, sunday, TEAMS, SERVICES, PEOPLE, ITEMS, ROSTERS, BLOCKOUTS, GAPS, REMINDERS, CANDIDATES, AWAY };
 }
 
 // A fake api: canned answers, no network.
@@ -115,7 +118,7 @@ export function demoApi(d) {
   const routes = (path) => {
     if (path === '/api/teams') return d.TEAMS;
     if (path.startsWith('/api/services')) return d.SERVICES;
-    if (path.startsWith('/api/admin/suggest')) return { candidates: path.includes('includeUnqualified') ? d.CANDIDATES : d.CANDIDATES.filter((c) => c.qualified) };
+    if (path.startsWith('/api/admin/suggest')) return { candidates: path.includes('includeUnqualified') ? d.CANDIDATES : d.CANDIDATES.filter((c) => c.qualified), away: d.AWAY };
     if (path === '/api/admin/gaps') return d.GAPS;
     if (path.startsWith('/api/admin/reminders')) return { reminders: d.REMINDERS };
     return {};
@@ -161,7 +164,7 @@ const frame = (label, body) => html`<figure class="gallery-frame-wrap"><figcapti
 function panelHtml(d, slot, state = {}) {
   const panel = createSlotPanel({ api: { get: () => new Promise(() => {}) }, paint: () => {} });
   panel.open(slot);
-  Object.assign(panel.state, { loading: false, candidates: d.CANDIDATES.filter((c) => c.qualified), ...state });
+  Object.assign(panel.state, { loading: false, candidates: d.CANDIDATES.filter((c) => c.qualified), away: d.AWAY, ...state });
   return panel.render();
 }
 

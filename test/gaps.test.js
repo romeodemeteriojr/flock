@@ -72,6 +72,7 @@ test('GET /api/admin/suggest: shape, includeUnqualified and validation errors', 
         personId: otherId, name: 'Olive Other', servedLast8Weeks: 0, lastServed: null, qualified: true, alsoOn: [],
         reasons: ['Has never served', 'Nothing scheduled in the next 4 weeks'],
       }],
+      away: [],
     });
     for (const flag of ['true', '1']) {
       const all = await get(`/api/admin/suggest?slotId=${open}&includeUnqualified=${flag}`, adminCookie);

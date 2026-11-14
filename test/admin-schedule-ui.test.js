@@ -415,6 +415,41 @@ test('slot panel: ranked suggestions with reasons, toggle shows untrained people
   assert.ok(!root.innerHTML.includes('data-slot-panel'));
 });
 
+test('slot panel: trained people who are away show in their own group, and assigning one asks first', async () => {
+  const away = [{ personId: 50, name: 'Kim Away', qualified: true, startDate: '2026-11-01', endDate: '2026-11-10', reason: 'Holiday', reasons: ['Away Sun 1 Nov to Tue 10 Nov: Holiday'] }];
+  const bodies = [];
+  const { root } = await schedSetup({
+    'GET /api/admin/suggest?slotId=4': { ...CANDS, away },
+    'PUT /api/slots/4/assign': (b) => { bodies.push(b); return b.force ? { slot: {} } : conflict('blocked'); },
+  });
+  await root.click('slot-open', 4);
+  await flush();
+  const h = root.innerHTML;
+  assert.match(h, /Away on this date \(1\)/);
+  assert.ok(h.indexOf('Old Joe') < h.indexOf('Kim Away'), 'away people come after the free ones');
+  assert.match(h, /chip-away[^>]*>.*Away<\/span>/s);
+  assert.match(h, /Away Sun 1 Nov to Tue 10 Nov: Holiday/);
+  assert.match(h, /aria-label="Assign Kim Away anyway"/);
+  await root.click('slot-assign', 50);
+  await flush();
+  assert.deepEqual(bodies, [{ personId: 50, force: false }]);
+  assert.match(root.innerHTML, /Kim Away is away on that date\. Assign anyway\?/);
+  await root.click('slot-force');
+  await flush();
+  assert.deepEqual(bodies.at(-1), { personId: 50, force: true });
+  assert.match(root.innerHTML, /Kim Away is now on Keys/);
+});
+
+test('slot panel: nobody free but someone away still names who is away', async () => {
+  const away = [{ personId: 50, name: 'Kim Away', qualified: true, reasons: ['Away Sun 8 Nov'] }];
+  const { root } = await schedSetup({ 'GET /api/admin/suggest?slotId=4': { candidates: [], away } });
+  await root.click('slot-open', 4);
+  await flush();
+  assert.match(root.innerHTML, /Nobody trained for this is free/);
+  assert.match(root.innerHTML, /Kim Away/);
+  assert.match(root.innerHTML, /Away Sun 8 Nov/);
+});
+
 test('slot panel: assign works, reloads and closes', async () => {
   const { api, root } = await schedSetup({ 'GET /api/admin/suggest?slotId=4': CANDS, 'PUT /api/slots/4/assign': { slot: {} } });
   await root.click('slot-open', 4);
