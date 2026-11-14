@@ -293,7 +293,7 @@ test('suggest: who said no, then trained people who are away that day, are liste
   assert.deepEqual(r.candidates.map((c) => c.personId).sort(), [fine.id, later.id].sort());
   // Who said no first (with their day off too), then the away people by name; inactive and untrained left out.
   assert.deepEqual(r.unavailable, [
-    { personId: zed.id, name: 'Zed Declined', qualified: true, why: 'declined', reasons: ['Said no to this', 'Away Sun 26 Jan'] },
+    { personId: zed.id, name: 'Zed Declined', qualified: true, why: 'declined', reasons: ['Away Sun 26 Jan'] },
     { personId: al.id, name: 'Al Away', qualified: true, why: 'away', startDate: '2025-01-26', endDate: '2025-01-26', reason: '', reasons: ['Away Sun 26 Jan'] },
     { personId: bo.id, name: 'Bo Blocked', qualified: true, why: 'away', startDate: '2025-01-20', endDate: '2025-01-30', reason: 'Holiday', reasons: ['Away Mon 20 Jan to Thu 30 Jan: Holiday'] },
   ]);
@@ -311,7 +311,7 @@ test('suggest: whoever said no is listed even when not trained, unless no longer
   const { slots: [target] } = await service('2025-01-26');
   await put(target, ned.id, { status: 'declined' });
   assert.deepEqual((await svc.suggest({ slotId: target })).unavailable, [
-    { personId: ned.id, name: 'Ned No', qualified: false, why: 'declined', reasons: ['Said no to this', 'Not set up for Drums'] },
+    { personId: ned.id, name: 'Ned No', qualified: false, why: 'declined', reasons: ['Not set up for Drums'] },
   ]);
   await deactivate(ned);
   assert.deepEqual((await svc.suggest({ slotId: target })).unavailable, []);

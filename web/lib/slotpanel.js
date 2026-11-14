@@ -243,7 +243,7 @@ export function createSlotPanel({ api, paint, changed = () => {} }) {
         <p class="candidate-name"><strong>${c.name}</strong> ${c.why === 'declined'
     ? html`<span class="chip chip-bad">${iconSlot('x', 'chip-icon')}Said no</span>`
     : html`<span class="chip chip-away">${iconSlot('calendar', 'chip-icon')}Away</span>`}${c.qualified === false ? html` <span class="chip chip-plain">Not trained</span>` : ''}</p>
-        <ul class="hint reasons">${(c.reasons ?? []).map((r) => html`<li>${r}</li>`)}</ul></div></div>
+        ${c.reasons?.length ? html`<ul class="hint reasons">${c.reasons.map((r) => html`<li>${r}</li>`)}</ul>` : ''}</div></div>
         <div class="btn-row candidate-actions"><button type="button" class="btn" disabled aria-label="Can't assign ${c.name}: ${c.why === 'declined' ? 'said no' : 'away'}">Assign</button></div>
       </li>`)}</ul>`;
     }
