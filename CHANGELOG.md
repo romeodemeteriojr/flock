@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+No database changes.
+
+### A shorter Services page
+
+- **Opens on the list.** **Services** now shows the upcoming services first, with an **Add a service** button. The form opens when you tap it, so you no longer scroll past it to reach a service.
+- **Start from.** In the add form, tap a recent service (the latest of each title and time, up to 4) to copy its time, title and positions onto the next free week. **Blank** starts clean. (Decision 0012.)
+- **Teams fold up.** Each team in the position picker is one line, like "Drums, Keys x2". Tap to open it. What you picked in a folded team is still saved. A single team starts open.
+
 ## 0.12.0
 
 Database change: migration 0005 adds the `attachments` table. Older versions of Flock cannot open the database after this.
