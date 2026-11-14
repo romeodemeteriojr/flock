@@ -7,6 +7,7 @@ import * as account from './views/account.js';
 import * as offline from './views/offline.js';
 import * as installSteps from './views/install-steps.js';
 import { createInstall, canInstall, isIosSafari } from './lib/install.js';
+import { errorFromEvent, reasonFromEvent } from './lib/stray-error.js';
 import { createSheet, host, watchHost } from './lib/sheet.js';
 import { watchScroll } from './lib/topbar.js';
 import { swipeToDismiss } from './lib/swipe.js';
@@ -331,8 +332,18 @@ export function createApp({ root, win = globalThis.window, api = createApi() }) 
     if (doc?.addEventListener) watchLimits(doc);
     registerWorker(win).catch(() => { /* no worker: Flock works, just not offline */ });
     win.addEventListener('hashchange', onHashChange);
-    win.addEventListener('unhandledrejection', (e) => { e.preventDefault(); handleError(e.reason); });
-    win.addEventListener('error', (e) => { e.preventDefault(); handleError(e.error); });
+    // Only Flock's own errors get the toast (web/lib/stray-error.js); the rest are logged.
+    win.addEventListener('unhandledrejection', (e) => {
+      e.preventDefault();
+      const reason = reasonFromEvent(e);
+      if (reason) handleError(reason); else win.console?.warn?.('Flock: ignored', e.reason);
+    });
+    win.addEventListener('error', (e) => {
+      const err = errorFromEvent(e);
+      if (!err) { win.console?.warn?.('Flock: ignored', e.message); return; }
+      e.preventDefault();
+      handleError(err);
+    });
     // Try again by itself when the phone gets a connection back, or Flock comes back to the screen.
     win.addEventListener('online', () => { if (offlineShown) boot(); });
     doc?.addEventListener?.('visibilitychange', () => {
