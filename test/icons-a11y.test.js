@@ -300,6 +300,8 @@ test('icons-a11y: every button and link in gaps is accessible', () => {
   const results = viewStates(gaps, [
     ['loading', () => gaps.render({})],
     ['with-gaps', () => gaps.renderScreen(gm())],
+    ['gaps-one-open', () => gaps.renderScreen(gm({ open: gaps.openGroups(gaps.groupGaps(d.GAPS.items), new Set()) }))],
+    ['gaps-filtered', () => gaps.renderScreen(gm({ filter: 'declined' }))],
     ['no-gaps', () => gaps.renderScreen(gm({ summary: {}, items: [], reminders: { weekOf: d.sunday, list: [], loading: false, error: '', notice: '' } }))],
     ['empty-reminders', () => gaps.renderScreen(gm({ reminders: { weekOf: d.sunday, list: [], loading: false, error: '', notice: '' } }))],
   ], 'gaps');

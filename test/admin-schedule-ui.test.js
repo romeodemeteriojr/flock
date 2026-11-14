@@ -560,7 +560,10 @@ test('gaps: summary counts by kind, then one group per service (roster day) in d
   assert.deepEqual([...h.matchAll(/data-gap-service="([^"]+)"/g)].map((x) => x[1]), ['2026-11-08T09:00', '2026-11-15T09:00']);
   const badges = [...h.matchAll(/role="img" data-gap-count="([^"]+)" aria-label="([^"]+)">(\d+)</g)].map((x) => x.slice(1));
   assert.deepEqual(badges, [['2026-11-08T09:00', '4 gaps', '4'], ['2026-11-15T09:00', '1 gap', '1']]);
-  assert.match(h, /<span class="gap-label num">Sun 8 Nov at 9:00 am<\/span>/);
+  assert.match(h, /<span class="visually-hidden">Sun 8 Nov: <\/span>Sunday service<\/span>\s*<span class="disclosure-sub num">9:00 am<\/span>/);
+  assert.match(h, /data-action="toggle-gaps" data-id="2026-11-08T09:00" aria-expanded="true"/, 'the nearest service starts open');
+  assert.match(h, /data-action="toggle-gaps" data-id="2026-11-15T09:00" aria-expanded="false"/, 'later ones are one line each');
+  assert.doesNotMatch(h.slice(h.indexOf('data-gap-service="2026-11-15T09:00"')), /data-gap-type/, 'a folded service lists nothing');
   // Inside a group, each item still says what kind of gap it is, in words, with the person when there is one.
   const first = h.slice(h.indexOf('data-gap-service="2026-11-08T09:00"'), h.indexOf('data-gap-service="2026-11-15T09:00"'));
   assert.deepEqual([...first.matchAll(/data-gap-type="(\w+)"/g)].map((x) => x[1]), ['declined', 'open', 'blocked', 'unanswered']);
@@ -1156,4 +1159,34 @@ test('position picker: one team with positions starts open', async () => {
   const { root } = await svcSetup({ 'GET /api/teams': [TEAMS[0]] });
   root.click('add-open');
   assert.doesNotMatch(root.innerHTML, /data-team-body="1" hidden/);
+});
+
+test('gaps: services fold and unfold; finishing the open one opens the next; folding everything is respected', () => {
+  const g = gaps.groupGaps(GAPS.items);
+  assert.deepEqual([...gaps.openGroups(g, new Set())], ['2026-11-08T09:00'], 'nothing open yet: the nearest');
+  assert.deepEqual([...gaps.openGroups(g, new Set(['2026-11-15T09:00']))], ['2026-11-15T09:00'], 'what was open stays open');
+  assert.deepEqual([...gaps.openGroups(g.slice(1), new Set(['2026-11-08T09:00']))], ['2026-11-15T09:00'], 'the open one was filled: the next opens');
+  assert.deepEqual([...gaps.openGroups(g, new Set(), true)], [], 'the scheduler folded everything away');
+  assert.deepEqual([...gaps.openGroups([], new Set(['x']))], []);
+});
+
+test('gaps: tapping a service folds or unfolds it; a filter shows every match unfolded', async () => {
+  const { root } = await gapsSetup();
+  root.click('toggle-gaps', '2026-11-15T09:00');
+  let h = root.innerHTML;
+  assert.match(h, /data-id="2026-11-15T09:00" aria-expanded="true"/);
+  assert.match(h, /data-id="2026-11-08T09:00" aria-expanded="true"/, 'several can be open');
+  root.click('toggle-gaps', '2026-11-08T09:00');
+  root.click('toggle-gaps', '2026-11-15T09:00');
+  h = root.innerHTML;
+  assert.doesNotMatch(h, /data-gap-type/);
+  root.click('filter', undefined, { dataset: { action: 'filter', filter: 'unanswered' } });
+  h = root.innerHTML;
+  assert.deepEqual([...h.matchAll(/data-gap-type="(\w+)"/g)].map((x) => x[1]), ['unanswered'], 'a filter answers its question unfolded');
+  assert.doesNotMatch(h, /data-action="toggle-gaps"/, 'nothing to fold while filtering');
+});
+
+test('gaps: the service holding the open slot panel stays unfolded', () => {
+  const m = { loading: false, error: '', notice: '', summary: {}, items: GAPS.items, tab: 'gaps', filter: 'all', open: new Set(), current: 5, reminders: { weekOf: TODAY, list: null } };
+  assert.match(gaps.renderScreen(m), /data-action="slot-open" data-id="5" aria-current="true"/);
 });

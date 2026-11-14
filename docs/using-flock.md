@@ -166,7 +166,8 @@ Schedulers also see:
   served longest ago. Nobody is asked until you choose **Ask these people**.
   Positions nobody can fill stay empty and show on Gaps.
 - **Gaps** has two tabs. **Gaps** lists the next 4 weeks of positions that
-  still need attention, one card per service, each marked with why: empty,
+  still need attention, one card per service (only the nearest is open; tap
+  the others to open them), each marked with why: empty,
   said no, not answered, held by someone who is now away or no longer active.
   The chips at the top show one kind at a time. **Reminders** writes reminder
   messages for a chosen week: **Share** or **Copy** them into your messages

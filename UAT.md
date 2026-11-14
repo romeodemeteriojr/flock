@@ -299,11 +299,13 @@ to **Welcome** there, and **Vocals**, **Keys** and **Door greeter** are empty.
 1. Click **Gaps**. You should see two tabs, **Gaps** and **Reminders**, then
    "**… gaps in the next 4 weeks**" and filter chips (**All** and each kind
    there is, such as **Nobody yet** and **Said no**, with counts). Below, a
-   card per service (date and time, with how many gaps it has), in date order.
-   Each position says what kind of gap it is, with the person's name when
-   there is one (for example **Said no** and who said it). Tap **Said no**:
-   only those show; tap **All** again.
-2. Find the **Welcome (Greeters)** gap in the first Practice service. Click it.
+   card per service (a date tile, title, time and a red count of its gaps), in
+   date order. Only the nearest one is open; the others are one line each.
+   Tap one to open it, and again to fold it. Each position says what kind of
+   gap it is, with the person's name when there is one (for example
+   **Said no** and who said it). Tap **Said no**: only those show, every
+   service open; tap **All** again.
+2. Open the first Practice service and find its **Welcome (Greeters)** gap. Click it.
    The same panel opens. Click **Assign** on the first suggested person. You
    should see their name is now on it, and the **Nobody yet** count goes down by one.
 3. Tap the **Reminders** tab. You should see: **Flock never sends messages. Copy
