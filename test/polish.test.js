@@ -279,8 +279,8 @@ function allViewHtml() {
   add(teams.render({})); add(tm({ loading: true })); add(tm({ error: 'E', notice: 'N' })); add(tm({ teams: [] }));
   for (const panel of [{ kind: 'rename-team', id: 1 }, { kind: 'delete-team', id: 1 }, { kind: 'add-position', id: 1 }, { kind: 'rename-position', id: 10 }, { kind: 'delete-position', id: 10 }]) add(tm({ panel }));
   // Services.
-  const sm = (x = {}) => services.renderScreen({ teams: TEAMS, services: SERVICES, loading: false, panel: null, error: '', notice: '', today: TODAY, draft: null, ...x });
-  add(services.render({})); add(sm({ loading: true })); add(sm({ error: 'E', notice: 'N' })); add(sm({ services: [], teams: [] }));
+  const sm = (x = {}) => services.renderScreen({ teams: TEAMS, services: SERVICES, recent: SERVICES, loading: false, panel: null, error: '', notice: '', today: TODAY, draft: null, adding: false, startKey: null, openTeams: new Set(), ...x });
+  add(services.render({})); add(sm({ loading: true })); add(sm({ error: 'E', notice: 'N' })); add(sm({ services: [], teams: [] })); add(sm({ adding: true })); add(sm({ adding: true, services: [], teams: [] }));
   for (const panel of [{ kind: 'edit', id: 1 }, { kind: 'repeat', id: 1 }, { kind: 'delete', id: 1, count: 2 }, { kind: 'delete', id: 3, count: 0 }]) add(sm({ panel }));
   // Schedule.
   const sc = (x = {}, p = '') => schedule.renderScreen({ services: SERVICES, teams: TEAMS, loading: false, error: '', notice: '', today: TODAY, from: TODAY, to: '2027-01-02', ...x }, p);

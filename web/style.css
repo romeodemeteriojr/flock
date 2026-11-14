@@ -540,6 +540,16 @@ input[type="checkbox"], input[type="radio"] { width: 1.4rem; height: 1.4rem; acc
 .fieldset legend { padding: 0 var(--s-2); font-weight: 700; max-width: 100%; overflow-wrap: anywhere; }
 .pos-pick { display: grid; grid-template-columns: minmax(0, 1fr) 7rem; gap: var(--s-1) var(--s-3); align-items: end; margin-bottom: var(--s-3); }
 .pos-pick .check { grid-row: span 2; align-self: center; }
+.pick-team { padding-bottom: var(--s-2); }
+.pick-team-name { font-weight: 700; overflow-wrap: anywhere; }
+.pick-team-body { margin-top: var(--s-2); }
+.pick-team-body[hidden] { display: none; }
+.start-row { display: flex; flex-wrap: wrap; gap: var(--s-2); }
+.start-choice { flex-direction: column; align-items: flex-start; gap: 2px; min-height: 44px; min-width: 0; max-width: 100%; text-align: left; white-space: normal; overflow-wrap: anywhere; }
+.start-choice[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); }
+.start-main { font-weight: 700; }
+.start-sub { font-size: var(--fs-xs); color: var(--muted); font-weight: 500; }
+@media (max-width: 420px) { .start-choice { width: 100%; } }
 .count-label { font-size: var(--fs-xs); color: var(--muted); margin: 0; overflow-wrap: anywhere; }
 .pos-pick .check { min-width: 0; overflow-wrap: anywhere; }
 .input-icon { position: relative; }

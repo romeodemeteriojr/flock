@@ -33,7 +33,7 @@ const SERVICES = [
     slot(4, 11),
   ] },
 ];
-const SVC_PATH = `GET /api/services?from=${TODAY}&to=2027-05-05`;
+const SVC_PATH = 'GET /api/services?from=2026-08-05&to=2027-05-05'; // 91 days back for Start from
 const SCHED_PATH = `GET /api/services?from=${TODAY}&to=2026-12-29`;
 
 async function svcSetup(extra = {}) {
@@ -118,9 +118,13 @@ test('services: list sorted by date, grouped positions, people count; empty stat
   assert.match(h, /Sun 8 Nov at 9:00 am/);
   assert.match(h, /Band: Drums x2, Keys\. Sound: Mixer/);
   assert.match(h, /3 people are scheduled on this date/); // like the server: anyone in a slot
-  assert.match(h, /value="Wednesday service"/, "the title follows the day (4 Nov 2026 is a Wednesday)");
-  assert.match(h, /value="09:00"/);
-  assert.ok(h.indexOf('Drums') < h.indexOf('Mixer'));
+  assert.doesNotMatch(h, /id="svc-date"/, 'the page opens on the list, not the form');
+  assert.match(h, /data-action="add-open"/);
+  root.click('add-open');
+  const f = root.innerHTML;
+  assert.match(f, /value="Wednesday service"/, "the title follows the day (4 Nov 2026 is a Wednesday)");
+  assert.match(f, /value="09:00"/);
+  assert.ok(f.indexOf('name="pos-10"') < f.indexOf('name="pos-20"'), 'positions follow the Teams page order');
   const empty = await svcSetup({ [SVC_PATH]: [] });
   assert.match(empty.root.innerHTML, /No upcoming services yet/);
 });
@@ -142,6 +146,7 @@ test('services: form builds the right POST body', async () => {
 
 test('services: a form error keeps what the scheduler typed', async () => {
   const { api, root } = await svcSetup();
+  root.click('add-open');
   root.submit('create', { date: '2026-11-22', time: '10:30', title: 'Easter', 'pos-10': true, 'count-10': '99', 'pos-20': true, 'count-20': '2' });
   await flush();
   assert.equal(api.calls.length, 0);
@@ -1016,6 +1021,7 @@ test('add service: the title follows the day until one is typed; no past dates o
   assert.equal(services.titleFor('2026-11-08'), 'Sunday service');
   assert.equal(services.titleFor('bad'), 'Sunday service');
   const { root } = await svcSetup();
+  root.click('add-open');
   assert.match(root.innerHTML, /id="svc-date" name="date" type="date" required min="2026-11-04"/);
   const title = { value: 'Wednesday service' };
   root.querySelector = (sel) => (sel === '#svc-title' ? title : null);
@@ -1030,8 +1036,108 @@ test('add service: the title follows the day until one is typed; no past dates o
 test('add service: teams with no positions are one line, not one box each', async () => {
   const teams = [...TEAMS, { id: 90, name: 'Empty A', positions: [] }, { id: 91, name: 'Empty B', positions: [] }];
   const { root } = await svcSetup({ 'GET /api/teams': teams });
+  root.click('add-open');
   assert.doesNotMatch(root.innerHTML, /Empty A|Empty B|No positions in this team yet/);
   assert.match(root.innerHTML, /2 teams have no positions yet, so they are not shown\./);
   const only = await svcSetup({ 'GET /api/teams': [{ id: 90, name: 'Empty A', positions: [] }] });
+  only.root.click('add-open');
   assert.match(only.root.innerHTML, /No positions yet\. Add positions on the Teams page first\./);
+});
+
+// ---------- services: Start from, folded teams ----------
+
+const hist = (id, date, time, title, positions) => ({ id, date, time, title, slots: positions.map((p, i) => slot(id * 10 + i, p)) });
+
+test('startChoices: latest of each title and time, only with positions, newest first, at most 4', () => {
+  const list = [
+    hist(1, '2026-10-04', '09:00', 'Sunday service', [10]),
+    hist(2, '2026-10-25', '09:00', 'Sunday service', [10, 11]),
+    hist(3, '2026-10-26', '11:00', 'Empty one', []),
+    hist(4, '2026-10-18', '19:00', 'Youth night', [20]),
+  ];
+  assert.deepEqual(services.startChoices(list).map((s) => s.id), [2, 4], 'the 25 Oct Sunday wins; a service with no positions is left out');
+  const many = [1, 2, 3, 4, 5, 6].map((n) => hist(n, `2026-10-0${n}`, '09:00', `T${n}`, [10]));
+  assert.deepEqual(services.startChoices(many).map((s) => s.id), [6, 5, 4, 3]);
+  assert.deepEqual(services.startChoices(undefined), []);
+});
+
+test('nextFreeDate: a week on, today or later, and not on a taken date at that time', () => {
+  const src = hist(1, '2026-10-25', '09:00', 'Sunday service', [10]);
+  assert.equal(services.nextFreeDate(src, [src], TODAY), '2026-11-08', 'a week after a past service is too early: roll to the next Sunday from today');
+  const taken = [src, hist(2, '2026-11-08', '09:00', 'Sunday service', [10])];
+  assert.equal(services.nextFreeDate(src, taken, TODAY), '2026-11-15');
+  const otherTime = [src, hist(2, '2026-11-08', '11:00', 'Other', [10])];
+  assert.equal(services.nextFreeDate(src, otherTime, TODAY), '2026-11-08', 'a different time on the same date is no clash');
+  const ahead = hist(3, '2026-11-15', '09:00', 'Sunday service', [10]);
+  assert.equal(services.nextFreeDate(ahead, [ahead], TODAY), '2026-11-22');
+});
+
+test('teamSummary: what is picked in a team, with counts', () => {
+  const band = TEAMS[0];
+  assert.equal(services.teamSummary(band, {}), 'None picked');
+  assert.equal(services.teamSummary(band, { 10: { on: true, count: '1' }, 11: { on: true, count: '2' } }), 'Drums, Keys x2');
+  assert.equal(services.teamSummary(band, { 10: { on: false, count: '3' } }), 'None picked');
+});
+
+test('add service: Start from copies a recent service onto the next free week; Blank clears it', async () => {
+  const past = hist(9, '2026-10-25', '09:00', 'Family service', [10, 10, 11]);
+  const { api, root } = await svcSetup({ [SVC_PATH]: [past, ...SERVICES] });
+  root.click('add-open');
+  let h = root.innerHTML;
+  assert.match(h, /Start from/);
+  assert.match(h, /Sunday service · 9:00 am/);
+  assert.match(h, /Family service · 9:00 am/);
+  assert.match(h, /data-action="start-from" data-id="-1" aria-pressed="true"/, 'the form opens on Blank');
+  root.click('start-from', 1);
+  h = root.innerHTML;
+  assert.match(h, /name="date" type="date" required min="2026-11-04" value="2026-11-22"/, 'Sunday 8 and 15 Nov are taken at 9:00');
+  assert.match(h, /name="pos-10" type="checkbox" checked>/);
+  assert.match(h, /name="count-10" type="number" min="1" max="20" value="2"/);
+  assert.match(h, /data-team-sum="1">Drums x2, Keys</);
+  api.calls.length = 0;
+  root.submit('create', { date: '2026-11-22', time: '09:00', title: 'Family service', 'pos-10': true, 'count-10': '2', 'pos-11': true, 'count-11': '1' });
+  await flush();
+  assert.match(api.calls[0], /^POST \/api\/services /);
+  assert.doesNotMatch(root.innerHTML, /id="svc-date"/, 'a saved service closes the form');
+  root.click('add-open');
+  root.click('start-from', 1);
+  root.click('start-from', -1);
+  assert.match(root.innerHTML, /value="Wednesday service"/, 'Blank goes back to the day\'s title');
+  assert.doesNotMatch(root.innerHTML, /name="pos-10" type="checkbox" checked>/);
+});
+
+test('add service: Cancel closes the form; opening a row panel closes it too', async () => {
+  const { root } = await svcSetup();
+  root.click('add-open');
+  assert.match(root.innerHTML, /id="svc-date"/);
+  root.click('add-cancel');
+  assert.doesNotMatch(root.innerHTML, /id="svc-date"/);
+  root.click('add-open');
+  root.click('edit', 1);
+  assert.doesNotMatch(root.innerHTML, /id="svc-date"/, 'one form at a time');
+  assert.match(root.innerHTML, /id="edit-date-1"/);
+});
+
+test('position picker: teams are folded lines, but folded picks are still in the form', async () => {
+  const { root } = await svcSetup();
+  root.click('add-open');
+  let h = root.innerHTML;
+  assert.match(h, /data-team-body="1" hidden/);
+  assert.match(h, /data-team-body="2" hidden/);
+  assert.match(h, /aria-expanded="false"/);
+  assert.match(h, /name="pos-10"/, 'a folded team keeps its checkboxes in the form');
+  root.click('toggle-pick-team', 1);
+  root.click('start-from', -1); // any repaint
+  h = root.innerHTML;
+  assert.doesNotMatch(h, /data-team-body="1" hidden/, 'an open team stays open across a repaint');
+  assert.match(h, /data-team-body="2" hidden/);
+  root.click('toggle-pick-team', 1);
+  root.click('start-from', -1);
+  assert.match(root.innerHTML, /data-team-body="1" hidden/);
+});
+
+test('position picker: one team with positions starts open', async () => {
+  const { root } = await svcSetup({ 'GET /api/teams': [TEAMS[0]] });
+  root.click('add-open');
+  assert.doesNotMatch(root.innerHTML, /data-team-body="1" hidden/);
 });

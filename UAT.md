@@ -208,13 +208,15 @@ Use the laptop. Keep the terminal window open.
 
 ### 6. Create a service date
 
-1. Click **Services**. You should see **Add a service** and the eight demo
-   Sundays under **Upcoming services**.
-2. Leave the Date empty and click **Add service**. You should see
+1. Click **Services**. You should see an **Add a service** button and the
+   eight demo Sundays under **Upcoming services**. No form yet.
+2. Click **Add a service**. Leave the Date empty and click **Add service**. You should see
    **Please pick a date.**
 3. Pick a date about **two weeks from today**. Set the time to 9:00 am and the
-   title to `Practice service`. Under **Ushers**, tick **Door** and set
-   **How many Door** to `1`. Under **Greeters**, tick **Welcome** (also `1`).
+   title to `Practice service`. Each team is one folded line: tap **Ushers**
+   to open it, tick **Door** and set **How many Door** to `1`. Open
+   **Greeters** and tick **Welcome** (also `1`). The folded lines now say
+   **Door** and **Welcome**.
 4. Click **Add service** (try double-clicking). You should see **Service added
    for** that date, and the new service in the list: **Practice service**, with
    **Greeters: Welcome. Ushers: Door.** Only one should be added.
@@ -224,6 +226,11 @@ Use the laptop. Keep the terminal window open.
 6. Try to add a service with **How many Door** set to `0`. You should see
    **How many Door? Please type a number from 1 to 20.** and what you typed is
    still there.
+7. Click **Add a service** again. Under **Start from** you should see
+   **Practice service · 9:00 am** and **Blank**. Tap the Practice service: the
+   time, title and positions are filled in, and the date is the next week with
+   no Practice service. Tap **Blank** and they clear. Click **Cancel**: the
+   form closes.
 
 - [ ] Pass   [ ] Fail   Notes: ______________________________
 

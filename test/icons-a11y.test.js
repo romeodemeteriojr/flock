@@ -260,11 +260,13 @@ test('icons-a11y: every button and link in teams is accessible', () => {
 
 test('icons-a11y: every button and link in services is accessible', () => {
   const sm = (extra = {}) => ({
-    teams: d.TEAMS, services: d.SERVICES, loading: false, panel: null, error: '', notice: '', today: d.today, draft: null, ...extra
+    teams: d.TEAMS, services: d.SERVICES, recent: d.SERVICES, loading: false, panel: null, error: '', notice: '', today: d.today, draft: null, adding: false, startKey: null, openTeams: new Set(), ...extra
   });
   const results = viewStates(services, [
     ['loading', () => services.render({})],
     ['list', () => services.renderScreen(sm())],
+    ['add-form', () => services.renderScreen(sm({ adding: true }))],
+    ['add-form-open-team', () => services.renderScreen(sm({ adding: true, startKey: null, openTeams: new Set([d.TEAMS[0].id]) }))],
     ['delete-panel', () => services.renderScreen(sm({ panel: { kind: 'delete', id: 1, count: 3 } }))],
     ['repeat-panel', () => services.renderScreen(sm({ panel: { kind: 'repeat', id: 2 } }))],
     ['error', () => services.renderScreen(sm({ error: 'Pick a number from 1 to 20.' }))],
@@ -334,7 +336,7 @@ test('icons-a11y: all icons used across all views are valid', () => {
   allHtml.push(String(teams.renderScreen({ teams: [], loading: false, panel: null, error: '', notice: '' })));
 
   // Services
-  allHtml.push(String(services.renderScreen({ teams: [], services: [], loading: false, panel: null, error: '', notice: '', today: d.today, draft: null })));
+  allHtml.push(String(services.renderScreen({ teams: [], services: [], recent: [], loading: false, panel: null, error: '', notice: '', today: d.today, draft: null, adding: true, startKey: null, openTeams: new Set() })));
 
   // Schedule
   allHtml.push(String(schedule.renderScreen({ services: [], teams: [], loading: false, error: '', notice: '', today: d.today, from: d.today, to: d.today })));

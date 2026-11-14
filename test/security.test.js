@@ -523,6 +523,9 @@ test('stored XSS: every web/views/*.js render path escapes hostile data from the
     const { root } = await screen('admin-services');
     assert.ok(allHtml(root).includes('&lt;/title&gt;'), 'title shown');
     assertSafe(allHtml(root), 'admin-services');
+    root.click('add-open'); await flush(); assertSafe(allHtml(root), 'admin-services add form');
+    root.click('start-from', 0); await flush(); assertSafe(allHtml(root), 'admin-services start from');
+    root.click('add-cancel'); await flush();
     for (const action of ['delete', 'repeat']) { root.click(action, w.s1.id); await flush(); assertSafe(allHtml(root), `admin-services ${action}`); }
   }
   // Schedule grid, the slot panel with suggestions, and a conflict naming the person.
