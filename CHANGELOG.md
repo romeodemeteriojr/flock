@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+No database changes.
+
+- **A quieter bell.** With notifications on, the bell is the same plain outline as when they're off, just without the slash. No more solid coloured button.
+
 ## 0.14.1
 
 No database changes.

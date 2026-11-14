@@ -307,9 +307,11 @@ test('top bar: the bell shows only when the church turned notifications on, and 
   assert.doesNotMatch(on, /bell-off/);
 });
 
-test('the bell has no dot: on and off differ by the icon and the fill', async () => {
+test('the bell has no dot, and on looks like off without the slash', async () => {
   const css = (await import('node:fs')).readFileSync(new URL('../web/style.css', import.meta.url), 'utf8');
   assert.doesNotMatch(css, /\.icon-btn\.is-on::after/);
+  assert.doesNotMatch(css, /\.icon-btn\.is-on[^{]*\{[^}]*(background|fill)/, 'no solid fill or accent background when on: it is the quiet, normal state');
+  assert.match(css, /\.icon-btn\.is-on, \.icon-btn\.is-off \{ color: var\(--muted\); \}/);
   const { icon } = await import('../web/lib/icons.js');
   assert.match(icon('bell-off'), /M3\.75 3\.75l16\.5 16\.5/);
 });

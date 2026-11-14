@@ -36,8 +36,8 @@ function link(r, current, extra = '') {
   return html`<li class="nav-item"><a href="#${r.path}" ${r.path === current ? html`aria-current="page"` : ''}>${iconSlot(ICONS[r.path] ?? 'chevron', 'nav-icon')}<span class="nav-label">${r.label}</span>${SHORT[r.path] ? html`<span class="nav-label-short">${SHORT[r.path]}</span>` : ''}${extra}</a></li>`;
 }
 
-// The bell (decision 0008): opens the Notifications page. On here: a solid
-// accent bell. Off: a plain, crossed-out bell.
+// The bell (decision 0008): opens the Notifications page. On here: a plain
+// bell. Off: the same bell, crossed out.
 function bell(push) {
   const on = push.status === 'on';
   const label = on ? 'Notifications: on for this device' : 'Notifications: off for this device';
