@@ -417,7 +417,7 @@ test('slot panel: ranked suggestions with reasons, toggle shows untrained people
 
 test('slot panel: who said no and who is away show under Not available, and cannot be assigned', async () => {
   const unavailable = [
-    { personId: 51, name: 'Dee Declined', qualified: true, why: 'declined', reasons: ['Said no to this'] },
+    { personId: 51, name: 'Dee Declined', qualified: true, why: 'declined', reasons: [] },
     { personId: 50, name: 'Kim Away', qualified: true, why: 'away', startDate: '2026-11-01', endDate: '2026-11-10', reason: 'Holiday', reasons: ['Away Sun 1 Nov to Tue 10 Nov: Holiday'] },
   ];
   const { api, root } = await schedSetup({ 'GET /api/admin/suggest?slotId=4': { ...CANDS, unavailable } });

@@ -108,7 +108,7 @@ export function demoData(today = todayString()) {
     { personId: 11, name: 'Lou Pretend', qualified: false, reasons: ['Not set up for Vocals'] },
   ];
   const UNAVAILABLE = [
-    { personId: 7, name: 'Juniper Test', qualified: true, why: 'declined', reasons: ['Said no to this'] },
+    { personId: 7, name: 'Juniper Test', qualified: true, why: 'declined', reasons: [] },
     { personId: 6, name: 'Wren Example', qualified: true, why: 'away', reasons: ['Away Sat 7 Nov to Sun 15 Nov: Family visit'] },
   ];
   return { today, sunday, TEAMS, SERVICES, PEOPLE, ITEMS, ROSTERS, BLOCKOUTS, GAPS, REMINDERS, CANDIDATES, UNAVAILABLE };

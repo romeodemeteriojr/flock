@@ -176,7 +176,7 @@ export function createGapsService(deps) {
      * they are missing. First whoever said no to this slot (why: 'declined',
      * shown whatever their training), then, by name, the people the rules
      * above would list but for a day off covering the date (why: 'away', with
-     * the blockout's startDate, endDate and reason). Each has reason lines.
+     * the blockout's startDate, endDate and reason). Each has reason lines (a plain no has none: the chip says it).
      */
     async suggest({ slotId, includeUnqualified = false } = {}) {
       if (!isInt(slotId)) throw new ValidationError('Slot id must be a whole number.');
@@ -231,7 +231,7 @@ export function createGapsService(deps) {
           if (slot.status === 'declined' && slot.personId === p.id) {
             declined.push({
               personId: p.id, name: p.name, qualified, why: 'declined',
-              reasons: ['Said no to this', ...(off ? [awayReason(off)] : []), ...(qualified ? [] : [notSetUp])],
+              reasons: [...(off ? [awayReason(off)] : []), ...(qualified ? [] : [notSetUp])],
             });
             continue;
           }
