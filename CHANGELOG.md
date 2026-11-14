@@ -5,6 +5,7 @@
 No database changes.
 
 - **Closing a PDF works again.** Closing a PDF showed "Something went wrong" and left the page behind stuck, so it could not scroll (which is why a file added again seemed impossible to open). Closing now always finishes cleanly, even while the file is still loading.
+- **Files are PDF, text and photos, and every one opens inside Flock** with the **X** to close: PDF, text and chord charts (TXT, MD, ChordPro), and photos (JPG, PNG, GIF, WebP). Word, Excel and PowerPoint files, audio, video and CSV are no longer kept: add a link instead (a Google Doc, OneDrive or Dropbox file, a YouTube video). iPhone photos are sent as JPEG. Files added before this stay until they expire.
 
 ## 0.14.3
 
