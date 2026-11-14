@@ -65,7 +65,19 @@ export function planAutofill({ today, start, weeks, slots, history, people, avai
   const end = addDays(start, 7 * weeks - 1);
   const countFrom = addDays(start, -FAIRNESS_LOOKBACK_DAYS);
   const everyOf = (id) => (availability.has(id) ? availability.get(id) : DEFAULT_EVERY_WEEKS);
-  const isBlocked = (id, date) => blockouts.some((b) => b.personId === id && b.startDate <= date && date <= b.endDate);
+  // Indexed by person: Fill asks this for every candidate of every slot.
+  const blocksOf = new Map();
+  for (const b of blockouts) {
+    if (!blocksOf.has(b.personId)) blocksOf.set(b.personId, []);
+    blocksOf.get(b.personId).push(b);
+  }
+  const isBlocked = (id, date) => (blocksOf.get(id) ?? []).some((b) => b.startDate <= date && date <= b.endDate);
+  const gaps = new Map(); // `${a}|${b}` -> weeksApart(a, b): the same few dates come up again and again
+  const apart = (a, b) => {
+    const k = `${a}|${b}`;
+    if (!gaps.has(k)) gaps.set(k, weeksApart(a, b));
+    return gaps.get(k);
+  };
 
   const held = new Map(); // personId -> dates of pending/accepted slots (existing and planned)
   const onService = new Set(); // `${serviceId}:${personId}`: already on it, or said no to it
@@ -80,14 +92,16 @@ export function planAutofill({ today, start, weeks, slots, history, people, avai
   }
   const active = people.filter((p) => p.active);
 
+  const byPosition = new Map(); // positionId -> active people who can do it
   function candidates(slot) {
-    const qualified = active.filter((p) => p.positionIds.includes(slot.positionId));
+    if (!byPosition.has(slot.positionId)) byPosition.set(slot.positionId, active.filter((p) => p.positionIds.includes(slot.positionId)));
+    const qualified = byPosition.get(slot.positionId);
     const free = qualified.filter((p) => {
       const n = everyOf(p.id);
       if (n === 0) return false;
       if (isBlocked(p.id, slot.serviceDate)) return false;
       if (onService.has(`${slot.serviceId}:${p.id}`)) return false;
-      return (held.get(p.id) ?? []).every((d) => weeksApart(d, slot.serviceDate) >= n);
+      return (held.get(p.id) ?? []).every((d) => apart(d, slot.serviceDate) >= n);
     });
     return { qualified, free };
   }

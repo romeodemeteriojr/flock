@@ -283,7 +283,8 @@ for (const route of ROUTES) {
           }
           if (role !== 'anonymous' && matched.auth !== 'none') assert.notEqual(res.status, 401, `${where}: a logged-in user was treated as logged out`);
           if (role === 'scheduler') assert.notEqual(res.status, 403, `${where}: the scheduler was refused`);
-          if (c.expect && hasBody) assert.equal(res.status, c.expect, `${where}: expected ${c.expect}`);
+          // An upload route reads the body as bytes (with its own size limit), not as JSON.
+          if (c.expect && hasBody && !matched.raw) assert.equal(res.status, c.expect, `${where}: expected ${c.expect}`);
         }
       }
       // The app is still healthy afterwards.

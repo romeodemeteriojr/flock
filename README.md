@@ -47,10 +47,12 @@ The guides are also at <https://romeodemeteriojr.github.io/flock/>.
 
 - It sends no emails or texts. It drafts reminder messages for you to copy
   and send.
-- It has no songs, set lists, files or media; it only schedules people.
+- It is not a song or media library. A service can carry a few files (up to
+  5 MB each) and links, but they are gone a week after the service.
+- It plans at most 10 services ahead.
 - There is no app in the app stores; Flock can be added to the Home Screen
   instead.
-- It is built for one church of about 70 people.
+- It runs one church at a time. It is tested with up to 1,000 people.
 
 ## For developers
 

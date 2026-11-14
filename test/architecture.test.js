@@ -130,13 +130,13 @@ test('architecture: the scan covers the layers', () => {
   for (const f of ['src/container.js', 'src/server.js', 'src/db.js', 'src/data/index.js', 'src/routes/index.js', 'bin/flock.js']) {
     assert.ok(names.includes(f), `${f} was not scanned`);
   }
-  for (const s of ['auth', 'people', 'teams', 'calendar', 'blockouts', 'assignments', 'gaps', 'availability', 'autofill', 'notifications']) {
+  for (const s of ['auth', 'people', 'teams', 'calendar', 'blockouts', 'assignments', 'gaps', 'availability', 'autofill', 'notifications', 'attachments']) {
     assert.ok(names.includes(`src/services/${s}-service.js`), `missing service ${s}`);
   }
   // The container really is wired: it imports the db layer and every service.
   const c = files.find((f) => f.file === 'src/container.js');
   assert.ok(c.imports.some((im) => im.target === 'src/db.js'));
-  assert.equal(c.imports.filter((im) => im.target.startsWith('src/services/')).length, 10);
+  assert.equal(c.imports.filter((im) => im.target.startsWith('src/services/')).length, 11);
 });
 
 // ---------- self-tests of the scanner, so the rules cannot pass by accident ----------
@@ -271,7 +271,7 @@ test('data interface: every repository method in src/data/index.js has a contrac
   const contract = lex(readFileSync(path.join(ROOT, 'test/data/contract.js'), 'utf8')).code;
   const { repos, dataProps } = interfaceMethods(src);
   assert.deepEqual(Object.keys(repos).sort(),
-    ['audit', 'availability', 'blockouts', 'identities', 'invites', 'maintenance', 'people', 'positions', 'pushDevices', 'qualifications', 'services', 'sessions', 'slots', 'teams']);
+    ['attachments', 'audit', 'availability', 'blockouts', 'identities', 'invites', 'maintenance', 'people', 'positions', 'pushDevices', 'qualifications', 'services', 'sessions', 'slots', 'teams']);
   assert.ok(dataProps.includes('tx'));
   const missing = [];
   let count = 0;

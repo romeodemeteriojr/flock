@@ -102,6 +102,13 @@ Everyone sees:
   else is serving, the whole day's roster (every service, team and position,
   names only) and **I can't make it after all**. The numbers on the tab (and
   on an installed app's icon) count the asks waiting for you.
+- **Files**: under the next time you serve (and in **Details** on each card),
+  **Files** lists that service's files and links. Tap one to open it in your
+  phone's own viewer. **Add a file** takes anything up to 5 MB (a setlist, a
+  run sheet, a photo); for something bigger, put it on Google Drive, Dropbox
+  or YouTube and use **Add a link**. Only the people serving at that service
+  and the schedulers can see them, and they are gone a week after the service.
+  You can remove what you added.
 - **Days I can't serve**: tap the first and last day you are away on the
   calendar (up to 12 months ahead), add a reason if you like, and choose
   **Add days off**. Flock will not suggest you for those days, and tells you
@@ -124,11 +131,15 @@ Schedulers also see:
   bring it back, with the people who can do it (a team comes back without its
   positions; add them again too).
 - **Services**: add service dates with the positions you need. You can repeat
-  a service weekly for several weeks. **Edit** changes the date, time, title
+  a service weekly for several weeks. There can be at most 10 upcoming
+  services; add more as the earlier ones pass. **Edit** changes the date, time, title
   and the positions with how many of each. A number can only go down by
   empty spots; if everyone in it is already down, take someone off on
   Schedule first. Taking a whole position off names the people in it and
-  tells them. Services before today are past: they can't be changed or
+  tells them. **Files** shows the service's files and links (you can add or
+  remove any). **Clear expired files**, at the bottom, deletes every file
+  and link from services more than a week ago; nobody can open those any
+  more, so this only frees space. Services before today are past: they can't be changed or
   deleted, or answered.
 - **Schedule**: the next 8 weeks. The card at the top says how many positions
   are confirmed and what still needs doing. Each service shows a dot per

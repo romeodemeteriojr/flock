@@ -940,6 +940,74 @@ export function runContract(name, makeData) {
       });
     });
 
+    // ---------- attachments (decision 0011) ----------
+    describe('attachments', () => {
+      const svcOn = (date, time = '09:00') => data.services.create({ date, time, title: `S ${date}` });
+
+      test('create a file and a link, findById, content, listForService, counts', async () => {
+        await fresh();
+        const w = await world();
+        const s1 = await svcOn('2025-01-12');
+        const s2 = await svcOn('2025-01-19');
+        const bytes = Buffer.from('%PDF-1.4 hello');
+        const f = await data.attachments.create({ serviceId: s1.id, kind: 'file', name: 'Setlist.pdf', mime: 'application/pdf', content: bytes, addedBy: w.ann.id, createdAt: T });
+        assert.deepEqual(f, {
+          id: f.id, serviceId: s1.id, serviceDate: '2025-01-12', kind: 'file', name: 'Setlist.pdf', mime: 'application/pdf',
+          size: bytes.length, url: null, addedBy: w.ann.id, addedByName: 'Ann Able', createdAt: T,
+        });
+        clean(f, 'attachments.create');
+        const l = await data.attachments.create({ serviceId: s1.id, kind: 'link', name: 'Video', url: 'https://example.com/v', addedBy: w.bob.id, createdAt: T });
+        assert.equal(l.size, 0);
+        assert.equal(l.mime, null);
+        assert.deepEqual(await data.attachments.findById(f.id), f);
+        assert.equal(await data.attachments.findById(9999), null);
+        assert.deepEqual(await data.attachments.content(f.id), bytes);
+        assert.equal(await data.attachments.content(l.id), null);
+        assert.equal(await data.attachments.content(9999), null);
+        assert.deepEqual((await data.attachments.listForService(s1.id)).map((a) => a.id), [f.id, l.id]);
+        assert.deepEqual(await data.attachments.listForService(s2.id), []);
+        assert.equal(await data.attachments.countForService(s1.id), 2);
+        assert.equal(await data.attachments.countForService(s2.id), 0);
+        assert.deepEqual(await data.attachments.countByService([s1.id, s2.id]), { [s1.id]: 2 });
+        assert.deepEqual(await data.attachments.countByService([]), {});
+        assert.equal(await data.services.countFrom('2025-01-12'), 2);
+        assert.equal(await data.services.countFrom('2025-01-13'), 1);
+        assert.equal(await data.services.countFrom('2025-02-01'), 0);
+        await assert.rejects(data.attachments.create({ serviceId: 9999, kind: 'link', name: 'x', url: 'https://x.example', createdAt: T }), Error);
+      });
+
+      test('remove; deleting the service or the person', async () => {
+        await fresh();
+        const w = await world();
+        const s1 = await svcOn('2025-01-12');
+        const a = await data.attachments.create({ serviceId: s1.id, kind: 'link', name: 'A', url: 'https://a.example', addedBy: w.bob.id, createdAt: T });
+        const b = await data.attachments.create({ serviceId: s1.id, kind: 'link', name: 'B', url: 'https://b.example', addedBy: w.bob.id, createdAt: T });
+        assert.equal(await data.attachments.remove(a.id), true);
+        assert.equal(await data.attachments.remove(a.id), false);
+        assert.equal((await data.attachments.findById(b.id)).serviceDate, '2025-01-12');
+        await data.services.update(s1.id, { date: '2025-02-02' });
+        assert.equal((await data.attachments.findById(b.id)).serviceDate, '2025-02-02', 'the expiry follows the service date');
+        await data.services.remove(s1.id);
+        assert.equal(await data.attachments.findById(b.id), null);
+      });
+
+      test('removeForServicesUpTo deletes only services on or before the date', async () => {
+        await fresh();
+        const old = await svcOn('2025-01-05');
+        const edge = await svcOn('2025-01-12');
+        const later = await svcOn('2025-01-13');
+        for (const s of [old, edge, later]) {
+          await data.attachments.create({ serviceId: s.id, kind: 'file', name: 'f.txt', mime: 'text/plain', content: Buffer.from('abc'), createdAt: T });
+        }
+        await data.attachments.create({ serviceId: old.id, kind: 'link', name: 'l', url: 'https://l.example', createdAt: T });
+        assert.deepEqual(await data.attachments.removeForServicesUpTo('2025-01-12'), { removed: 3, bytes: 6 });
+        assert.deepEqual(await data.attachments.countByService([old.id, edge.id, later.id]), { [later.id]: 1 });
+        assert.deepEqual(await data.attachments.removeForServicesUpTo('2025-01-12'), { removed: 0, bytes: 0 });
+        await data.maintenance.compact();
+        await assert.rejects(data.tx((d) => d.maintenance.compact()), Error);
+      });
+    });
+
     // ---------- transactions ----------
     describe('tx', () => {
       test('commits and returns the function result', async () => {

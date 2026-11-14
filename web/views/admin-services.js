@@ -8,6 +8,7 @@ import { iconSlot } from '../lib/icons.js';
 import { toasts, createNoticeClock, dropProblem } from '../lib/toast.js';
 import { skeleton, emptyState, pageHead, disclosure, refocus } from '../lib/ui.js';
 import { takenOffText, peopleFrom } from '../lib/taken-off.js';
+import { createFiles, filesLabel, sizeWords } from '../lib/files.js';
 
 export const title = 'Services';
 export const DEFAULT_TIME = '09:00';
@@ -100,6 +101,8 @@ export function repeatNotice(r) {
   const skipped = r?.skipped ?? [];
   let text = made === 1 ? 'Added 1 more service.' : `Added ${made} more services.`;
   if (skipped.length) text += ` Skipped ${skipped.map(formatDate).join(', ')}: there is already a service then, or it has passed.`;
+  const over = r?.overLimit ?? [];
+  if (over.length) text += ` Not added: ${over.map(formatDate).join(', ')}. You can have at most 10 upcoming services.`;
   const gone = r?.skippedPositions ?? [];
   if (gone.length) text += ` Left out ${gone.join(', ')}: deleted on the Teams page.`;
   return text;
@@ -200,6 +203,9 @@ function serviceCard(svc, m) {
         <button type="button" class="btn" data-action="cancel">Cancel</button></div>
     </form>`;
   }
+  if (mine?.kind === 'files' && m.files) {
+    extra = html`<div class="confirm files-panel">${m.files.render(svc.id, `svc-${svc.id}`)}</div>`;
+  }
   if (mine?.kind === 'delete') {
     const n = mine.count;
     extra = html`<div class="confirm confirm-danger" role="alertdialog" aria-label="Confirm">
@@ -222,6 +228,7 @@ function serviceCard(svc, m) {
     ${disclosure({ action: 'select', id: svc.id, open: selected, label, cls: 'row-select' })}
     ${selected ? html`<div class="btn-row btn-row-compact row-actions">
       <button type="button" class="btn btn-sm" data-action="repeat" data-id="${svc.id}">Repeat for more weeks</button>
+      <button type="button" class="btn btn-sm" data-action="files" data-id="${svc.id}" aria-expanded="${mine?.kind === 'files' ? 'true' : 'false'}">${iconSlot('paperclip')} ${filesLabel(svc.files)}</button>
       <button type="button" class="btn btn-sm" data-action="edit" data-id="${svc.id}">${iconSlot('edit')} Edit</button>
       <button type="button" class="btn btn-sm btn-danger" data-action="delete" data-id="${svc.id}">${iconSlot('trash')} Delete</button>
     </div>` : ''}
@@ -237,6 +244,11 @@ export function renderScreen(m) {
     <h2 class="section-title">Upcoming services</h2>
     ${m.services.length ? html`<ul class="list card-list" data-services>${m.services.map((s) => serviceCard(s, m))}</ul>`
     : emptyState('No upcoming services yet. Add one above.', 'art-calendar')}
+    <section class="card purge-card" aria-label="Expired files">
+      <h2 class="section-title">Expired files</h2>
+      <p class="hint">Files and links are kept until a week after their service. After that nobody can open them; clearing them frees the space.</p>
+      <div class="btn-row"><button type="button" class="btn btn-sm" data-action="purge-files">${iconSlot('trash')} Clear expired files</button></div>
+    </section>
   `);
 }
 
@@ -261,6 +273,7 @@ export function createScreen({ api, root, today = todayString() }) {
     m.services = sortServices(Array.isArray(s) ? s : []);
   };
   const find = (id) => m.services.find((s) => s.id === Number(id));
+  m.files = createFiles({ api, paint: () => paint(), onCount: (id, n) => { const svc = find(id); if (svc) svc.files = n; } });
 
   async function attempt(fn) {
     if (busy) return;
@@ -316,6 +329,22 @@ export function createScreen({ api, root, today = todayString() }) {
       await saveEdit(panel.id, panel.body, true);
     }),
     select: (id) => { m.selected = m.selected === id ? null : id; m.panel = null; paint(); refocus(root, 'select', id); },
+    files: (id) => {
+      if (m.panel?.kind === 'files' && m.panel.id === id) { m.panel = null; paint(); return; }
+      if (!find(id)) return;
+      m.panel = { kind: 'files', id };
+      m.selected = id;
+      m.error = '';
+      m.notice = '';
+      paint();
+      m.files.open(id);
+    },
+    'purge-files': () => attempt(async () => {
+      const r = await api.post('/api/admin/files/purge');
+      m.notice = r?.removed
+        ? `Cleared ${r.removed} expired ${r.removed === 1 ? 'file or link' : 'files and links'} (${sizeWords(r.bytes)} freed).`
+        : 'Nothing to clear: no files have expired.';
+    }),
     edit: ask('edit'),
     repeat: ask('repeat'),
     delete: ask('delete'),
@@ -380,6 +409,7 @@ export function createScreen({ api, root, today = todayString() }) {
     const title = root.querySelector?.('#svc-title');
     if (title && (!title.value || isDayTitle(title.value))) title.value = titleFor(e.target.value);
   });
+  root.addEventListener('change', (e) => { m.files.change(e); });
   root.addEventListener('input', () => {
     if (!m.error) return;
     m.error = '';
@@ -387,6 +417,7 @@ export function createScreen({ api, root, today = todayString() }) {
   });
   root.addEventListener('click', (e) => {
     const el = e.target?.closest?.('[data-action]');
+    if (el && m.files.click(el)) return;
     const fn = el && actions[el.dataset.action];
     if (fn) fn(Number(el.dataset.id));
   });
@@ -394,6 +425,7 @@ export function createScreen({ api, root, today = todayString() }) {
     const form = e.target?.closest?.('form[data-form]');
     if (!form) return;
     e.preventDefault();
+    if (m.files.submit(form)) return;
     const fn = forms[form.dataset.form];
     if (fn) fn(form);
   });

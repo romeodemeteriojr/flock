@@ -44,10 +44,14 @@ export function createApi(fetchFn = (url, init) => globalThis.fetch(url, init), 
     try { fn(err); } catch { /* a broken hook must not hide the real error */ }
   }
 
-  async function request(method, path, body) {
+  // file: a File or Blob sent as the raw body (an upload), instead of JSON.
+  async function request(method, path, body, file) {
     const headers = { Accept: 'application/json', 'X-Flock': '1' };
     const init = { method, headers, credentials: 'same-origin' };
-    if (body !== undefined) {
+    if (file !== undefined) {
+      headers['Content-Type'] = file.type || 'application/octet-stream';
+      init.body = file;
+    } else if (body !== undefined) {
       headers['Content-Type'] = 'application/json';
       init.body = JSON.stringify(body);
     }
@@ -86,5 +90,6 @@ export function createApi(fetchFn = (url, init) => globalThis.fetch(url, init), 
   api.put = (path, body = {}) => request('PUT', path, body);
   api.patch = (path, body = {}) => request('PATCH', path, body);
   api.del = (path, body) => request('DELETE', path, body);
+  api.upload = (path, file) => request('POST', path, undefined, file);
   return api;
 }

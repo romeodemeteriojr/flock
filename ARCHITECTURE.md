@@ -168,7 +168,7 @@ start of the service method; rules that need data are checked in the service.
 `src/data/index.js` describes the interface: repositories (`people`,
 `sessions`, `invites`, `identities`, `teams`, `positions`, `qualifications`,
 `services`, `slots`, `blockouts`, `availability`, `audit`, `maintenance`,
-`pushDevices`) plus `tx(fn)`. Every method returns a
+`pushDevices`, `attachments`) plus `tx(fn)`. Every method returns a
 Promise and plain camelCase objects. `test/data/contract.js` is a contract test
 suite that any adapter must pass.
 

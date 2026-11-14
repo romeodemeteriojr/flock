@@ -15,6 +15,7 @@ import { answerCount } from '../lib/counts.js';
 import { isIosSafari, laterChosen, chooseLater } from '../lib/install.js';
 import { avatar } from '../lib/avatar.js';
 import { host, watchHost } from '../lib/sheet.js';
+import { createFiles, filesLabel } from '../lib/files.js';
 
 export const title = 'My schedule';
 
@@ -43,6 +44,20 @@ function roster(item, view) {
         <span class="roster-who">${p.mine ? html`<strong>You</strong>` : p.name ?? ''} ${statusChip(p.status)}</span>
       </li>`)}</ul>`)}`)}
     </div>` : ''}
+  </div>`;
+}
+
+// The service's files and links (decision 0011), behind a disclosure. key is
+// the card's slot, so two cards of one service keep their own open state.
+function filesBlock(item, view) {
+  if (!item?.serviceId) return '';
+  const key = item.slotId;
+  const open = !!view.openFiles?.has(key);
+  const n = view.fileCounts?.get(item.serviceId) ?? item.files ?? 0;
+  const label = html`${iconSlot('paperclip', 'icon-sm')} ${filesLabel(n)}<span class="visually-hidden"> for ${formatDate(item.date)}</span>`;
+  return html`<div class="files-block">
+    ${disclosure({ action: 'files', id: key, open, label })}
+    ${open && view.files ? view.files.render(item.serviceId, key) : ''}
   </div>`;
 }
 
@@ -142,8 +157,8 @@ function card(item, view) {
   } else {
     actions = html`<div class="btn-row"><button type="button" class="btn btn-quiet" data-action="decline-ask" data-id="${item.slotId}" ${busy}>${cantAfterAll(item)}</button></div>`;
   }
-  const details = html`${co ? html`<p class="hint serve-with">${iconSlot('users', 'icon-sm')} Serving with: ${co}</p>` : ''}${roster(item, view)}`;
-  const hasDetails = !!co || !!view.data?.rosters?.[item.date]?.length || !pending;
+  const details = html`${co ? html`<p class="hint serve-with">${iconSlot('users', 'icon-sm')} Serving with: ${co}</p>` : ''}${roster(item, view)}${filesBlock(item, view)}`;
+  const hasDetails = !!co || !!view.data?.rosters?.[item.date]?.length || !pending || !!item.serviceId;
   return html`<li class="card serve-card is-compact${pending ? ' is-pending' : ''}" data-slot="${item.slotId}">
     <div class="serve-head">
       ${tile(item.date)}
@@ -213,7 +228,7 @@ export function render(state, view = { loading: true }) {
       ${emptyState('You have nothing coming up. When you are asked to serve, it will show here.', 'art-calendar')}`;
     } else {
       const first = html`${hero(top, view, today)}
-        ${dayRoster ? html`<div class="card hero-roster">${dayRoster}</div>` : ''}
+        ${dayRoster || top.serviceId ? html`<div class="card hero-roster">${dayRoster}${filesBlock(top, view)}</div>` : ''}
         ${asks.length ? html`<h2 class="section-title">Also needs your answer</h2><ul class="cards">${asks.map((i) => card(i, view))}</ul>` : ''}`;
       const coming = later.length ? html`<ul class="cards">${later.map((i) => card(i, view))}</ul>` : '';
       // Wide screens: what comes up sits beside the hero.
@@ -233,9 +248,10 @@ export function render(state, view = { loading: true }) {
 
 export function mount(main, ctx) {
   const root = makeHost(main);
-  const view = { loading: true, today: ctx.today ?? todayString(), openRosters: new Set(), openCards: new Set() };
+  const view = { loading: true, today: ctx.today ?? todayString(), openRosters: new Set(), openCards: new Set(), openFiles: new Set(), fileCounts: new Map() };
   view.wide = host(ctx.win) === 'pane';
   const paint = () => { if (isAlive(root, main)) root.innerHTML = render(ctx.state, view); };
+  view.files = createFiles({ api: ctx.api, paint, onCount: (id, n) => view.fileCounts.set(id, n) });
 
   async function load() {
     try {
@@ -298,12 +314,29 @@ export function mount(main, ctx) {
     }
     if (action === 'retry') { view.loading = true; paint(); return load(); }
     if (action === 'roster') { if (!view.openRosters.delete(id)) view.openRosters.add(id); paint(); refocus(root, action, id); return; }
+    if (view.files.click(el)) return;
+    if (action === 'files') {
+      if (!view.openFiles.delete(id)) {
+        view.openFiles.add(id);
+        const item = view.data?.items?.find((i) => i.slotId === id);
+        if (item?.serviceId) view.files.open(item.serviceId);
+      }
+      paint();
+      refocus(root, action, id);
+      return;
+    }
     if (action === 'card') { if (!view.openCards.delete(id)) view.openCards.add(id); paint(); refocus(root, action, id); return; }
     if (action === 'accept') return answer(id, 'accept', 'Thank you! You are confirmed.');
     if (action === 'decline') return answer(id, 'decline', "Thanks for letting us know. Your scheduler will find someone else.");
     if (action === 'decline-ask') { view.confirmId = id; view.message = null; paint(); return; }
     if (action === 'keep') { view.confirmId = null; paint(); return; }
     if (action === 'decline-sure') return answer(id, 'decline', "Thanks for letting us know. Your scheduler will find someone else.");
+  });
+
+  root.addEventListener('change', (e) => { view.files.change(e); });
+  root.addEventListener('submit', (e) => {
+    const form = e.target?.closest?.('form[data-form]');
+    if (form && view.files.submit(form)) e.preventDefault?.();
   });
 
   ctx.pushReady?.then(() => { view.showPush = showCard(ctx.state.push, ctx.win); paint(); });

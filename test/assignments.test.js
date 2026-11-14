@@ -43,7 +43,7 @@ test('assign, schedule, accept, decline and unassign end to end', async () => {
     assert.equal(sched.status, 200);
     assert.equal(sched.json.nextServing.slotId, a);
     assert.deepEqual(sched.json.items, [{
-      slotId: a, date: '2025-01-12', time: '09:00', serviceTitle: 'Sunday service', positionName: 'Drums', teamName: 'Band',
+      slotId: a, serviceId: sched.json.items[0].serviceId, files: 0, date: '2025-01-12', time: '09:00', serviceTitle: 'Sunday service', positionName: 'Drums', teamName: 'Band',
       status: 'pending', alsoOn: [], coVolunteers: [{ name: 'Olive Other', positionName: 'Keys' }],
     }]);
     assert.deepEqual(sched.json.rosters, { '2025-01-12': [{ time: '09:00', serviceTitle: 'Sunday service', teams: [{ teamName: 'Band', positions: [

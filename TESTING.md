@@ -79,6 +79,11 @@ with the demo data. Each test follows a numbered scenario in `UAT.md`.
 and the GitHub workflows are well formed. The Docker build runs only
 when Docker is installed (otherwise it is skipped).
 
+**Scale** (`test/scale.test.js`). A church of 1,000 people, 12 teams of 5
+positions, 10 upcoming services, a third of people away some days: Fill open
+positions, My schedule, Services, Gaps, suggestions, People and reminders each
+give right answers in under a second (a few milliseconds on a laptop).
+
 **Stress and concurrency** (`test/stress.test.js`). A church of 70 members
 and 5 schedulers with a month of Sunday services, on a temporary WAL database
 file, under many requests at once over real HTTP:
@@ -175,8 +180,10 @@ injected clock and the process time zone set per test:
 - **Real password hashing cost.** Most tests use the fast test hasher; scrypt
   itself has its own tests, but load tests do not measure real scrypt CPU
   time.
-- **Load beyond a small church.** The stress test is sized for about 70
-  people. It does not measure response times or run for long periods.
+- **Long-running load.** The stress test has about 70 people under many requests
+  at once; the scale test (`test/scale.test.js`) checks 1,000 people, 60
+  positions and 10 services with only a loose 1-second bound per step. Nothing
+  runs for long periods or measures response times closely.
 - **Disk problems while running.** A full disk, power loss during a write or
   a file damaged while the app is running are not simulated. The check for
   damaged files runs when the database is opened.

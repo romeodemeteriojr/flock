@@ -29,6 +29,7 @@ import { createGapsService } from './services/gaps-service.js';
 import { createAvailabilityService } from './services/availability-service.js';
 import { createAutofillService } from './services/autofill-service.js';
 import { createNotificationsService } from './services/notifications-service.js';
+import { createAttachmentsService } from './services/attachments-service.js';
 
 /** Infrastructure every service may ask for. */
 export const CORE_DEPS = Object.freeze(['data', 'clock', 'random', 'hasher', 'logger', 'config']);
@@ -49,6 +50,7 @@ export const SERVICE_SPECS = Object.freeze({
   availability: { factory: createAvailabilityService, needs: [...CORE] },
   autofill: { factory: createAutofillService, needs: [...CORE, 'assignments', 'notifications'] },
   notifications: { factory: createNotificationsService, needs: [...CORE, 'push'] },
+  attachments: { factory: createAttachmentsService, needs: [...CORE] },
 });
 
 export class ContainerError extends Error {

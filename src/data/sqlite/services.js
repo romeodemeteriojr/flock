@@ -49,6 +49,8 @@ export function servicesRepo({ db, run }) {
 
     remove: (serviceId) => run(() => changed(db.prepare('DELETE FROM services WHERE id = ?').run(serviceId))),
 
+    countFrom: (fromDate) => run(() => num(db.prepare('SELECT COUNT(*) AS n FROM services WHERE date >= ?').get(fromDate).n)),
+
     assignedCount: (serviceId) => run(() => num(db.prepare(
       'SELECT COUNT(DISTINCT person_id) AS n FROM slots WHERE service_id = ? AND person_id IS NOT NULL',
     ).get(serviceId).n)),

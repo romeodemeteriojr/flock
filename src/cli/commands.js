@@ -24,6 +24,7 @@ Commands:
   backup <file>              Copy the database to a new file (never overwrites)
   export <file.csv> [--from YYYY-MM-DD --to YYYY-MM-DD]
                              Write the schedule as a CSV file (never overwrites)
+  purge-files                Delete files and links of services more than a week ago
   push-keys                  Make the two keys that turn on push notifications
   help                       Show this help
   version                    Show the version
@@ -158,6 +159,18 @@ export const commands = {
       refuseOverwrite(file);
       await data.maintenance.backupTo(file);
       console.log(`Backup written to ${file}`);
+      return 0;
+    });
+  },
+
+  async 'purge-files'(argv, env) {
+    const { positionals, options } = args(argv);
+    exactly(positionals, 0, 'purge-files');
+    return withContainer(options, env, async ({ services }) => {
+      const { removed, bytes } = await services.attachments.purge(null);
+      console.log(removed
+        ? `Deleted ${removed} expired ${removed === 1 ? 'file or link' : 'files and links'} (${(bytes / (1024 * 1024)).toFixed(1)} MB freed).`
+        : 'Nothing to delete: no files or links have expired.');
       return 0;
     });
   },

@@ -16,6 +16,9 @@ const CLASH = 'A service already exists at that date and time.';
 export const PAST_LOCKED = "Past services can't be changed";
 export const PAST_DATE = "A service can't be set in the past";
 export const DEFAULT_TIME = '09:00';
+/** At most this many services from today on (decision 0011: it bounds what files can take). */
+export const MAX_UPCOMING = 10;
+export const TOO_MANY = `You can have at most ${MAX_UPCOMING} upcoming services. Delete one, or add more once one has passed.`;
 export const DEFAULT_TITLE = 'Sunday service';
 export const MAX_COUNT = 20;
 export const MAX_WEEKS = 26;
@@ -164,6 +167,7 @@ export function createCalendarService(deps) {
       return data.tx(async (d) => {
         const list = await checkSlotList(d, b.slots);
         if (await d.services.findByDateTime(date, time)) throw new ConflictError(CLASH);
+        if ((await d.services.countFrom(today())) >= MAX_UPCOMING) throw new ConflictError(TOO_MANY, { code: 'too_many_services' });
         const svc = await d.services.create({ date, time, title });
         const positions = expand(list);
         if (positions.length) await d.slots.createMany(svc.id, positions);
@@ -191,18 +195,23 @@ export function createCalendarService(deps) {
         const skippedPositions = [...new Set(srcSlots.filter((s) => !active.get(s.positionId)).map((s) => s.positionName))];
         const created = [];
         const skipped = [];
+        const overLimit = []; // dates not made: there would be more than MAX_UPCOMING
+        let room = MAX_UPCOMING - await d.services.countFrom(today());
         for (let w = 1; w <= weeks; w++) {
           const date = addDays(src.date, 7 * w);
           if (date < today() || await d.services.findByDateTime(date, src.time)) { skipped.push(date); continue; }
+          if (room <= 0) { overLimit.push(date); continue; }
+          room--;
           const svc = await d.services.create({ date, time: src.time, title: src.title });
           if (positions.length) await d.slots.createMany(svc.id, positions);
           created.push(svc);
         }
+        if (!created.length && overLimit.length) throw new ConflictError(TOO_MANY, { code: 'too_many_services' });
         await audit(d, actor, 'service.repeat',
           `service ${src.id} for ${weeks} weeks: ${created.length} created, ${skipped.length} skipped`);
         const out = [];
         for (const svc of created) out.push(await view(d, svc));
-        return { created: out, skipped, skippedPositions };
+        return { created: out, skipped, skippedPositions, overLimit };
       });
     },
 
@@ -225,7 +234,8 @@ export function createCalendarService(deps) {
           if (!by.has(s.serviceId)) by.set(s.serviceId, []);
           by.get(s.serviceId).push(s);
         }
-        return services.map((svc) => serviceView(svc, by.get(svc.id) ?? []));
+        const fileCounts = await d.attachments.countByService(services.map((svc) => svc.id));
+        return services.map((svc) => ({ ...serviceView(svc, by.get(svc.id) ?? []), files: fileCounts[svc.id] ?? 0 }));
       });
     },
 

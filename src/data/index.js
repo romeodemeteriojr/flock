@@ -188,6 +188,7 @@ export { DuplicateError, InUseError } from './errors.js';
  *   DuplicateError when the new date and time clash with another service.
  * @property {(id: number) => Promise<boolean>} remove  Also deletes its slots.
  * @property {(id: number) => Promise<number>} assignedCount  People in the service's slots, each counted once however many slots they have.
+ * @property {(fromDate: string) => Promise<number>} countFrom  Services dated on or after fromDate.
  */
 
 /**
@@ -308,6 +309,37 @@ export { DuplicateError, InUseError } from './errors.js';
  *   Writes a consistent copy of the database (VACUUM INTO). Throws Error if the file already
  *   exists (never overwrites). Cannot run inside a transaction.
  * @property {() => Promise<number>} personCount
+ * @property {() => Promise<void>} compact
+ *   Gives the space of deleted rows back to the disk (VACUUM). Cannot run inside a transaction.
+ */
+
+/**
+ * @typedef {object} Attachment  A file or link on a service (decision 0011). Never carries the bytes.
+ * @property {number} id
+ * @property {number} serviceId
+ * @property {string} serviceDate  YYYY-MM-DD, the service's date now
+ * @property {'file'|'link'} kind
+ * @property {string} name
+ * @property {string|null} mime  files only
+ * @property {number} size  bytes; 0 for a link
+ * @property {string|null} url  links only
+ * @property {number|null} addedBy  person id (null once that person is deleted)
+ * @property {string|null} addedByName
+ * @property {string} createdAt  ISO time
+ */
+
+/**
+ * @typedef {object} AttachmentsRepo
+ * @property {(a: {serviceId: number, kind: 'file'|'link', name: string, mime?: string|null, url?: string|null, content?: Uint8Array|null, addedBy?: number|null, createdAt: string}) => Promise<Attachment>} create
+ *   Error for an unknown service.
+ * @property {(id: number) => Promise<Attachment|null>} findById
+ * @property {(id: number) => Promise<Buffer|null>} content  A file's bytes; null for a link or unknown id.
+ * @property {(serviceId: number) => Promise<Attachment[]>} listForService  Oldest first.
+ * @property {(serviceIds: number[]) => Promise<Record<number, number>>} countByService  Services with none are left out.
+ * @property {(serviceId: number) => Promise<number>} countForService
+ * @property {(id: number) => Promise<boolean>} remove
+ * @property {(lastDate: string) => Promise<{removed: number, bytes: number}>} removeForServicesUpTo
+ *   Deletes the attachments of every service dated on or before lastDate.
  */
 
 /**
@@ -350,6 +382,7 @@ export { DuplicateError, InUseError } from './errors.js';
  * @property {AuditRepo} audit
  * @property {MaintenanceRepo} maintenance
  * @property {PushDevicesRepo} pushDevices
+ * @property {AttachmentsRepo} attachments
  * @property {<T>(fn: (d: Data) => T | Promise<T>) => Promise<T>} tx
  *   Runs fn in one transaction (BEGIN IMMEDIATE ... COMMIT, ROLLBACK if fn throws) and
  *   resolves to fn's result. `d` has the same repositories bound to the transaction.
