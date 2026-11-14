@@ -5,7 +5,8 @@
 //  - when it opens, focus moves to its heading;
 //  - Escape closes it (so does tapping the backdrop: data-action="slot-close");
 //  - Tab and Shift+Tab stay inside it while it is open (it is aria-modal);
-//  - when it closes, focus goes back to the button that opened it.
+//  - when it closes, focus goes back to the button that opened it;
+//  - the phone's Back button (or back swipe) closes it instead of leaving the page.
 // Works with a real DOM, and degrades quietly with the test fakes.
 
 const SLOT_PANEL = '[data-slot-panel]';
@@ -57,8 +58,10 @@ export function createSheet({
   root, isOpen, close, panel: PANEL = SLOT_PANEL,
   opener = (id) => `[data-action="slot-open"][data-id="${id}"]`, openerRoot = root,
   modal = () => true, // false while it shows in a pane: then Tab may leave it
+  win = root?.ownerDocument?.defaultView,
 }) {
   let openerId = null;
+  const back = backStep(win, root, isOpen, close);
   let wasOpen = false;
   let keep = null; // the control inside the panel that had focus before a repaint
 
@@ -77,6 +80,8 @@ export function createSheet({
 
   function update() {
     const open = !!isOpen();
+    if (open && !wasOpen) back.opened();
+    else if (!open && wasOpen) back.closed();
     if (open && !wasOpen) {
       const h = pick(root, `${PANEL} h2`);
       if (canFocus(h)) h.focus();
@@ -85,8 +90,8 @@ export function createSheet({
       const el = pick(root, keep) ?? pick(root, `${PANEL} h2`);
       if (canFocus(el)) el.focus();
     } else if (!open && wasOpen && openerId !== null) {
-      const back = pick(openerRoot, opener(openerId));
-      if (canFocus(back)) back.focus();
+      const btn = pick(openerRoot, opener(openerId));
+      if (canFocus(btn)) btn.focus();
       openerId = null;
     }
     wasOpen = open;
@@ -121,5 +126,39 @@ export function createSheet({
     before,
     update,
     get openerId() { return openerId; },
+  };
+}
+
+/**
+ * Back closes an open sheet. Opening adds a history step at the same address;
+ * Back takes it off again and we close the sheet. Closing the sheet any other
+ * way takes our step off, so the next Back leaves the page as usual.
+ */
+export function backStep(win, root, isOpen, close) {
+  const h = win?.history;
+  if (typeof h?.pushState !== 'function' || typeof win.addEventListener !== 'function') return { opened() {}, closed() {} };
+  const mark = `sheet-${Math.random().toString(36).slice(2)}`;
+  let pushed = false; // our step is in the history
+  let skip = false; // the popstate after our own history.back()
+  win.addEventListener('popstate', () => {
+    if (skip) { skip = false; return; }
+    if (!pushed) return;
+    pushed = false;
+    if (isOpen()) close();
+  });
+  // A new page: our step (if any) now belongs to the page we left. Forget it,
+  // so a later Back never closes a sheet of a page that is gone.
+  win.addEventListener('hashchange', () => { pushed = false; skip = false; });
+  return {
+    opened() {
+      if (pushed) return;
+      try { h.pushState({ ...(h.state ?? {}), flockSheet: mark }, '', win.location?.href); pushed = true; } catch { /* no history: Back leaves the page */ }
+    },
+    closed() {
+      if (!pushed) return;
+      pushed = false;
+      // Only step back if we are still on our own step (not after a link to another page).
+      if (h.state?.flockSheet === mark) { skip = true; h.back(); }
+    },
   };
 }

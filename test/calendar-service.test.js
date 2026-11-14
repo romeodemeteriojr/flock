@@ -57,21 +57,21 @@ test('calendar: createService with defaults, slots in team/position order, audit
 test('calendar: createService validation, count limits and same date+time conflict', async () => {
   const { svc, admin, pos, count } = await setup();
   await svc.createService(admin, { date: '2026-03-01', title: '  Easter  ' });
-  await rejectsWith(svc.createService(admin, { date: '2026-03-01' }), ConflictError, 'A service already exists at that date and time');
+  await rejectsWith(svc.createService(admin, { date: '2026-03-01' }), ConflictError, 'A service already exists at that date and time.');
   assert.equal((await svc.createService(admin, { date: '2026-03-01', time: '18:00' })).time, '18:00');
   const cases = [
-    [{ date: '2026-02-30' }, 'Date must be a real date like 2026-03-01'],
-    [{}, 'Date must be a real date like 2026-03-01'],
-    [{ date: '2026-03-08', time: '24:00' }, 'Time must look like 09:00'],
-    [{ date: '2026-03-08', time: null }, 'Time must look like 09:00'],
-    [{ date: '2026-03-08', title: '' }, 'Title must be 1 to 100 characters'],
-    [{ date: '2026-03-08', title: 'x'.repeat(101) }, 'Title must be 1 to 100 characters'],
-    [{ date: '2026-03-08', slots: 'x' }, 'Slots must be a list'],
-    [{ date: '2026-03-08', slots: [null] }, 'Each slot needs a positionId'],
-    [{ date: '2026-03-08', slots: [{ positionId: 999 }] }, 'One or more positions do not exist'],
-    [{ date: '2026-03-08', slots: [{ positionId: pos.drums, count: 0 }] }, 'Count must be a whole number from 1 to 20'],
-    [{ date: '2026-03-08', slots: [{ positionId: pos.drums, count: 21 }] }, 'Count must be a whole number from 1 to 20'],
-    [{ date: '2026-03-08', slots: [{ positionId: pos.drums, count: 1.5 }] }, 'Count must be a whole number from 1 to 20'],
+    [{ date: '2026-02-30' }, 'Date must be a real date like 2026-03-01.'],
+    [{}, 'Date must be a real date like 2026-03-01.'],
+    [{ date: '2026-03-08', time: '24:00' }, 'Time must look like 09:00.'],
+    [{ date: '2026-03-08', time: null }, 'Time must look like 09:00.'],
+    [{ date: '2026-03-08', title: '' }, 'Title must be 1 to 100 characters.'],
+    [{ date: '2026-03-08', title: 'x'.repeat(101) }, 'Title must be 1 to 100 characters.'],
+    [{ date: '2026-03-08', slots: 'x' }, 'Slots must be a list.'],
+    [{ date: '2026-03-08', slots: [null] }, 'Each slot needs a positionId.'],
+    [{ date: '2026-03-08', slots: [{ positionId: 999 }] }, 'One or more positions do not exist.'],
+    [{ date: '2026-03-08', slots: [{ positionId: pos.drums, count: 0 }] }, 'Count must be a whole number from 1 to 20.'],
+    [{ date: '2026-03-08', slots: [{ positionId: pos.drums, count: 21 }] }, 'Count must be a whole number from 1 to 20.'],
+    [{ date: '2026-03-08', slots: [{ positionId: pos.drums, count: 1.5 }] }, 'Count must be a whole number from 1 to 20.'],
   ];
   for (const [input, message] of cases) await rejectsWith(svc.createService(admin, input), ValidationError, message);
   assert.equal(count('services'), 2);
@@ -103,10 +103,10 @@ test('calendar: repeat copies structure weekly, skips existing, caps at 26 weeks
   const [entry] = await data.audit.list(1);
   assert.equal(entry.action, 'service.repeat');
   assert.equal(entry.detail, `service ${src.id} for 3 weeks: 2 created, 1 skipped`);
-  await rejectsWith(svc.repeat(admin, { fromServiceId: src.id, weeks: 0 }), ValidationError, 'Weeks must be a whole number from 1 to 26');
-  await rejectsWith(svc.repeat(admin, { fromServiceId: src.id, weeks: 27 }), ValidationError, 'Weeks must be a whole number from 1 to 26');
+  await rejectsWith(svc.repeat(admin, { fromServiceId: src.id, weeks: 0 }), ValidationError, 'Weeks must be a whole number from 1 to 26.');
+  await rejectsWith(svc.repeat(admin, { fromServiceId: src.id, weeks: 27 }), ValidationError, 'Weeks must be a whole number from 1 to 26.');
   await rejectsWith(svc.repeat(admin, { fromServiceId: src.id, weeks: '2' }), ValidationError);
-  await rejectsWith(svc.repeat(admin, { fromServiceId: 999, weeks: 2 }), NotFoundError, 'Service not found');
+  await rejectsWith(svc.repeat(admin, { fromServiceId: 999, weeks: 2 }), NotFoundError, 'Service not found.');
   await rejectsWith(svc.repeat(admin, { fromServiceId: 'x', weeks: 2 }), NotFoundError);
   const big = await svc.repeat(admin, { fromServiceId: src.id, weeks: 26 });
   assert.equal(big.created.length + big.skipped.length, 26);
@@ -137,10 +137,10 @@ test('calendar: listServices defaults from the clock, inclusive ends, range limi
   assert.equal((await svc.listServices('2026-01-04', '2026-01-04')).length, 1);
   assert.equal((await svc.listServices('2026-03-03')).length, 1);
   assert.equal((await svc.listServices('2026-01-01', '2027-01-02')).length, 6); // exactly 366 days
-  await rejectsWith(svc.listServices('2026-01-01', '2027-01-03'), ValidationError, 'The date range can be at most 366 days');
-  await rejectsWith(svc.listServices('2026-02-30'), ValidationError, 'Date must be a real date like 2026-03-01');
-  await rejectsWith(svc.listServices('2026-01-01', 'soon'), ValidationError, 'Date must be a real date like 2026-03-01');
-  await rejectsWith(svc.listServices('2026-02-01', '2026-01-31'), ValidationError, 'The end date must not be before the start date');
+  await rejectsWith(svc.listServices('2026-01-01', '2027-01-03'), ValidationError, 'The date range can be at most 366 days.');
+  await rejectsWith(svc.listServices('2026-02-30'), ValidationError, 'Date must be a real date like 2026-03-01.');
+  await rejectsWith(svc.listServices('2026-01-01', 'soon'), ValidationError, 'Date must be a real date like 2026-03-01.');
+  await rejectsWith(svc.listServices('2026-02-01', '2026-01-31'), ValidationError, 'The end date must not be before the start date.');
 });
 
 test('calendar: listServices "today" is the local date of the clock', async () => {
@@ -163,13 +163,13 @@ test('calendar: updateService changes fields, keeps others, refuses clashes', as
   const [entry] = await data.audit.list(1);
   assert.equal(entry.action, 'service.update');
   assert.equal(entry.detail, `service ${a.id} 2026-03-01 10:30 "Easter"`);
-  await rejectsWith(svc.updateService(admin, a.id, { date: '2026-03-08', time: '09:00' }), ConflictError, 'A service already exists at that date and time');
+  await rejectsWith(svc.updateService(admin, a.id, { date: '2026-03-08', time: '09:00' }), ConflictError, 'A service already exists at that date and time.');
   assert.equal((await svc.updateService(admin, a.id, { date: '2026-03-08' })).date, '2026-03-08');
   assert.equal((await svc.updateService(admin, a.id, { time: '10:30' })).time, '10:30'); // its own slot is no clash
-  await rejectsWith(svc.updateService(admin, a.id, { date: '2026-02-30' }), ValidationError, 'Date must be a real date like 2026-03-01');
-  await rejectsWith(svc.updateService(admin, a.id, { time: 'noon' }), ValidationError, 'Time must look like 09:00');
-  await rejectsWith(svc.updateService(admin, a.id, { title: '   ' }), ValidationError, 'Title must be 1 to 100 characters');
-  await rejectsWith(svc.updateService(admin, 999, { title: 'x' }), NotFoundError, 'Service not found');
+  await rejectsWith(svc.updateService(admin, a.id, { date: '2026-02-30' }), ValidationError, 'Date must be a real date like 2026-03-01.');
+  await rejectsWith(svc.updateService(admin, a.id, { time: 'noon' }), ValidationError, 'Time must look like 09:00.');
+  await rejectsWith(svc.updateService(admin, a.id, { title: '   ' }), ValidationError, 'Title must be 1 to 100 characters.');
+  await rejectsWith(svc.updateService(admin, 999, { title: 'x' }), NotFoundError, 'Service not found.');
   await rejectsWith(svc.updateService(admin, null, { title: 'x' }), NotFoundError);
 });
 
@@ -199,7 +199,7 @@ test('calendar: deleteService needs confirm when people are scheduled (has_peopl
   const [entry] = await data.audit.list(1);
   assert.equal(entry.action, 'service.delete');
   assert.equal(entry.detail, `service ${b.id} 2026-03-08 09:00 "Sunday service" (2 people scheduled)`);
-  await rejectsWith(svc.deleteService(admin, 999), NotFoundError, 'Service not found');
+  await rejectsWith(svc.deleteService(admin, 999), NotFoundError, 'Service not found.');
 });
 
 test('calendar: deleteService rolls back on failure', async () => {
@@ -222,10 +222,10 @@ test('calendar: addSlots adds 1-20 open slots and audits', async () => {
   const [entry] = await data.audit.list(1);
   assert.equal(entry.action, 'slot.create');
   assert.equal(entry.detail, `service ${a.id} position ${pos.sound} x20`);
-  await rejectsWith(svc.addSlots(admin, a.id, { positionId: 999 }), ValidationError, 'That position does not exist');
-  await rejectsWith(svc.addSlots(admin, a.id, { positionId: pos.drums, count: 21 }), ValidationError, 'Count must be a whole number from 1 to 20');
-  await rejectsWith(svc.addSlots(admin, a.id, { positionId: pos.drums, count: 0 }), ValidationError, 'Count must be a whole number from 1 to 20');
-  await rejectsWith(svc.addSlots(admin, 999, { positionId: pos.drums }), NotFoundError, 'Service not found');
+  await rejectsWith(svc.addSlots(admin, a.id, { positionId: 999 }), ValidationError, 'That position does not exist.');
+  await rejectsWith(svc.addSlots(admin, a.id, { positionId: pos.drums, count: 21 }), ValidationError, 'Count must be a whole number from 1 to 20.');
+  await rejectsWith(svc.addSlots(admin, a.id, { positionId: pos.drums, count: 0 }), ValidationError, 'Count must be a whole number from 1 to 20.');
+  await rejectsWith(svc.addSlots(admin, 999, { positionId: pos.drums }), NotFoundError, 'Service not found.');
   assert.equal((await svc.getService(a.id)).slots.length, 24);
 });
 
@@ -242,7 +242,7 @@ test('calendar: removeSlot needs confirm when someone is in it (has_person)', as
   const a = await svc.createService(admin, { date: '2026-03-01', slots: [{ positionId: pos.drums, count: 2 }] });
   const [taken, open] = a.slots;
   await data.slots.assign(taken.id, { personId: pat.id, status: 'accepted', assignedAt: NOW });
-  await rejectsWith(svc.removeSlot(admin, taken.id), ConflictError, 'Someone is scheduled in this slot', 'has_person');
+  await rejectsWith(svc.removeSlot(admin, taken.id), ConflictError, 'Someone is scheduled in this slot.', 'has_person');
   assert.equal(count('slots'), 2);
   assert.deepEqual(await svc.removeSlot(admin, taken.id, { confirm: true }), { ok: true });
   let [entry] = await data.audit.list(1);
@@ -251,8 +251,8 @@ test('calendar: removeSlot needs confirm when someone is in it (has_person)', as
   assert.deepEqual(await svc.removeSlot(admin, open.id), { ok: true });
   [entry] = await data.audit.list(1);
   assert.equal(entry.detail, `slot ${open.id} service ${a.id} position ${pos.drums} person none`);
-  await rejectsWith(svc.removeSlot(admin, open.id), NotFoundError, 'Slot not found');
-  await rejectsWith(svc.removeSlot(admin, null), NotFoundError, 'Slot not found');
+  await rejectsWith(svc.removeSlot(admin, open.id), NotFoundError, 'Slot not found.');
+  await rejectsWith(svc.removeSlot(admin, null), NotFoundError, 'Slot not found.');
 });
 
 test('calendar: removeSlot rolls back on failure', async () => {
@@ -320,7 +320,7 @@ test('calendar: updateService dropping a position with people needs confirm; mov
 test('calendar: updateService slots are validated: deleted positions, duplicates, counts', async () => {
   const { svc, admin, pos, data } = await editSetup();
   const s = await svc.createService(admin, { date: '2026-02-01' });
-  await rejectsWith(svc.updateService(admin, s.id, { slots: [{ positionId: pos.drums }, { positionId: pos.drums }] }), ValidationError, 'Each position can be listed only once');
+  await rejectsWith(svc.updateService(admin, s.id, { slots: [{ positionId: pos.drums }, { positionId: pos.drums }] }), ValidationError, 'Each position can be listed only once.');
   await rejectsWith(svc.updateService(admin, s.id, { slots: [{ positionId: pos.drums, count: 0 }] }), ValidationError);
   await data.positions.retire(pos.piano, NOW);
   await assert.rejects(svc.updateService(admin, s.id, { slots: [{ positionId: pos.piano }] }), ValidationError);

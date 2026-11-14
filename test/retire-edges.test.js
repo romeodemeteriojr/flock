@@ -47,7 +47,7 @@ test('retire: an out-of-date screen sending a deleted position is refused everyw
   try {
     const svc = await s.calendar.createService(actor, { date: '2025-01-12', slots: [{ positionId: bass.id }] });
     await s.teams.deletePosition(actor, keys.id);
-    const refused = (r) => /^validation_error: .*positions? do(es)? not exist$/.test(r) || /^not_found/.test(r);
+    const refused = (r) => /^validation_error: .*positions? do(es)? not exist\.$/.test(r) || /^not_found/.test(r);
     const tries = {
       'add a service': s.calendar.createService(actor, { date: '2025-01-19', slots: [{ positionId: keys.id }] }),
       'edit a service': s.calendar.updateService(actor, svc.id, { slots: [{ positionId: keys.id, count: 1 }] }),

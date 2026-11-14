@@ -50,7 +50,7 @@ const ticked = (els, name) => !!els?.[name]?.checked;
 export function serviceBody(elements, teams) {
   const date = val(elements, 'date');
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return { error: 'Please pick a date.' };
-  const time = val(elements, 'time') || DEFAULT_TIME;
+  const time = val(elements, 'time');
   if (!/^\d{2}:\d{2}$/.test(time)) return { error: 'Please pick a time, like 9:00 am.' };
   const titleText = val(elements, 'title') || titleFor(date);
   if (titleText.length > 100) return { error: 'The title is too long. Please keep it under 100 letters.' };

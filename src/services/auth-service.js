@@ -280,7 +280,7 @@ export function createAuthService(deps) {
     /** Where to send the browser, and the state to remember in a cookie. */
     ssoStart(providerId, redirectUri) {
       const p = providerOf(providerId);
-      if (!p) throw new NotFoundError('That sign-in is not set up');
+      if (!p) throw new NotFoundError('That sign-in is not set up.');
       const state = random.token(32);
       return { state, url: p.authUrl({ state, redirectUri }) };
     },

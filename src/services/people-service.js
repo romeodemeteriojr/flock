@@ -5,6 +5,7 @@
 // src/container.js. Invites and session ending use the injected auth service;
 // no secret is ever written to the audit log or the logger.
 import { ConflictError, NotFoundError, ValidationError } from '../errors.js';
+import { todayStr } from '../dates.js';
 
 export const ROLES = Object.freeze(['admin', 'member']);
 export const EMAIL_RE = /^[^\s@]{1,64}@[^\s@]+\.[^\s@]+$/;
@@ -47,10 +48,18 @@ export function createPeopleService(deps) {
   const audit = (d, actor, action, detail) => d.audit.log({ at: clock.now(), actorId: actor?.id ?? null, action, detail });
 
   return {
-    /** Everyone (active or not), sorted by name. notifications: they turned push on somewhere (decision 0008). */
+    /**
+     * Everyone (active or not), sorted by name. notifications: they turned push
+     * on somewhere (decision 0008). upcoming: spots they hold (asked or
+     * confirmed) on services from today on.
+     */
     async list() {
       const withDevices = await data.pushDevices.personIds();
-      return (await data.people.list()).map((p) => ({ ...personView(p), notifications: withDevices.has(p.id) }));
+      const upcoming = new Map();
+      for (const s of await data.slots.assignedBetween(todayStr(clock.now()), '9999-12-31')) {
+        if (s.status === 'pending' || s.status === 'accepted') upcoming.set(s.personId, (upcoming.get(s.personId) ?? 0) + 1);
+      }
+      return (await data.people.list()).map((p) => ({ ...personView(p), notifications: withDevices.has(p.id), upcoming: upcoming.get(p.id) ?? 0 }));
     },
 
     /**
@@ -93,12 +102,12 @@ export function createPeopleService(deps) {
         const newRole = role ?? cur.role;
         const newActive = active === undefined ? cur.active : !!active;
         if (id === actor?.id && !newActive && cur.active) {
-          throw new ConflictError('You cannot deactivate your own account');
+          throw new ConflictError('You cannot deactivate your own account.');
         }
         const wasActiveAdmin = cur.role === 'admin' && cur.active && cur.joined;
         const stillActiveAdmin = newRole === 'admin' && newActive;
         if (wasActiveAdmin && !stillActiveAdmin && (await d.people.countActiveAdmins()) <= 1) {
-          throw new ConflictError('There must always be at least one active admin');
+          throw new ConflictError('There must always be at least one active admin.');
         }
         const changes = [];
         if (name !== undefined && name !== cur.name) changes.push('name');

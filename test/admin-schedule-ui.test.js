@@ -127,10 +127,11 @@ test('services: list sorted by date, grouped positions, people count; empty stat
 
 test('services: form builds the right POST body', async () => {
   const els = (o) => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, typeof v === 'boolean' ? { checked: v } : { value: v }]));
-  assert.deepEqual(services.serviceBody(els({ date: '2026-11-08', time: '', title: '', 'pos-10': true, 'count-10': '2', 'pos-11': false, 'pos-20': true, 'count-20': '' }), TEAMS).body,
+  assert.deepEqual(services.serviceBody(els({ date: '2026-11-08', time: '09:00', title: '', 'pos-10': true, 'count-10': '2', 'pos-11': false, 'pos-20': true, 'count-20': '' }), TEAMS).body,
     { date: '2026-11-08', time: '09:00', title: 'Sunday service', slots: [{ positionId: 10, count: 2 }, { positionId: 20, count: 1 }] });
+  assert.match(services.serviceBody(els({ date: '2026-11-08', time: '' }), TEAMS).error, /pick a time/, 'an empty time is asked for, not saved as 9:00');
   assert.match(services.serviceBody(els({ date: '' }), TEAMS).error, /pick a date/);
-  assert.match(services.serviceBody(els({ date: '2026-11-08', 'pos-10': true, 'count-10': '99' }), TEAMS).error, /1 to 20/);
+  assert.match(services.serviceBody(els({ date: '2026-11-08', time: '09:00', 'pos-10': true, 'count-10': '99' }), TEAMS).error, /1 to 20/);
 
   const { api, root } = await svcSetup({ 'POST /api/services': {} });
   root.submit('create', { date: '2026-11-22', time: '10:30', title: ' Easter ', 'pos-11': true, 'count-11': '3' });
@@ -472,7 +473,7 @@ for (const code of ['inactive', 'past']) {
 test('slot panel: a 409 without a known code shows the server words; other errors too', async () => {
   const { root } = await schedSetup({
     'GET /api/admin/suggest?slotId=4': CANDS,
-    'PUT /api/slots/4/assign': new ApiError({ status: 404, message: 'Person not found' }),
+    'PUT /api/slots/4/assign': new ApiError({ status: 404, message: 'Person not found.' }),
   });
   await root.click('slot-open', 4);
   await flush();
@@ -656,7 +657,7 @@ test('reminders: without push there is no Send button and a failed send is expla
   off.root.submit('reminders', { weekOf: '2026-11-08' });
   await flush();
   assert.doesNotMatch(off.root.innerHTML, /send-reminders/);
-  const fail = Object.assign(new Error('Notifications are not set up on this Flock yet'), { status: 409 });
+  const fail = Object.assign(new Error('Notifications are not set up on this Flock yet.'), { status: 409 });
   const on = await remindersSetup({
     'GET /api/admin/reminders?weekOf=2026-11-08': { push: true, reminders: REMINDERS.reminders.map((x) => ({ ...x, hasPush: true })) },
     'POST /api/admin/reminders/send': fail,
@@ -817,7 +818,7 @@ test('schedule: fill open positions: bad date, cancel and a server error', async
   assert.doesNotMatch(root.innerHTML, /data-autofill-sheet/, 'Cancel also closes the sheet');
   assert.equal(api.calls.filter((c) => c.includes('"apply":true')).length, 0, 'cancel asks nobody');
 
-  const bad = await schedSetup({ 'POST /api/admin/autofill': new ApiError({ status: 400, message: 'Those weeks are already over' }) });
+  const bad = await schedSetup({ 'POST /api/admin/autofill': new ApiError({ status: 400, message: 'Those weeks are already over.' }) });
   await bad.root.click('autofill-open');
   await bad.root.submit('autofill', { weekOf: '2026-11-02', weeks: '1' });
   await flush();

@@ -57,7 +57,7 @@ test('emails: optional, unique case-insensitively, and locked once the person jo
     assert.ok(a.json.invite.link);
     const d = await call('POST', '/api/people', { name: 'Dup', email: 'SAM@example.com' });
     assert.equal(d.status, 409);
-    assert.equal(d.json.error, 'That email is already used by someone else');
+    assert.equal(d.json.error, 'That email is already used by someone else.');
     const none = await call('POST', '/api/people', { name: 'Gran' });
     assert.equal(none.status, 201);
     assert.equal(none.json.person.email, null);
@@ -80,7 +80,7 @@ test('listing has no secrets, sorted by name, with positionIds', async () => {
     assert.deepEqual(r.json.map((p) => p.name), ['Ada Admin', 'Max Member']);
     assert.deepEqual(r.json[1].positionIds, [1]);
     assert.deepEqual(Object.keys(r.json[0]).sort(),
-      ['active', 'email', 'id', 'joined', 'name', 'notifications', 'positionIds', 'role']);
+      ['active', 'email', 'id', 'joined', 'name', 'notifications', 'positionIds', 'role', 'upcoming']);
     assert.doesNotMatch(r.text, /scrypt|password_hash/);
   } finally { await app.close(); }
 });
@@ -151,6 +151,8 @@ test('validation errors', async () => {
       ['PATCH', `/api/people/${s.memberId}`, { email: 'nope' }],
       ['POST', '/api/people', { name: 'A B', role: 'boss' }], ['POST', '/api/people', { name: 'A B', extra: 1 }],
       ['POST', '/api/people', []],
+      ['POST', '/api/people', { name: '\u0000' }], ['POST', '/api/people', { name: '\u200b\u3164' }],
+      ['PATCH', `/api/people/${s.memberId}`, { name: '\u2060 \u00a0' }],
       ['PATCH', `/api/people/${s.memberId}`, {}], ['PATCH', `/api/people/${s.memberId}`, { active: 'no' }],
       ['PATCH', `/api/people/${s.memberId}`, { role: 'x' }], ['PATCH', `/api/people/${s.memberId}`, { name: '' }],
       ['PATCH', '/api/people/abc', { name: 'Q' }], ['PATCH', '/api/people/0', { name: 'Q' }],

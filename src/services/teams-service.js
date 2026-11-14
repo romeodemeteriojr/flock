@@ -4,12 +4,12 @@
 // `deps.data` and throws AppErrors (src/errors.js). Built once by
 // src/container.js.
 import { ConflictError, NotFoundError, ValidationError } from '../errors.js';
-import { v, parse } from '../validate.js';
+import { v, parse, checkName } from '../validate.js';
 import { todayStr } from '../dates.js';
 import { takenOff } from './taken-off.js';
 
-export const TEAM_DUP = 'A team with that name already exists';
-export const POS_DUP = 'That team already has a position with that name';
+export const TEAM_DUP = 'A team with that name already exists.';
+export const POS_DUP = 'That team already has a position with that name.';
 
 const isDup = (e) => e?.name === 'DuplicateError';
 
@@ -23,12 +23,10 @@ async function translating(fn, { dup } = {}) {
   }
 }
 
-export const NAME_ERR = 'Name must be 1 to 60 characters';
-export const SORT_ERR = 'Sort must be a whole number';
-export const IDS_ERR = 'positionIds must be a list of position ids';
-const TEAM_MISSING = 'That team does not exist';
+export const SORT_ERR = 'Sort must be a whole number.';
+export const IDS_ERR = 'positionIds must be a list of position ids.';
+const TEAM_MISSING = 'That team does not exist.';
 
-const nameSchema = v.string({ max: 60, pattern: /^[\s\S]+$/ });
 const intSchema = v.integer();
 const idList = v.array(v.integer());
 
@@ -80,13 +78,13 @@ export function createTeamsService(deps) {
 
   async function mustTeam(d, id) {
     const team = Number.isSafeInteger(id) ? await d.teams.findById(id) : null;
-    if (!team) throw new NotFoundError('Team not found');
+    if (!team) throw new NotFoundError('Team not found.');
     return team;
   }
 
   async function mustPosition(d, id) {
     const pos = Number.isSafeInteger(id) ? await d.positions.findById(id) : null;
-    if (!pos) throw new NotFoundError('Position not found');
+    if (!pos) throw new NotFoundError('Position not found.');
     return pos;
   }
 
@@ -112,7 +110,7 @@ export function createTeamsService(deps) {
 
     /** @param {{name: unknown}} input  Raw input; checked here. */
     async createTeam(actor, input = {}) {
-      const name = check(nameSchema, input.name, NAME_ERR);
+      const name = checkName(input.name, { max: 60 });
       return data.tx(async (d) => {
         const retired = await d.teams.findRetiredByName(name);
         if (retired) {
@@ -136,7 +134,7 @@ export function createTeamsService(deps) {
       return data.tx(async (d) => {
         let team = await mustTeam(d, id);
         if (input.name !== undefined) {
-          const name = check(nameSchema, input.name, NAME_ERR);
+          const name = checkName(input.name, { max: 60 });
           team = await translating(() => d.teams.update(id, { name }), { dup: TEAM_DUP });
         }
         if (input.sort !== undefined) {
@@ -171,7 +169,7 @@ export function createTeamsService(deps) {
     async createPosition(actor, teamId, input = {}) {
       return data.tx(async (d) => {
         const team = await mustTeam(d, teamId);
-        const name = check(nameSchema, input.name, NAME_ERR);
+        const name = checkName(input.name, { max: 60 });
         const retired = await d.positions.findRetiredByName(team.id, name);
         if (retired) {
           // Bring the old position back (same id, history and qualifications).
@@ -195,7 +193,7 @@ export function createTeamsService(deps) {
       return data.tx(async (d) => {
         await mustPosition(d, id);
         const patch = {};
-        if (input.name !== undefined) patch.name = check(nameSchema, input.name, NAME_ERR);
+        if (input.name !== undefined) patch.name = checkName(input.name, { max: 60 });
         if (input.sort !== undefined) patch.sort = check(intSchema, input.sort, SORT_ERR);
         if (input.teamId !== undefined) {
           patch.teamId = check(intSchema, input.teamId, TEAM_MISSING);
@@ -233,11 +231,11 @@ export function createTeamsService(deps) {
     async setQualifications(actor, personId, rawIds) {
       return data.tx(async (d) => {
         const person = Number.isSafeInteger(personId) ? await d.people.findById(personId) : null;
-        if (!person) throw new NotFoundError('Person not found');
+        if (!person) throw new NotFoundError('Person not found.');
         const positionIds = check(idList, rawIds, IDS_ERR);
         const unique = [...new Set(positionIds)];
         for (const id of unique) {
-          if (!(await d.positions.findById(id))) throw new ValidationError('One or more positions do not exist');
+          if (!(await d.positions.findById(id))) throw new ValidationError('One or more positions do not exist.');
         }
         const saved = await d.qualifications.setForPerson(person.id, unique);
         await audit(d, actor, 'person.positions', `person ${person.id} positions [${unique.join(',')}]`);

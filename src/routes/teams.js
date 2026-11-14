@@ -31,12 +31,12 @@ export function register(router, ctx) {
 
   function teamId(params) {
     const id = toId(params.id);
-    if (id === null) throw new NotFoundError('Team not found');
+    if (id === null) throw new NotFoundError('Team not found.');
     return id;
   }
   function positionId(params) {
     const id = toId(params.id);
-    if (id === null) throw new NotFoundError('Position not found');
+    if (id === null) throw new NotFoundError('Position not found.');
     return id;
   }
 
@@ -70,7 +70,7 @@ export function register(router, ctx) {
 
   router.add('PUT', '/api/people/:id/positions', async ({ params, body, user }) => {
     const personId = toId(params.id);
-    if (personId === null) throw new NotFoundError('Person not found');
+    if (personId === null) throw new NotFoundError('Person not found.');
     return ok({ positionIds: await teams().setQualifications(user, personId, bodyOf(body).positionIds) });
   }, { auth: 'admin' });
 

@@ -46,7 +46,8 @@ test('people service: list is sorted, has positionIds and no secrets', async () 
   const { people } = await setup();
   const list = await people.list();
   assert.deepEqual(list.map((p) => p.name), ['Ada Admin', 'Max Member']);
-  assert.deepEqual(Object.keys(list[0]), ['id', 'name', 'email', 'role', 'active', 'joined', 'positionIds', 'notifications']);
+  assert.deepEqual(Object.keys(list[0]), ['id', 'name', 'email', 'role', 'active', 'joined', 'positionIds', 'notifications', 'upcoming']);
+  assert.equal(list[0].upcoming, 0);
   assert.equal(list[0].notifications, false);
   assert.doesNotMatch(JSON.stringify(list), /fast\$|hash/i);
 });
@@ -83,7 +84,7 @@ test('people service: emails are unique, case-insensitively', async () => {
   const { people, admin } = await setup();
   await people.create(admin, { name: 'Sam Jones', email: 'sam@example.com' });
   await assert.rejects(people.create(admin, { name: 'Dup', email: 'SAM@example.com' }),
-    (e) => e instanceof ConflictError && e.status === 409 && e.message === 'That email is already used by someone else');
+    (e) => e instanceof ConflictError && e.status === 409 && e.message === 'That email is already used by someone else.');
   await assert.rejects(people.create(admin, { name: 'Dup', email: 'MAX@example.com' }), ConflictError);
 });
 
@@ -126,9 +127,9 @@ test('people service: update changes name and role and writes an audit row', asy
 test('people service: the last active admin can never be demoted or deactivated', async () => {
   const { people, data, admin, adminId, memberId } = await setup();
   await assert.rejects(people.update({ id: memberId }, adminId, { role: 'member' }),
-    (e) => e instanceof ConflictError && e.message === 'There must always be at least one active admin');
+    (e) => e instanceof ConflictError && e.message === 'There must always be at least one active admin.');
   await assert.rejects(people.update({ id: memberId }, adminId, { active: false }),
-    (e) => e instanceof ConflictError && e.message === 'There must always be at least one active admin');
+    (e) => e instanceof ConflictError && e.message === 'There must always be at least one active admin.');
   await assert.rejects(people.update(admin, adminId, { role: 'member' }), ConflictError);
   // With a second admin, demoting yourself is fine.
   await people.update(admin, memberId, { role: 'admin' });
@@ -146,7 +147,7 @@ test('people service: an admin cannot deactivate themselves', async () => {
   const { people, admin, adminId, memberId } = await setup();
   await people.update(admin, memberId, { role: 'admin' });
   await assert.rejects(people.update(admin, adminId, { active: false }),
-    (e) => e instanceof ConflictError && e.message === 'You cannot deactivate your own account');
+    (e) => e instanceof ConflictError && e.message === 'You cannot deactivate your own account.');
 });
 
 test('people service: deactivating ends sessions; reactivating works', async () => {
@@ -207,4 +208,22 @@ test('people service: a failed create writes nothing', async () => {
   await assert.rejects(people.create(admin, { name: 'X', email: 'ada@example.com' }), ConflictError);
   assert.equal((await data.audit.list()).length, 0);
   assert.equal((await people.list()).length, 2);
+});
+
+test('people service: upcoming counts spots held from today on, not past, open or declined ones', async () => {
+  const { data, people, memberId } = await setup();
+  const band = await data.teams.create({ name: 'Band' });
+  const drums = await data.positions.create(band.id, { name: 'Drums' });
+  const at = NOW;
+  const slotOn = async (date) => (await data.slots.createMany((await data.services.create({ date, time: '09:00', title: 'S' })).id, [drums.id]))[0].id;
+  await data.slots.assign(await slotOn('2025-01-04'), { personId: memberId, assignedAt: at }); // past
+  await data.slots.assign(await slotOn('2025-01-05'), { personId: memberId, assignedAt: at }); // today, pending
+  const accepted = await slotOn('2025-01-12');
+  await data.slots.assign(accepted, { personId: memberId, status: 'accepted', assignedAt: at });
+  const declined = await slotOn('2025-01-19');
+  await data.slots.assign(declined, { personId: memberId, assignedAt: at });
+  await data.slots.respond(declined, { status: 'declined', respondedAt: at });
+  await slotOn('2025-01-26'); // open
+  const byName = Object.fromEntries((await people.list()).map((p) => [p.name, p.upcoming]));
+  assert.deepEqual(byName, { 'Ada Admin': 0, 'Max Member': 2 });
 });

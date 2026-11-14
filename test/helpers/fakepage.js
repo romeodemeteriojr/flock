@@ -266,6 +266,7 @@ export function openPage({ url, jar = { cookie: '' }, fetchLog = [] } = {}) {
       },
     },
     history: { replaceState(_s, _t, u) { hash = String(u); } },
+    sessionStorage: (() => { const m = new Map(); return { getItem: (k) => m.get(k) ?? null, setItem: (k, v) => m.set(k, String(v)), removeItem: (k) => m.delete(k) }; })(),
     addEventListener(type, fn) { (winHandlers[type] ??= []).push(fn); },
     setTimeout(fn, ms) { const t = { fn, ms }; page.timers.push(t); return t; },
     clearTimeout(t) { page.timers = page.timers.filter((x) => x !== t); },

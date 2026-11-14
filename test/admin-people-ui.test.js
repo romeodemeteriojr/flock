@@ -145,7 +145,7 @@ test('adding someone without an email: no invite, a plain notice instead', async
 });
 
 test('email taken 409 is shown as is', async () => {
-  const { root } = await setup({ 'POST /api/people': apiErr(409, 'That email is already used by someone else') });
+  const { root } = await setup({ 'POST /api/people': apiErr(409, 'That email is already used by someone else.') });
   root.click('add-open');
   root.submit('add-person', { name: 'Al', email: 'ann@example.com', scheduler: false });
   await flush();
@@ -190,6 +190,16 @@ test('deactivate and reactivate need confirmation and explain history is kept', 
   assert.ok(api.calls.includes('PATCH /api/people/3 {"active":true}'));
 });
 
+test('the deactivate confirm warns when the person is on upcoming services', async () => {
+  const { root } = await setup({ 'GET /api/people': [PEOPLE[0], { ...PEOPLE[1], upcoming: 3 }, { ...P(4, 'Kim Lee', 'kim@example.com'), upcoming: 1 }, { ...P(5, 'Lou Free', 'lou@example.com'), upcoming: 0 }] });
+  root.click('active-ask', 2);
+  assert.match(root.innerHTML, /data-upcoming><strong>Sam Ortiz is on 3 upcoming services\.<\/strong>.*Gaps will list those spots/s);
+  root.click('active-ask', 4);
+  assert.match(root.innerHTML, /Kim Lee is on 1 upcoming service\.<\/strong>.*that spot/s);
+  root.click('active-ask', 5);
+  assert.doesNotMatch(root.innerHTML, /data-upcoming/);
+});
+
 test('a confirm for one person cannot be used for another', async () => {
   const { api, root } = await setup();
   root.click('active-ask', 2);
@@ -199,7 +209,7 @@ test('a confirm for one person cannot be used for another', async () => {
 });
 
 test('last scheduler 409 is friendly', async () => {
-  const { root } = await setup({ 'PATCH /api/people/1': apiErr(409, 'There must always be at least one active admin') });
+  const { root } = await setup({ 'PATCH /api/people/1': apiErr(409, 'There must always be at least one active admin.') });
   root.click('active-ask', 1);
   root.click('deactivate-yes', 1);
   await flush();
@@ -609,7 +619,7 @@ test('confirm action is ignored unless its panel is open for that person', async
 });
 
 test('a role change refused with 409 shows the message instead of failing silently', async () => {
-  const { root } = await setupAs(9, { 'PATCH /api/people/1': apiErr(409, 'There must always be at least one active admin') });
+  const { root } = await setupAs(9, { 'PATCH /api/people/1': apiErr(409, 'There must always be at least one active admin.') });
   root.click('role-ask', 1);
   root.click('role-yes', 1);
   await flush();

@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { makeData } from './helpers/data.js';
 import { fixedClock } from '../src/infra/clock.js';
 import { createBlockoutsService } from '../src/services/blockouts-service.js';
-import { ValidationError, NotFoundError } from '../src/errors.js';
+import { ValidationError, NotFoundError, ConflictError } from '../src/errors.js';
 
 const NOW = '2025-01-05T12:00:00';
 
@@ -79,24 +79,24 @@ test('blockouts: add with defaults, trims the reason and returns conflicts', asy
   assert.deepEqual(r.conflicts.map((c) => c.slotId), [s]);
   const [stored] = await data.blockouts.listForPerson(pat.id);
   assert.equal(stored.createdAt, new Date(NOW).toISOString());
-  for (const empty of [null, '']) {
-    assert.equal((await svc.add(pat.id, { startDate: '2025-06-01', endDate: empty })).blockout.endDate, '2025-06-01');
+  for (const [i, empty] of [null, ''].entries()) {
+    assert.equal((await svc.add(pat.id, { startDate: `2025-06-0${i + 1}`, endDate: empty })).blockout.endDate, `2025-06-0${i + 1}`);
   }
 });
 
 test('blockouts: add validation rules and boundary dates', async () => {
   const { svc, pat, count } = await setup();
   const cases = [
-    [{}, 'Start date must be a real date like 2025-11-08'],
-    [{ startDate: '2025-02-30' }, 'Start date must be a real date like 2025-11-08'],
-    [{ startDate: 5 }, 'Start date must be a real date like 2025-11-08'],
-    [{ startDate: '2025-03-01', endDate: 'x' }, 'End date must be a real date like 2025-11-08'],
-    [{ startDate: '2025-03-01', endDate: '2025-02-28' }, 'End date cannot be before the start date'],
-    [{ startDate: '2025-01-01', endDate: '2025-01-04' }, 'That time is already past'],
-    [{ startDate: '2024-12-01' }, 'That time is already past'],
-    [{ startDate: '2025-01-10', endDate: '2026-01-11' }, 'A blockout can be at most 366 days'],
-    [{ startDate: '2025-01-10', reason: 7 }, 'Reason must be text'],
-    [{ startDate: '2025-01-10', reason: 'a'.repeat(201) }, 'Reason can be at most 200 characters'],
+    [{}, 'Start date must be a real date like 2025-11-08.'],
+    [{ startDate: '2025-02-30' }, 'Start date must be a real date like 2025-11-08.'],
+    [{ startDate: 5 }, 'Start date must be a real date like 2025-11-08.'],
+    [{ startDate: '2025-03-01', endDate: 'x' }, 'End date must be a real date like 2025-11-08.'],
+    [{ startDate: '2025-03-01', endDate: '2025-02-28' }, 'End date cannot be before the start date.'],
+    [{ startDate: '2025-01-01', endDate: '2025-01-04' }, 'That time is already past.'],
+    [{ startDate: '2024-12-01' }, 'That time is already past.'],
+    [{ startDate: '2025-01-10', endDate: '2026-01-11' }, 'A blockout can be at most 366 days.'],
+    [{ startDate: '2025-01-10', reason: 7 }, 'Reason must be text.'],
+    [{ startDate: '2025-01-10', reason: 'a'.repeat(201) }, 'Reason can be at most 200 characters.'],
   ];
   for (const [input, message] of cases) await rejectsWith(svc.add(pat.id, input), ValidationError, message);
   assert.equal(count(), 0);
@@ -106,7 +106,10 @@ test('blockouts: add validation rules and boundary dates', async () => {
   await svc.add(pat.id, { startDate: '2025-01-10', endDate: '2026-01-10' }); // exactly 366 days
   await svc.add(pat.id, { startDate: '2025-01-10', reason: 'a'.repeat(200) });
   await svc.add(pat.id, { startDate: '2028-02-29' });
-  await svc.add(pat.id, { startDate: '2025-01-10', reason: `  ${'a'.repeat(200)}  ` }); // trimmed first
+  assert.equal(count(), 5);
+  // The same days and reason again (two devices at once; trimmed first) is kept once.
+  await rejectsWith(svc.add(pat.id, { startDate: '2025-01-10', reason: `  ${'a'.repeat(200)}  ` }), ConflictError, 'You already have those days off.');
+  await svc.add(pat.id, { startDate: '2025-01-10', reason: 'b' }); // another reason is another day off
   assert.equal(count(), 6);
 });
 
@@ -115,7 +118,7 @@ test('blockouts: "today" follows the clock (local date)', async () => {
   clock.set(new Date(2025, 5, 1, 23, 59));
   await svc.add(pat.id, { startDate: '2025-06-01' });
   clock.advance(60_000);
-  await rejectsWith(svc.add(pat.id, { startDate: '2025-06-01' }), ValidationError, 'That time is already past');
+  await rejectsWith(svc.add(pat.id, { startDate: '2025-06-01' }), ValidationError, 'That time is already past.');
   assert.deepEqual(await svc.listMine(pat.id), []);
 });
 
@@ -135,8 +138,8 @@ test('blockouts: removeOwn only removes your own', async () => {
   const { svc, pat, quinn, block, count } = await setup();
   const theirs = await block(quinn.id, '2025-05-01', '2025-05-02');
   const mine = await block(pat.id, '2025-05-03', '2025-05-04');
-  await rejectsWith(svc.removeOwn(pat.id, theirs.id), NotFoundError, 'Blockout not found');
-  await rejectsWith(svc.removeOwn(pat.id, null), NotFoundError, 'Blockout not found');
+  await rejectsWith(svc.removeOwn(pat.id, theirs.id), NotFoundError, 'Blockout not found.');
+  await rejectsWith(svc.removeOwn(pat.id, null), NotFoundError, 'Blockout not found.');
   assert.equal(count(), 2);
   assert.deepEqual(await svc.removeOwn(pat.id, mine.id), { ok: true });
   await rejectsWith(svc.removeOwn(pat.id, mine.id), NotFoundError);
@@ -153,16 +156,16 @@ test('blockouts: admin listings', async () => {
   assert.deepEqual(p.map((b) => b.startDate), ['2024-07-01', '2025-05-03']); // past ones too
   assert.deepEqual(Object.keys(p[0]), ['id', 'personId', 'startDate', 'endDate', 'reason', 'personName']);
   assert.equal(p[0].personName, 'Pat Person');
-  await rejectsWith(svc.listForPerson(9999), NotFoundError, 'Person not found');
-  await rejectsWith(svc.listForPerson(null), NotFoundError, 'Person not found');
+  await rejectsWith(svc.listForPerson(9999), NotFoundError, 'Person not found.');
+  await rejectsWith(svc.listForPerson(null), NotFoundError, 'Person not found.');
   assert.equal((await svc.listRange()).length, 3);
   const f = await svc.listRange('2025-05-10', '2025-06-30');
   assert.deepEqual(f.map((b) => `${b.startDate} ${b.personName}`), ['2025-05-03 Pat Person', '2025-06-30 Quinn Quill']);
   assert.equal((await svc.listRange('2025-05-11', '2025-06-29')).length, 0);
   assert.equal((await svc.listRange('2025-07-02')).length, 1);
   assert.equal((await svc.listRange(undefined, '2024-07-01')).length, 1);
-  await rejectsWith(svc.listRange('bad'), ValidationError, 'From must be a real date like 2025-11-08');
-  await rejectsWith(svc.listRange('2025-01-01', '2025-02-30'), ValidationError, 'To must be a real date like 2025-11-08');
+  await rejectsWith(svc.listRange('bad'), ValidationError, 'From must be a real date like 2025-11-08.');
+  await rejectsWith(svc.listRange('2025-01-01', '2025-02-30'), ValidationError, 'To must be a real date like 2025-11-08.');
 });
 
 test('blockouts: add stores nothing when the transaction fails', async () => {

@@ -180,7 +180,7 @@ test('past: answers, assignments and blockouts in the past are refused over HTTP
     assert.equal(assign.json.code, 'past');
     const block = await app.request('POST', '/api/me/blockouts', { cookie: member, headers: h, body: { startDate: '2025-01-01', endDate: '2025-01-07' } });
     assert.equal(block.status, 400);
-    assert.equal(block.json.error, 'That time is already past');
+    assert.equal(block.json.error, 'That time is already past.');
     const today = await app.request('POST', '/api/me/blockouts', { cookie: member, headers: h, body: { startDate: '2025-01-01', endDate: '2025-01-08' } });
     assert.equal(today.status, 201, 'a blockout ending today is still allowed');
     // My schedule from today no longer shows the past service.

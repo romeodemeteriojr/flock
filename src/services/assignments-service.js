@@ -102,7 +102,7 @@ export function createAssignmentsService(deps) {
 
   async function loadSlot(d, slotId) {
     const slot = isInt(slotId) ? await d.slots.findById(slotId) : null;
-    if (!slot) throw new NotFoundError('Slot not found');
+    if (!slot) throw new NotFoundError('Slot not found.');
     return slot;
   }
 
@@ -127,14 +127,14 @@ export function createAssignmentsService(deps) {
      * @param {{notify?: boolean}} [opts]
      */
     async assign(actor, slotId, { personId, force = false } = {}, { notify = true } = {}) {
-      if (!isInt(personId)) throw new ValidationError('Person id must be a whole number');
-      if (typeof force !== 'boolean') throw new ValidationError('Force must be true or false');
+      if (!isInt(personId)) throw new ValidationError('Person id must be a whole number.');
+      if (typeof force !== 'boolean') throw new ValidationError('Force must be true or false.');
       let before = null;
       const result = await data.tx(async (d) => {
         const slot = await loadSlot(d, slotId);
         notPast(slot);
         const person = await d.people.findById(personId);
-        if (!person) throw new NotFoundError('Person not found');
+        if (!person) throw new NotFoundError('Person not found.');
         if (!person.active) {
           throw new ConflictError(`${person.name} is no longer active`, { code: 'inactive' });
         }
@@ -192,7 +192,7 @@ export function createAssignmentsService(deps) {
      */
     async mySchedule(personId, { from } = {}) {
       const start = from === undefined || from === null || from === '' ? today() : from;
-      if (!isValidDate(start)) throw new ValidationError('From must be a real date like 2025-11-08');
+      if (!isValidDate(start)) throw new ValidationError('From must be a real date like 2025-11-08.');
       const end = addDays(start, SCHEDULE_DAYS);
       return data.tx(async (d) => {
         const mine = await d.slots.listForPerson(personId, start, end, HOLDING);
@@ -234,15 +234,15 @@ export function createAssignmentsService(deps) {
      * person now holds that position, or the most positions, on the service.
      */
     async respond(personId, slotId, action) {
-      if (action !== 'accept' && action !== 'decline') throw new ValidationError('Answer must be accept or decline');
+      if (action !== 'accept' && action !== 'decline') throw new ValidationError('Answer must be accept or decline.');
       const status = action === 'accept' ? 'accepted' : 'declined';
       let saidNo = null;
       const result = await data.tx(async (d) => {
         const slot = isInt(slotId) ? await d.slots.findById(slotId) : null;
-        if (!slot || slot.personId === null || slot.personId !== personId) throw new NotFoundError('Slot not found');
+        if (!slot || slot.personId === null || slot.personId !== personId) throw new NotFoundError('Slot not found.');
         notPast(slot, 'That service is in the past');
         if (slot.status === status) return mySlotView(slot);
-        if (!['pending', 'accepted', 'declined'].includes(slot.status)) throw new NotFoundError('Slot not found');
+        if (!['pending', 'accepted', 'declined'].includes(slot.status)) throw new NotFoundError('Slot not found.');
         if (status === 'accepted' && slot.status === 'declined') {
           // Taking back a "no" holds the slot again, so the limits apply as on assign.
           const others = (await d.slots.listForService(slot.serviceId))

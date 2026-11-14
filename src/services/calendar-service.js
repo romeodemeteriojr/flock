@@ -7,12 +7,12 @@ import { ValidationError, ConflictError, NotFoundError } from '../errors.js';
 import { isValidDate, isValidTime, addDays, daysBetween, todayStr } from '../dates.js';
 import { takenOff } from './taken-off.js';
 
-export const DATE_ERR = 'Date must be a real date like 2026-03-01';
-export const TIME_ERR = 'Time must look like 09:00';
-export const TITLE_ERR = 'Title must be 1 to 100 characters';
-export const COUNT_ERR = 'Count must be a whole number from 1 to 20';
-export const WEEKS_ERR = 'Weeks must be a whole number from 1 to 26';
-const CLASH = 'A service already exists at that date and time';
+export const DATE_ERR = 'Date must be a real date like 2026-03-01.';
+export const TIME_ERR = 'Time must look like 09:00.';
+export const TITLE_ERR = 'Title must be 1 to 100 characters.';
+export const COUNT_ERR = 'Count must be a whole number from 1 to 20.';
+export const WEEKS_ERR = 'Weeks must be a whole number from 1 to 26.';
+const CLASH = 'A service already exists at that date and time.';
 export const PAST_LOCKED = "Past services can't be changed";
 export const PAST_DATE = "A service can't be set in the past";
 export const DEFAULT_TIME = '09:00';
@@ -71,7 +71,7 @@ export function createCalendarService(deps) {
 
   async function loadService(d, id) {
     const svc = isInt(id) ? await d.services.findById(id) : null;
-    if (!svc) throw new NotFoundError('Service not found');
+    if (!svc) throw new NotFoundError('Service not found.');
     return svc;
   }
 
@@ -82,16 +82,16 @@ export function createCalendarService(deps) {
   // Checks a list of {positionId, count?}; returns [{positionId, count}].
   async function checkSlotList(d, list) {
     if (list === undefined) return [];
-    if (!Array.isArray(list)) throw new ValidationError('Slots must be a list');
+    if (!Array.isArray(list)) throw new ValidationError('Slots must be a list.');
     const out = [];
     for (const item of list) {
-      if (!item || typeof item !== 'object') throw new ValidationError('Each slot needs a positionId');
+      if (!item || typeof item !== 'object') throw new ValidationError('Each slot needs a positionId.');
       const count = item.count === undefined ? 1 : item.count;
       if (!isInt(count) || count < 1 || count > MAX_COUNT) throw new ValidationError(COUNT_ERR);
       if (!isInt(item.positionId) || !(await d.positions.findById(item.positionId))) {
-        throw new ValidationError('One or more positions do not exist');
+        throw new ValidationError('One or more positions do not exist.');
       }
-      if (out.some((o) => o.positionId === item.positionId)) throw new ValidationError('Each position can be listed only once');
+      if (out.some((o) => o.positionId === item.positionId)) throw new ValidationError('Each position can be listed only once.');
       out.push({ positionId: item.positionId, count });
     }
     return out;
@@ -215,8 +215,8 @@ export function createCalendarService(deps) {
       if (!isValidDate(start)) throw new ValidationError(DATE_ERR);
       const end = to === undefined ? addDays(start, DEFAULT_RANGE_DAYS) : to;
       if (!isValidDate(end)) throw new ValidationError(DATE_ERR);
-      if (end < start) throw new ValidationError('The end date must not be before the start date');
-      if (daysBetween(start, end) > MAX_RANGE_DAYS) throw new ValidationError('The date range can be at most 366 days');
+      if (end < start) throw new ValidationError('The end date must not be before the start date.');
+      if (daysBetween(start, end) > MAX_RANGE_DAYS) throw new ValidationError('The date range can be at most 366 days.');
       return data.tx(async (d) => {
         const services = await d.services.listRange(start, end);
         const slots = await d.slots.listForServices(start, end);
@@ -298,7 +298,7 @@ export function createCalendarService(deps) {
         const count = rawCount === undefined ? 1 : rawCount;
         if (!isInt(count) || count < 1 || count > MAX_COUNT) throw new ValidationError(COUNT_ERR);
         if (!isInt(positionId) || !(await d.positions.findById(positionId))) {
-          throw new ValidationError('That position does not exist');
+          throw new ValidationError('That position does not exist.');
         }
         const slots = await d.slots.createMany(svc.id, Array(count).fill(positionId));
         await audit(d, actor, 'slot.create', `service ${svc.id} position ${positionId} x${count}`);
@@ -314,10 +314,10 @@ export function createCalendarService(deps) {
       let removed;
       const result = await data.tx(async (d) => {
         const slot = isInt(slotId) ? await d.slots.findById(slotId) : null;
-        if (!slot) throw new NotFoundError('Slot not found');
+        if (!slot) throw new NotFoundError('Slot not found.');
         mustBeUpcoming({ date: slot.serviceDate });
         if (holds(slot) && !confirm) {
-          throw new ConflictError('Someone is scheduled in this slot', { code: 'has_person' });
+          throw new ConflictError('Someone is scheduled in this slot.', { code: 'has_person' });
         }
         removed = slot;
         await d.slots.remove(slot.id);

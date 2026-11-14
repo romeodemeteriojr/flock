@@ -25,7 +25,7 @@ export const REMINDER_DAYS = 7;
 
 export const GAP_TYPES = Object.freeze(['open', 'declined', 'unanswered', 'blocked', 'inactive']);
 const HOLDING = ['pending', 'accepted'];
-const DATE_ERR = 'must be a real date like 2026-03-01';
+const DATE_ERR = 'must be a real date like 2026-03-01.';
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -116,7 +116,7 @@ export function createGapsService(deps) {
       const now = today();
       const start = dateOr(from, now, 'From');
       const end = dateOr(to, addDays(start, DEFAULT_GAP_DAYS), 'To');
-      if (end < start) throw new ValidationError('The end date must not be before the start date');
+      if (end < start) throw new ValidationError('The end date must not be before the start date.');
       if (daysBetween(start, end) > MAX_GAP_DAYS) throw new ValidationError(`The date range can be at most ${MAX_GAP_DAYS} days`);
       return data.tx(async (d) => {
         const slots = await d.slots.listForServices(start, end);
@@ -167,14 +167,14 @@ export function createGapsService(deps) {
      * served (never first), then name.
      */
     async suggest({ slotId, includeUnqualified = false } = {}) {
-      if (!isInt(slotId)) throw new ValidationError('Slot id must be a whole number');
-      if (typeof includeUnqualified !== 'boolean') throw new ValidationError('Include unqualified must be true or false');
+      if (!isInt(slotId)) throw new ValidationError('Slot id must be a whole number.');
+      if (typeof includeUnqualified !== 'boolean') throw new ValidationError('Include unqualified must be true or false.');
       const now = today();
       const backFrom = addDays(now, -LOOKBACK_DAYS);
       const aheadTo = addDays(now, LOOKAHEAD_DAYS);
       return data.tx(async (d) => {
         const slot = await d.slots.findById(slotId);
-        if (!slot) throw new NotFoundError('Slot not found');
+        if (!slot) throw new NotFoundError('Slot not found.');
         // Who already holds other slots of this service (decision 0010): they may
         // take this one too, up to the limit, but never a second slot of the same position.
         const onService = new Map(); // personId -> their other slots here
@@ -255,7 +255,7 @@ export function createGapsService(deps) {
      */
     async sendReminders(actor, { weekOf } = {}) {
       if (!notifications.settings().enabled) {
-        throw new ConflictError('Notifications are not set up on this Flock yet', { code: 'push_off' });
+        throw new ConflictError('Notifications are not set up on this Flock yet.', { code: 'push_off' });
       }
       const start = dateOr(weekOf, today(), 'Week of');
       const list = await drafts({ weekOf: start });

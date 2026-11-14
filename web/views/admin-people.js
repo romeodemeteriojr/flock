@@ -99,6 +99,7 @@ function confirmPanel(p, kind) {
   if (p.active) {
     return html`<div class="confirm confirm-danger" role="alertdialog" aria-label="Confirm">
       <p>Deactivate <strong>${p.name}</strong>? They will not be able to log in and will not be offered for scheduling. Nothing is deleted: their history is kept, and you can reactivate them any time.</p>
+      ${p.upcoming ? html`<p data-upcoming><strong>${p.name} is on ${p.upcoming === 1 ? '1 upcoming service' : `${p.upcoming} upcoming services`}.</strong> They stay on the schedule, and Gaps will list ${p.upcoming === 1 ? 'that spot' : 'those spots'} so you can find someone else.</p>` : ''}
       <div class="btn-row">
         <button type="button" class="btn btn-danger" data-action="deactivate-yes" data-id="${p.id}">Yes, deactivate</button>
         <button type="button" class="btn" data-action="cancel">No, go back</button>

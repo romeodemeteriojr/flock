@@ -70,7 +70,7 @@ export function mount(root, ctx, providers = null) {
     try {
       const r = await ctx.api.post('/api/login', { email, password });
       ctx.setUser(r.person);
-      ctx.navigate('#/');
+      ctx.navigate(ctx.afterLogin?.() ?? '#/'); // back to the page they were on
     } catch (err) {
       again(err.message, email);
     }

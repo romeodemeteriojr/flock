@@ -172,14 +172,14 @@ export function createAutofillService(deps) {
     async run(actor, { weekOf, weeks = 1, apply = false } = {}) {
       const now = today();
       const day = weekOf === undefined ? addDays(now, 7) : weekOf;
-      if (!isValidDate(day)) throw new ValidationError('Week of must be a real date like 2026-03-02');
+      if (!isValidDate(day)) throw new ValidationError('Week of must be a real date like 2026-03-02.');
       if (!isInt(weeks) || weeks < 1 || weeks > MAX_AUTOFILL_WEEKS) {
         throw new ValidationError(`Weeks must be a whole number from 1 to ${MAX_AUTOFILL_WEEKS}`);
       }
-      if (typeof apply !== 'boolean') throw new ValidationError('Apply must be true or false');
+      if (typeof apply !== 'boolean') throw new ValidationError('Apply must be true or false.');
       const start = mondayOf(day);
       const end = addDays(start, 7 * weeks - 1);
-      if (end < now) throw new ValidationError('Those weeks are already over');
+      if (end < now) throw new ValidationError('Those weeks are already over.');
       const result = await data.tx(async (d) => {
         const plan = planAutofill({
           today: now,
