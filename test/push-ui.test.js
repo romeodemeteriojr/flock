@@ -267,7 +267,7 @@ test('Notifications page: Turn on, Send me a test and Turn off', async () => {
   await root.click('push-on');
   assert.equal(ctx.state.push.status, 'on');
   assert.match(textOf(root.innerHTML), /Notifications are on for this device/);
-  assert.equal(tops, 1, 'the bell changes too');
+  assert.equal(tops, 1, 'the bell hint changes too');
   await root.click('push-test');
   assert.match(textOf(root.innerHTML), /Sent/);
   await root.click('push-off');
@@ -291,27 +291,27 @@ test('Notifications page: Turn on, Send me a test and Turn off', async () => {
   assert.match(textOf(r3.innerHTML), /Settings → Notifications/);
 });
 
-test('top bar: the bell shows only when the church turned notifications on, and says when it is on here', () => {
+test('top bar: the bell is a hint, not a button; it shows only when the church turned notifications on', () => {
   const user = { id: 2, name: 'Mary Member', role: 'member' };
-  assert.doesNotMatch(nav.render({ user }, '#/'), /#\/notifications/);
-  assert.doesNotMatch(nav.render({ user, push: { enabled: false } }, '#/'), /#\/notifications/);
-  // Off (or blocked): a plain button with a crossed-out bell. On: a solid bell. No dot either way.
+  assert.doesNotMatch(nav.render({ user }, '#/'), /data-icon="bell/);
+  assert.doesNotMatch(nav.render({ user, push: { enabled: false } }, '#/'), /data-icon="bell/);
   for (const status of ['off', 'blocked', 'unsupported']) {
     const off = nav.render({ user, push: { enabled: true, status } }, '#/');
-    assert.match(off, /<a class="icon-btn is-off" href="#\/notifications" aria-label="Notifications: off for this device"/, status);
-    assert.match(off, /data-icon="bell-off"/, status);
+    assert.match(off, /<span class="top-hint" role="img" aria-label="Notifications: off for this device" title="Notifications: off for this device"><span class="icon" data-icon="bell-off"/, status);
   }
   const on = nav.render({ user, push: { enabled: true, status: 'on' } }, '#/');
-  assert.match(on, /<a class="icon-btn is-on" href="#\/notifications" aria-label="Notifications: on for this device"/);
-  assert.match(on, /data-icon="bell"/);
-  assert.doesNotMatch(on, /bell-off/);
+  assert.match(on, /<span class="top-hint" role="img" aria-label="Notifications: on for this device"[^>]*><span class="icon" data-icon="bell"/);
+  // Not a link or button: Notifications opens only from the account sheet.
+  for (const top of [on, nav.render({ user, push: { enabled: true, status: 'off' } }, '#/')]) assert.doesNotMatch(top, /#\/notifications/);
 });
 
-test('the bell has no dot, and on looks like off without the slash', async () => {
-  const css = (await import('node:fs')).readFileSync(new URL('../web/style.css', import.meta.url), 'utf8');
-  assert.doesNotMatch(css, /\.icon-btn\.is-on::after/);
-  assert.doesNotMatch(css, /\.icon-btn\.is-on[^{]*\{[^}]*(background|fill)/, 'no solid fill or accent background when on: it is the quiet, normal state');
-  assert.match(css, /\.icon-btn\.is-on, \.icon-btn\.is-off \{ color: var\(--muted\); \}/);
+test('the bell hint is quiet: no dot, no fill, nothing to press', async () => {
+  const css = readFileSync(new URL('../web/style.css', import.meta.url), 'utf8');
+  assert.doesNotMatch(css, /\.icon-btn\.is-(on|off)/, 'the old bell button styles are gone');
+  const rule = css.match(/\.top-hint \{[^}]*\}/)?.[0] ?? '';
+  assert.match(rule, /color: var\(--muted\)/);
+  assert.doesNotMatch(rule, /background|cursor: pointer/);
+  assert.doesNotMatch(css, /\.top-hint:(hover|active)/);
   const { icon } = await import('../web/lib/icons.js');
   assert.match(icon('bell-off'), /M3\.75 3\.75l16\.5 16\.5/);
 });

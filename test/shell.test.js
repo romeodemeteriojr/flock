@@ -380,7 +380,7 @@ test('nav differs by role and marks the current page', () => {
   assert.equal(nav.render({ user: null }, '#/login'), '');
 });
 
-test('slim top bar: the mark, the page title for scrolling, the bell, and the avatar that opens the account sheet', () => {
+test('slim top bar: the mark, the page title for scrolling, the bell hint, and the avatar that opens the account sheet', () => {
   const m = nav.render({ user: member }, '#/blockouts', "Days I can't serve");
   assert.match(m, /<a class="brand" href="#\/" aria-label="Flock, my schedule">/);
   assert.match(m, /<span class="top-title" aria-hidden="true">Days I can&#39;t serve<\/span>/);

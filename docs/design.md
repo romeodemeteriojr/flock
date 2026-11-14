@@ -35,8 +35,9 @@ first.
   soft pill, a filled-in icon and bold text. The tabs show numbers: the asks
   waiting for your answer on **My schedule** (also on the installed app's
   icon), the gaps on **Gaps**.
-- The top bar is slim: the mark, the bell and your initials, which open your
-  account (notifications, password, install, log out). Scroll down and the
+- The top bar is slim: the mark, a bell and your initials, which open your
+  account (notifications, password, install, log out). The bell is only a hint
+  (crossed out when notifications are off here); you can't tap it. Scroll down and the
   page title takes the place of "Flock".
 - Sheets come up from the bottom and can be swiped down to close; **More** is
   one of them. Invites and reminders can go straight to the phone's share

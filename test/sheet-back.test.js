@@ -8,7 +8,11 @@ function fakeWin() {
   const stack = [{ state: null, href: 'x/#/schedule' }];
   let at = 0;
   const win = {
-    location: { get href() { return stack[at].href; } },
+    location: {
+      get href() { return stack[at].href; },
+      set hash(h) { win.goTo(`x/${h}`); },
+      replace(h) { stack[at] = { state: null, href: `x/${h}` }; win.fire('hashchange'); },
+    },
     addEventListener: (t, fn) => { (listeners[t] ??= []).push(fn); },
     fire: (t) => (listeners[t] ?? []).forEach((fn) => fn({})),
     history: {
@@ -19,6 +23,8 @@ function fakeWin() {
     pressBack() { at--; win.fire('popstate'); },
     goTo(href) { stack.splice(at + 1); stack.push({ state: null, href }); at++; win.fire('hashchange'); },
     get depth() { return at; },
+    get href() { return stack[at].href; },
+    hrefAt: (i) => stack[i].href,
   };
   return win;
 }
@@ -30,6 +36,7 @@ function sheet(win) {
   return {
     open() { open = true; step.opened(); },
     closeByButton() { open = false; step.closed(); },
+    closeByLink(to) { open = false; step.closed(to); },
     get closes() { return closes; },
     get isOpen() { return open; },
   };
@@ -55,6 +62,29 @@ test('closing with a button takes the step off, so the next Back leaves the page
   assert.equal(s.closes, 0, 'our own back does not close twice');
   s.open();
   assert.equal(win.depth, 1, 'opening again adds a fresh step');
+});
+
+test('a link in the sheet goes to its page, and Back from there returns to the page under it', () => {
+  const win = fakeWin();
+  const s = sheet(win);
+  s.open();
+  s.closeByLink('#/notifications');
+  assert.equal(win.href, 'x/#/notifications', 'the link is followed, not undone by stepping back');
+  assert.equal(win.depth, 1, 'the sheet step became the new page: no extra step');
+  assert.equal(win.hrefAt(0), 'x/#/schedule');
+  win.pressBack();
+  assert.equal(win.href, 'x/#/schedule');
+  assert.equal(s.closes, 0);
+});
+
+test('without its step (already gone), a link still goes to its page', () => {
+  const win = fakeWin();
+  const s = sheet(win);
+  s.closeByLink('#/password');
+  assert.equal(win.href, 'x/#/password');
+  const bare = { location: {} };
+  backStep(bare, {}, () => false, () => {}).closed('#/password');
+  assert.equal(bare.location.hash, '#/password', 'no history API: a plain hash change');
 });
 
 test('a sheet left open when going to another page is never closed by a later Back', () => {

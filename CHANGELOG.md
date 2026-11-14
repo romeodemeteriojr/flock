@@ -4,7 +4,9 @@
 
 No database changes.
 
+- **Notifications and Change my password open again from your account.** Since 0.11.1, tapping them in the sheet only closed it: closing the sheet stepped the history back and undid the link. Now the sheet closes and the page opens, and Back from there returns to the page you were on.
 - **A way back from Notifications and Password.** These pages aren't tabs, so in the installed app they had no way out but the tab bar. They now start with a back link to the page you came from, such as **‹ Gaps**, or **‹ My schedule** when opened directly. It goes back like the phone's own Back, so Back afterwards doesn't land on them again.
+- **The bell is just a hint now.** It still shows whether notifications are on for this device (crossed out when off), but tapping it does nothing. **Notifications** opens from your account: tap your initials. The card on **My schedule** that invites you to turn them on stays.
 
 ## 0.14.2
 

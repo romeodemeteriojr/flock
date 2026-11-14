@@ -219,7 +219,7 @@ function components(d) {
   ${section('nav', 'Top bar and menu', html`
     ${frame('Volunteer', html`<header class="top">${raw(nav.render({ user: { id: 3, name: 'Priya Demo', role: 'member' } }, '#/'))}</header>`)}
     ${frame('Scheduler', html`<header class="top">${raw(nav.render({ user: { id: 1, name: 'Morgan Fictional', role: 'admin' } }, '#/schedule'))}</header>`)}
-    ${frame('Notifications off on this device: a crossed-out bell', html`<header class="top">${raw(nav.render({ user: { id: 3, name: 'Priya Demo', role: 'member' }, push: { enabled: true, status: 'off' } }, '#/'))}</header>`)}
+    ${frame('Notifications off on this device: a crossed-out bell (a hint, not a button)', html`<header class="top">${raw(nav.render({ user: { id: 3, name: 'Priya Demo', role: 'member' }, push: { enabled: true, status: 'off' } }, '#/'))}</header>`)}
     ${frame('Notifications on: the same bell, no slash', html`<header class="top">${raw(nav.render({ user: { id: 3, name: 'Priya Demo', role: 'member' }, push: { enabled: true, status: 'on' } }, '#/'))}</header>`)}
     ${frame('Scrolled: the page title takes the place of "Flock"', html`<header class="top is-scrolled">${raw(nav.render({ user: { id: 3, name: 'Priya Demo', role: 'member' } }, '#/', 'My schedule'))}</header>`)}
     ${frame('Counts on the tabs (2 to answer, 7 gaps)', html`<header class="top">${raw(nav.render({ user: { id: 1, name: 'Morgan Fictional', role: 'admin' }, counts: { answer: 2, gaps: 7 } }, '#/schedule'))}</header>`)}
@@ -258,7 +258,7 @@ function pages(d) {
   ${section('p-login', 'Log in', html`${frame('Empty', login.render({}))}${frame('Wrong password', login.render({}, { error: 'Wrong email or password', email: 'priya.demo@example.com' }))}`)}
   ${section('p-welcome', 'Join with an invite', html`${frame('Checking', welcome.render({}))}${frame('Choose a password', welcome.render({}, { info: { name: 'Priya Demo', email: 'priya.demo@example.com' } }))}${frame('Link gone', welcome.render({}, { error: 'This link has expired or was already used. Ask your scheduler for a new one.' }))}`)}
   ${section('p-password', 'Change my password', html`${frame('Change password', password.render({ user: me }))}${frame('With a problem', password.render({ user: me }, { error: "The two new passwords don't match. Please type them again." }))}`)}
-  ${section('p-notifications', 'Notifications (the bell)', html`
+  ${section('p-notifications', 'Notifications', html`
     ${frame('Off', notifications.render({ user: me, push: { enabled: true, support: 'ok', status: 'off' } }))}
     ${frame('On, test sent', notifications.render({ user: me, push: { enabled: true, support: 'ok', status: 'on' } }, { message: 'Sent. It should arrive in a few seconds.' }))}
     ${frame('Blocked in the browser', notifications.render({ user: me, push: { enabled: true, support: 'ok', status: 'blocked' } }))}

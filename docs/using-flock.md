@@ -76,12 +76,13 @@ nothing for your own clicks, and there are no automatic "you serve tomorrow"
 reminders yet.
 
 Each person turns them on for each device, from the card at the top of **My
-schedule** or the bell at the top. The bell page has **Send me a test**.
+schedule** or **Notifications** in their account (tap your initials at the
+top). That page has **Send me a test**.
 
 - **Android and computers:** tap **Turn on** and allow notifications.
 - **iPhone** (iOS 16.4 or newer): notifications only work once Flock is on the
-  Home Screen. Add it, open Flock from the Home Screen, log in, then tap the
-  bell and **Turn on**. If **Sign in with Google** does not work inside the
+  Home Screen. Add it, open Flock from the Home Screen, log in, then tap your
+  initials, **Notifications** and **Turn on**. If **Sign in with Google** does not work inside the
   Home Screen app, log in there with your email and password (a scheduler can
   give a Google-only person a password with **Reset login**).
 

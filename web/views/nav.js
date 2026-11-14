@@ -6,9 +6,10 @@
 // The current page has aria-current="page" (exactly one link).
 //
 // The top bar is slim: the mark and "Flock" (which cross-fade to the page's
-// title once its heading scrolls under the bar, see web/app.js), the bell,
-// and the person's avatar, which opens the account sheet (views/account.js:
-// notifications, password, install, log out).
+// title once its heading scrolls under the bar, see web/app.js) and the
+// person's avatar, which opens the account sheet (views/account.js:
+// notifications, password, install, log out). Notifications open only from
+// there; the bell beside the avatar is a hint, not a button.
 import { html } from '../lib/html.js';
 import { navRoutes, pathOf, isAdmin } from '../routes.js';
 import { iconSlot } from '../lib/icons.js';
@@ -32,16 +33,17 @@ function badge(n, words) {
   return text ? html`<span class="nav-badge" aria-hidden="true">${text}</span><span class="visually-hidden">, ${n} ${words}</span>` : '';
 }
 
-function link(r, current, extra = '') {
-  return html`<li class="nav-item"><a href="#${r.path}" ${r.path === current ? html`aria-current="page"` : ''}>${iconSlot(ICONS[r.path] ?? 'chevron', 'nav-icon')}<span class="nav-label">${r.label}</span>${SHORT[r.path] ? html`<span class="nav-label-short">${SHORT[r.path]}</span>` : ''}${extra}</a></li>`;
-}
-
-// The bell (decision 0008): opens the Notifications page. On here: a plain
-// bell. Off: the same bell, crossed out.
+// The bell (decision 0008): shows whether this device gets notifications. A
+// plain bell when on, crossed out when off. Only a hint: it is not a button;
+// Notifications opens from the account sheet.
 function bell(push) {
   const on = push.status === 'on';
   const label = on ? 'Notifications: on for this device' : 'Notifications: off for this device';
-  return html`<a class="icon-btn ${on ? 'is-on' : 'is-off'}" href="#/notifications" aria-label="${label}" title="${label}">${iconSlot(on ? 'bell' : 'bell-off')}</a>`;
+  return html`<span class="top-hint" role="img" aria-label="${label}" title="${label}">${iconSlot(on ? 'bell' : 'bell-off')}</span>`;
+}
+
+function link(r, current, extra = '') {
+  return html`<li class="nav-item"><a href="#${r.path}" ${r.path === current ? html`aria-current="page"` : ''}>${iconSlot(ICONS[r.path] ?? 'chevron', 'nav-icon')}<span class="nav-label">${r.label}</span>${SHORT[r.path] ? html`<span class="nav-label-short">${SHORT[r.path]}</span>` : ''}${extra}</a></li>`;
 }
 
 /** state.accountOpen marks the avatar button as expanded; title is the page's own name. */

@@ -118,10 +118,12 @@ export function createApp({ root, win = globalThis.window, api = createApi() }) 
     paintLayer();
   }
   // focus: false when leaving the page anyway (a link, logging out).
-  function closeAccount({ focus = true } = {}) {
+  // to: a link in the sheet; it is followed once the sheet is closed.
+  function closeAccount({ focus = true, to = null } = {}) {
     if (!state.accountOpen) return;
     state.accountOpen = false;
     if (!focus) accountSheet.opened(null);
+    if (to) accountSheet.goTo(to);
     paintTop();
     paintLayer();
   }
