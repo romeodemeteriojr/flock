@@ -435,3 +435,13 @@ test('People: a bell chip on everyone with notifications on (not on deactivated 
   assert.doesNotMatch(row(2), /Notifications on/);
   assert.doesNotMatch(row(3), /Notifications on/);
 });
+
+test('Notifications has a way back: "‹ Gaps" when opened from Gaps, nothing when there is nowhere to go', async () => {
+  const notifications = await import('../web/views/notifications.js');
+  const { backLink } = await import('../web/lib/ui.js');
+  const user = { id: 2, name: 'Mary Member', role: 'member' };
+  const h = notifications.render({ user, push: { enabled: true, status: 'on' }, back: { path: '/gaps', label: 'Gaps' } });
+  assert.match(h, /<div class="page-head"><a class="page-back" href="#\/gaps" data-back><span class="icon" data-icon="chevron-left" aria-hidden="true"><\/span><span>Gaps<\/span><\/a><h1/);
+  assert.doesNotMatch(notifications.render({ user, push: { enabled: true, status: 'on' } }), /page-back/);
+  assert.equal(String(backLink(null)), '');
+});

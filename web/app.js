@@ -1,7 +1,7 @@
 // Starts the app in the browser: checks who is logged in, then shows the page
 // for the current #hash. Re-renders when the hash changes.
 import { createApi } from './api.js';
-import { resolve, pathOf } from './routes.js';
+import { resolve, pathOf, routes } from './routes.js';
 import * as nav from './views/nav.js';
 import * as account from './views/account.js';
 import * as offline from './views/offline.js';
@@ -46,6 +46,7 @@ export function createApp({ root, win = globalThis.window, api = createApi() }) 
   let pageTitle = '';
   // A new page fades in (its heading rises a little); the same page painted again does not.
   let shownPath = null;
+  let lastTab = null; // the last tab page shown: where "‹ Back" goes from a page that is not a tab
   main.addEventListener('animationend', (e) => { if (e.target === main) main.classList.remove('is-entering'); });
 
   // A message shown now stays through the next page change (pending.shown);
@@ -243,8 +244,14 @@ export function createApp({ root, win = globalThis.window, api = createApi() }) 
       if (state.user && pushFor !== state.user.id) { pushFor = state.user.id; loadPush(); }
       if (state.user && countsFor !== state.user.id) { countsFor = state.user.id; refreshCounts().catch(() => {}); }
       pageTitle = view.title ?? '';
-      paintTop();
       const path = pathOf(win.location.hash);
+      // A tab page is somewhere to go back to. Any other page (Notifications,
+      // Password) gets a way back to it, or to My schedule when opened directly.
+      if (r.route.label) { lastTab = path; state.back = null; } else if (state.user && r.route.path && r.route.role === 'any') {
+        const to = lastTab ?? '/';
+        state.back = { path: to, label: routes.find((x) => x.path === to)?.label ?? 'My schedule', history: lastTab !== null && shownPath === lastTab };
+      } else state.back = null;
+      paintTop();
       if (shownPath !== null && path !== shownPath) main.classList.add('is-entering');
       shownPath = path;
       main.innerHTML = view.render(state);
@@ -320,6 +327,13 @@ export function createApp({ root, win = globalThis.window, api = createApi() }) 
       if (offlineShown && doc.visibilityState === 'visible') boot();
     });
     main.addEventListener('click', (e) => {
+      // "‹ Gaps" pops this page off the history when it was opened from Gaps,
+      // so the phone's own Back does not bring it back again.
+      if (e.target?.closest?.('[data-back]') && state.back?.history && win.history?.length > 1) {
+        e.preventDefault();
+        win.history.back();
+        return;
+      }
       const el = e.target?.closest?.('[data-action]');
       if (offlineShown && el?.dataset?.action === 'retry-start') boot();
     });

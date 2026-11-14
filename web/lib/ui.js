@@ -40,9 +40,18 @@ export function refocus(root, action, id) {
   root?.querySelector?.(`[data-action="${action}"][data-id="${id}"]`)?.focus?.();
 }
 
-/** A page heading block: the h1 (focused on navigation) and an optional line under it. */
-export function pageHead(title, lead = '') {
-  return html`<div class="page-head"><h1 tabindex="-1">${title}</h1>${lead ? html`<p class="page-lead">${lead}</p>` : ''}</div>`;
+/**
+ * "‹ Gaps": the way back from a page that is not a tab (Notifications,
+ * Password). back is state.back, set by app.js: { path, label }.
+ */
+export function backLink(back) {
+  if (!back?.path) return '';
+  return html`<a class="page-back" href="#${back.path}" data-back>${iconSlot('chevron-left')}<span>${back.label}</span></a>`;
+}
+
+/** A page heading block: an optional way back, the h1 (focused on navigation) and an optional line under it. */
+export function pageHead(title, lead = '', back = null) {
+  return html`<div class="page-head">${backLink(back)}<h1 tabindex="-1">${title}</h1>${lead ? html`<p class="page-lead">${lead}</p>` : ''}</div>`;
 }
 
 /** The calendar tile: SUN / 8 / NOV. Hidden from screen readers: say the date in the text too. */
