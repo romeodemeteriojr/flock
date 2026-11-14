@@ -654,13 +654,18 @@ test('UAT 12 to 15: change access level, deactivate, reset password, log out, se
   const reloaded = await w.open(stale.jar);
   assert.equal(reloaded.hash(), '#/login');
 
-  // Session expiry: 15 days later the next click says "Please log in again."
+  // Session expiry: 15 days later the next click says "Please log in again.",
+  // and logging in goes back to the page they were going to, not home.
   await admin.goto('#/people');
   w.clock.advance(15 * 24 * 60 * 60 * 1000);
   await admin.goto('#/gaps');
   assert.equal(admin.hash(), '#/login');
   said(admin, /Please log in again\./);
   assert.equal(admin.has('nav'), false);
+  await logIn(admin, 'demo-admin@example.com', NEW_PASSWORD);
+  assert.equal(admin.hash(), '#/gaps', admin.text());
+  // Only once: logging out and in again starts at home.
+  await logOut(admin);
   await logIn(admin, 'demo-admin@example.com', NEW_PASSWORD);
   assert.equal(admin.hash(), '#/', admin.text());
 });
@@ -776,7 +781,7 @@ test('UAT 20: double clicks, odd names, stale tabs, rapid page changes and the b
   assert.equal(admin.has('#invite-box'), false, 'a too-long name was refused');
   assert.match(admin.text(), /\S/);
   assert.equal(admin.has('[role="alert"]'), true, 'and a message says so');
-  said(admin, /The name must be 1 to 80 characters long\./);
+  said(admin, /The name must be 80 characters or fewer\./);
   wellBuilt(admin, 'too-long name');
   const exact = 'M'.repeat(80);
   await admin.submit('add-person', { name: exact, email: 'm80@example.com' });

@@ -1,6 +1,6 @@
 import { translate, id as newId, changed, num } from './util.js';
 
-const DUP = 'A service already exists at that date and time';
+const DUP = 'A service already exists at that date and time.';
 const toService = (r) => ({ id: r.id, date: r.date, time: r.time, title: r.title });
 
 export function servicesRepo({ db, run }) {

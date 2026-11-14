@@ -79,17 +79,17 @@ test('validator: valid values pass and strings are trimmed', () => {
 
 test('validator: messages name the field in plain English', () => {
   const schema = v.object({ name: v.string({ min: 1 }), firstName: v.string().optional(), serviceDate: v.date().optional() });
-  assert.equal(message(() => parse(schema, {})), 'Name is required');
-  assert.equal(message(() => parse(schema, { name: '   ' })), 'Name is required');
-  assert.equal(message(() => parse(schema, { name: null })), 'Name is required');
-  assert.equal(message(() => parse(schema, { name: 5 })), 'Name must be text');
-  assert.equal(message(() => parse(schema, { name: 'a', firstName: 1 })), 'First name must be text');
+  assert.equal(message(() => parse(schema, {})), 'Name is required.');
+  assert.equal(message(() => parse(schema, { name: '   ' })), 'Name is required.');
+  assert.equal(message(() => parse(schema, { name: null })), 'Name is required.');
+  assert.equal(message(() => parse(schema, { name: 5 })), 'Name must be text.');
+  assert.equal(message(() => parse(schema, { name: 'a', firstName: 1 })), 'First name must be text.');
   assert.equal(message(() => parse(schema, { name: 'a', serviceDate: '2026-02-30' })),
-    'Service date must be a real date like 2026-11-08');
-  assert.equal(message(() => parse(v.object({ date: v.date() }), { date: 'tomorrow' })), 'Date must be a real date like 2026-11-08');
-  assert.equal(message(() => parse(schema, 'nope')), 'The request must be an object');
-  assert.equal(message(() => parse(schema, [])), 'The request must be an object');
-  assert.equal(message(() => parse(v.object({ n: v.string().label('Team name') }), {})), 'Team name is required');
+    'Service date must be a real date like 2026-11-08.');
+  assert.equal(message(() => parse(v.object({ date: v.date() }), { date: 'tomorrow' })), 'Date must be a real date like 2026-11-08.');
+  assert.equal(message(() => parse(schema, 'nope')), 'The request must be an object.');
+  assert.equal(message(() => parse(schema, [])), 'The request must be an object.');
+  assert.equal(message(() => parse(v.object({ n: v.string().label('Team name') }), {})), 'Team name is required.');
   const e = (() => { try { parse(schema, { name: 'a', serviceDate: 'x' }); } catch (err) { return err; } })();
   assert.equal(e.status, 400);
   assert.deepEqual(e.details, { field: 'serviceDate' });
@@ -99,32 +99,32 @@ test('validator: boundaries', () => {
   const s = v.string({ min: 2, max: 4 });
   assert.equal(parse(s, 'ab'), 'ab');
   assert.equal(parse(s, 'abcd'), 'abcd');
-  assert.equal(message(() => parse(s, 'a')), 'The request must be at least 2 characters');
-  assert.equal(message(() => parse(s, 'abcde')), 'The request must be at most 4 characters');
+  assert.equal(message(() => parse(s, 'a')), 'The request must be at least 2 characters.');
+  assert.equal(message(() => parse(s, 'abcde')), 'The request must be at most 4 characters.');
   const i = v.object({ count: v.integer({ min: 1, max: 10 }) });
   assert.deepEqual(parse(i, { count: 1 }), { count: 1 });
   assert.deepEqual(parse(i, { count: 10 }), { count: 10 });
-  assert.equal(message(() => parse(i, { count: 0 })), 'Count must be at least 1');
-  assert.equal(message(() => parse(i, { count: 11 })), 'Count must be at most 10');
-  assert.equal(message(() => parse(i, { count: 1.5 })), 'Count must be a whole number');
-  assert.equal(message(() => parse(i, { count: '3' })), 'Count must be a whole number');
-  assert.equal(message(() => parse(i, { count: NaN })), 'Count must be a whole number');
+  assert.equal(message(() => parse(i, { count: 0 })), 'Count must be at least 1.');
+  assert.equal(message(() => parse(i, { count: 11 })), 'Count must be at most 10.');
+  assert.equal(message(() => parse(i, { count: 1.5 })), 'Count must be a whole number.');
+  assert.equal(message(() => parse(i, { count: '3' })), 'Count must be a whole number.');
+  assert.equal(message(() => parse(i, { count: NaN })), 'Count must be a whole number.');
   const a = v.object({ ids: v.array(v.integer(), { min: 1, max: 2 }) });
   assert.deepEqual(parse(a, { ids: [1, 2] }), { ids: [1, 2] });
-  assert.equal(message(() => parse(a, { ids: [] })), 'Ids must have at least 1 item');
-  assert.equal(message(() => parse(a, { ids: [1, 2, 3] })), 'Ids must have at most 2 items');
-  assert.equal(message(() => parse(a, { ids: 'x' })), 'Ids must be a list');
-  assert.equal(message(() => parse(a, { ids: [1, 'x'] })), 'Ids item 2 must be a whole number');
+  assert.equal(message(() => parse(a, { ids: [] })), 'Ids must have at least 1 item.');
+  assert.equal(message(() => parse(a, { ids: [1, 2, 3] })), 'Ids must have at most 2 items.');
+  assert.equal(message(() => parse(a, { ids: 'x' })), 'Ids must be a list.');
+  assert.equal(message(() => parse(a, { ids: [1, 'x'] })), 'Ids item 2 must be a whole number.');
   const p = v.object({ code: v.string({ pattern: /^[A-Z]{3}$/ }) });
   assert.deepEqual(parse(p, { code: 'ABC' }), { code: 'ABC' });
-  assert.equal(message(() => parse(p, { code: 'abc' })), 'Code is not in the right format');
+  assert.equal(message(() => parse(p, { code: 'abc' })), 'Code is not in the right format.');
 });
 
 test('validator: booleans, enums, dates and times', () => {
   const b = v.object({ on: v.boolean() });
-  assert.equal(message(() => parse(b, { on: 'true' })), 'On must be true or false');
+  assert.equal(message(() => parse(b, { on: 'true' })), 'On must be true or false.');
   const e = v.object({ role: v.enum(['admin', 'volunteer']) });
-  assert.equal(message(() => parse(e, { role: 'boss' })), 'Role must be one of: admin, volunteer');
+  assert.equal(message(() => parse(e, { role: 'boss' })), 'Role must be one of: admin, volunteer.');
   for (const good of ['2026-11-08', '2024-02-29', '2026-12-31', '2026-01-01']) assert.equal(parse(v.date(), good), good);
   for (const bad of ['2026-02-30', '2025-02-29', '2026-13-01', '2026-00-10', '2026-04-31', '2026-1-1', '2026-11-08T00:00', 20261108, '']) {
     assert.throws(() => parse(v.date(), bad), ValidationError, String(bad));
@@ -133,7 +133,7 @@ test('validator: booleans, enums, dates and times', () => {
   for (const bad of ['24:00', '9:30', '12:60', '12:30:00', 930]) {
     assert.throws(() => parse(v.time(), bad), ValidationError, String(bad));
   }
-  assert.equal(message(() => parse(v.object({ start: v.time() }), { start: '25:00' })), 'Start must be a time like 09:30');
+  assert.equal(message(() => parse(v.object({ start: v.time() }), { start: '25:00' })), 'Start must be a time like 09:30.');
 });
 
 test('validator: optional and default', () => {
@@ -425,7 +425,7 @@ async function withLoggedApp(fn, { random } = {}) {
   add('GET', '/api/t/notfound', () => { throw new NotFoundError('That person does not exist'); });
   add('GET', '/api/t/conflict', () => { throw new ConflictError('That name is already taken', 'duplicate_name'); });
   add('GET', '/api/t/limit', () => { throw new TooManyRequestsError('Too many tries', 42); });
-  add('GET', '/api/t/dup', () => { throw new DuplicateError('A team with that name already exists'); });
+  add('GET', '/api/t/dup', () => { throw new DuplicateError('A team with that name already exists.'); });
   add('GET', '/api/t/inuse', () => { throw new InUseError('That position is still used'); });
   add('GET', '/api/t/boom', () => { const e = new Error('secret detail password=hunter2'); throw e; });
   add('POST', '/api/t/secret', ({ body }) => ({ status: 200, json: { ok: !!body.password } }));
@@ -465,7 +465,7 @@ test('error mapper: each kind of error becomes the right response', () => withLo
     ['/api/t/notfound', 404, { error: 'That person does not exist' }],
     ['/api/t/conflict', 409, { error: 'That name is already taken', code: 'duplicate_name' }],
     ['/api/t/limit', 429, { error: 'Too many tries' }],
-    ['/api/t/dup', 409, { error: 'A team with that name already exists' }],
+    ['/api/t/dup', 409, { error: 'A team with that name already exists.' }],
     ['/api/t/inuse', 409, { error: 'That position is still used' }],
     ['/api/t/boom', 500, { error: 'Something went wrong' }],
   ];

@@ -329,7 +329,7 @@ test('how often: pause, and a failed save shows the server message', async () =>
   });
   await ok.root.submit('availability', { everyWeeks: '0' });
   assert.match(ok.root.innerHTML, /Saved\. Flock will not ask you for now\./);
-  const bad = await setup(off, { 'GET /api/me/blockouts': { blockouts: [] }, 'PUT /api/me/availability': new Error('How often must be one of 0, 1, 2, 3, 4, 6 or 8 weeks') });
+  const bad = await setup(off, { 'GET /api/me/blockouts': { blockouts: [] }, 'PUT /api/me/availability': new Error('How often must be one of 0, 1, 2, 3, 4, 6 or 8 weeks.') });
   await bad.root.submit('availability', { everyWeeks: '5' });
   assert.match(bad.root.innerHTML, /How often must be one of/);
 });

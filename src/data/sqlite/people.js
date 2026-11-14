@@ -3,7 +3,7 @@ import { translate, id as newId, changed, num } from './util.js';
 // Joined = has a way to log in: a password or a linked provider account.
 const JOINED = '(password_hash IS NOT NULL OR EXISTS (SELECT 1 FROM identities i WHERE i.person_id = people.id))';
 const PUBLIC = `id, name, email, role, password_hash IS NOT NULL AS has_password, ${JOINED} AS joined, active, created_at`;
-const DUP = 'That email is already used by someone else';
+const DUP = 'That email is already used by someone else.';
 
 const toPerson = (r) => ({
   id: r.id,

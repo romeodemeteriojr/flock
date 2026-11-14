@@ -19,7 +19,7 @@ export function humanize(key) {
 }
 
 function fail(label, path, message) {
-  throw new ValidationError(`${label} ${message}`, { details: { field: path.join('.') || null } });
+  throw new ValidationError(`${label} ${message}.`, { details: { field: path.join('.') || null } });
 }
 
 function clone(x) {
@@ -181,4 +181,18 @@ export function parse(schema, input, label = 'The request') {
   if (!(schema instanceof Schema)) throw new TypeError('parse needs a schema');
   const r = schema._run(input, label, []);
   return r === MISSING ? undefined : r;
+}
+
+// A name someone types for a person, team or position: text, trimmed, at most
+// `max` characters, no control characters (a NUL, a line break), and at least
+// one character you can see. Zero-width and other invisible characters on
+// their own (U+200B, U+3164 and friends) would show as a blank name.
+const CONTROL = /\p{Cc}/u;
+const INVISIBLE = /[\s\p{Cc}\p{Cf}\p{Z}ᅟᅠㅤﾠ⠀]/gu;
+export function checkName(value, { max }) {
+  if (typeof value !== 'string' || !value.replace(INVISIBLE, '')) throw new ValidationError('Please type a name.');
+  const name = value.trim();
+  if (CONTROL.test(name)) throw new ValidationError('The name cannot contain control characters.');
+  if (name.length > max) throw new ValidationError(`The name must be ${max} characters or fewer.`);
+  return name;
 }

@@ -227,7 +227,7 @@ function panelStates() {
   const base = schedule.panelSlot(SERVICES[0].slots[0], SERVICES[0]);
   const states = [
     { loading: true }, { candidates: CANDS }, { candidates: [] }, { candidates: [], showAll: true },
-    { candidates: CANDS, error: 'Person not found' }, { conflict: { code: 'blocked', personId: 2, message: 'Away. Assign anyway?', force: true } },
+    { candidates: CANDS, error: 'Person not found.' }, { conflict: { code: 'blocked', personId: 2, message: 'Away. Assign anyway?', force: true } },
     { conflict: { code: 'past', personId: 2, message: 'Too late.', force: false } }, { removeAsk: true },
   ];
   for (const s of states) {

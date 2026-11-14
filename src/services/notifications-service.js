@@ -28,7 +28,7 @@ export function createNotificationsService(deps) {
   const lastTest = new Map(); // personId -> ms
 
   const requireOn = () => {
-    if (!push.enabled) throw new ConflictError('Notifications are not set up on this Flock yet', { code: 'push_off' });
+    if (!push.enabled) throw new ConflictError('Notifications are not set up on this Flock yet.', { code: 'push_off' });
   };
 
   /** The declarative message (WebKit Declarative Web Push; the service worker reads the same JSON). */
@@ -248,7 +248,7 @@ export function createNotificationsService(deps) {
     async sendTest(personId, endpoint) {
       requireOn();
       const device = typeof endpoint === 'string' ? await data.pushDevices.findByEndpoint(endpoint) : null;
-      if (!device || device.personId !== personId) throw new NotFoundError('Notifications are not on for this device');
+      if (!device || device.personId !== personId) throw new NotFoundError('Notifications are not on for this device.');
       const now = clock.now().getTime();
       const last = lastTest.get(personId);
       if (last !== undefined && now - last < TEST_GAP_MS) {

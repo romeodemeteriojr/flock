@@ -89,7 +89,7 @@ test('GET /api/admin/suggest: shape, includeUnqualified and validation errors', 
     }
     const missing = await get('/api/admin/suggest?slotId=9999', adminCookie);
     assert.equal(missing.status, 404);
-    assert.equal(missing.json.error, 'Slot not found');
+    assert.equal(missing.json.error, 'Slot not found.');
   } finally { await app.close(); }
 });
 

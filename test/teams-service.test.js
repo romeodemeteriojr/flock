@@ -50,16 +50,16 @@ test('teams service: duplicate team names become ConflictError with the old mess
   const { teams, admin } = await setup();
   const band = await teams.createTeam(admin, { name: 'Band' });
   await teams.createTeam(admin, { name: 'Sound' });
-  await assert.rejects(teams.createTeam(admin, { name: 'band' }), conflict('A team with that name already exists'));
-  await assert.rejects(teams.updateTeam(admin, band.id, { name: 'SOUND' }), conflict('A team with that name already exists'));
+  await assert.rejects(teams.createTeam(admin, { name: 'band' }), conflict('A team with that name already exists.'));
+  await assert.rejects(teams.updateTeam(admin, band.id, { name: 'SOUND' }), conflict('A team with that name already exists.'));
 });
 
 test('teams service: unknown teams and positions are NotFoundError', async () => {
   const { teams, admin } = await setup();
-  await assert.rejects(teams.updateTeam(admin, 999, { name: 'Z' }), (e) => e instanceof NotFoundError && e.message === 'Team not found');
+  await assert.rejects(teams.updateTeam(admin, 999, { name: 'Z' }), (e) => e instanceof NotFoundError && e.message === 'Team not found.');
   await assert.rejects(teams.deleteTeam(admin, 999), NotFoundError);
-  await assert.rejects(teams.createPosition(admin, 999, { name: 'A' }), (e) => e instanceof NotFoundError && e.message === 'Team not found');
-  await assert.rejects(teams.updatePosition(admin, 999, { name: 'A' }), (e) => e instanceof NotFoundError && e.message === 'Position not found');
+  await assert.rejects(teams.createPosition(admin, 999, { name: 'A' }), (e) => e instanceof NotFoundError && e.message === 'Team not found.');
+  await assert.rejects(teams.updatePosition(admin, 999, { name: 'A' }), (e) => e instanceof NotFoundError && e.message === 'Position not found.');
   await assert.rejects(teams.deletePosition(admin, 999), NotFoundError);
   await assert.rejects(teams.listPeopleForPosition(999), NotFoundError);
 });
@@ -70,13 +70,13 @@ test('teams service: positions CRUD, moving teams and duplicate names', async ()
   const t2 = (await teams.createTeam(admin, { name: 'Sound' })).id;
   const p = await teams.createPosition(admin, t1, { name: 'Drums' });
   assert.deepEqual(p, { id: p.id, teamId: t1, name: 'Drums', sort: 1 });
-  await assert.rejects(teams.createPosition(admin, t1, { name: 'drums' }), conflict('That team already has a position with that name'));
+  await assert.rejects(teams.createPosition(admin, t1, { name: 'drums' }), conflict('That team already has a position with that name.'));
   const moved = await teams.updatePosition(admin, p.id, { name: 'Keys', sort: 5, teamId: t2 });
   assert.deepEqual(moved, { id: p.id, teamId: t2, name: 'Keys', sort: 5 });
   await assert.rejects(teams.updatePosition(admin, p.id, { teamId: 999 }),
-    (e) => e instanceof ValidationError && e.message === 'That team does not exist');
+    (e) => e instanceof ValidationError && e.message === 'That team does not exist.');
   await teams.createPosition(admin, t1, { name: 'Keys' });
-  await assert.rejects(teams.updatePosition(admin, p.id, { teamId: t1 }), conflict('That team already has a position with that name'));
+  await assert.rejects(teams.updatePosition(admin, p.id, { teamId: t1 }), conflict('That team already has a position with that name.'));
   assert.deepEqual(await teams.deletePosition(admin, p.id), { ok: true });
   const rows = await actions();
   assert.ok(rows.some((r) => r.action === 'position.update' && r.detail === `position ${p.id} "Keys" team ${t2} sort 5`));
@@ -178,13 +178,13 @@ test('teams service: renaming or moving onto a deleted name is a clear conflict'
   await teams.deletePosition(admin, old);
   const p = (await teams.createPosition(admin, t, { name: 'Keys' })).id;
   await assert.rejects(teams.updatePosition(admin, p, { name: 'DRUMS' }),
-    conflict('A deleted position has that name. Add it as a new position to bring it back'));
+    conflict('A deleted position has that name. Add it as a new position to bring it back.'));
   const q = (await teams.createPosition(admin, t2, { name: 'Drums' })).id;
   await assert.rejects(teams.updatePosition(admin, q, { teamId: t }),
-    conflict('A deleted position has that name. Add it as a new position to bring it back'));
+    conflict('A deleted position has that name. Add it as a new position to bring it back.'));
   await teams.deleteTeam(admin, t2);
   await assert.rejects(teams.updateTeam(admin, t, { name: 'tech' }),
-    conflict('A deleted team has that name. Add it as a new team to bring it back'));
+    conflict('A deleted team has that name. Add it as a new team to bring it back.'));
 });
 
 test('teams service: setQualifications replaces, validates and audits', async () => {
@@ -195,11 +195,11 @@ test('teams service: setQualifications replaces, validates and audits', async ()
   assert.deepEqual(await teams.setQualifications(admin, memberId, [b, a, b]), [a, b]);
   assert.deepEqual(await teams.setQualifications(admin, memberId, [b]), [b]);
   await assert.rejects(teams.setQualifications(admin, memberId, [b, 9999]),
-    (e) => e instanceof ValidationError && e.message === 'One or more positions do not exist');
+    (e) => e instanceof ValidationError && e.message === 'One or more positions do not exist.');
   await assert.rejects(teams.setQualifications(admin, memberId, 'x'),
-    (e) => e instanceof ValidationError && e.message === 'positionIds must be a list of position ids');
+    (e) => e instanceof ValidationError && e.message === 'positionIds must be a list of position ids.');
   await assert.rejects(teams.setQualifications(admin, memberId, [1.5]), ValidationError);
-  await assert.rejects(teams.setQualifications(admin, 999, []), (e) => e instanceof NotFoundError && e.message === 'Person not found');
+  await assert.rejects(teams.setQualifications(admin, 999, []), (e) => e instanceof NotFoundError && e.message === 'Person not found.');
   assert.deepEqual(await data.qualifications.listPositionIds(memberId), [b]);
   const q = (await actions()).filter((r) => r.action === 'person.positions').map((r) => r.detail);
   assert.deepEqual(q, [`person ${memberId} positions [${b},${a}]`, `person ${memberId} positions [${b}]`]);
@@ -252,19 +252,26 @@ test('teams service: raw input is checked in the old order and a refused change 
   await teams.createTeam(admin, { name: 'Sound' });
   const p = (await teams.createPosition(admin, band, { name: 'Drums' })).id;
   const msg = (cls, m) => (e) => e instanceof cls && e.message === m;
-  await assert.rejects(teams.createTeam(admin, {}), msg(ValidationError, 'Name must be 1 to 60 characters'));
-  await assert.rejects(teams.createTeam(admin, { name: 'x'.repeat(61) }), msg(ValidationError, 'Name must be 1 to 60 characters'));
-  await assert.rejects(teams.updateTeam(admin, 999, { name: '', sort: 'x' }), msg(NotFoundError, 'Team not found'));
-  await assert.rejects(teams.updateTeam(admin, band, { name: 'SOUND', sort: 'x' }), msg(ConflictError, 'A team with that name already exists'));
-  await assert.rejects(teams.updateTeam(admin, band, { name: 'Worship', sort: 1.5 }), msg(ValidationError, 'Sort must be a whole number'));
+  await assert.rejects(teams.createTeam(admin, {}), msg(ValidationError, 'Please type a name.'));
+  await assert.rejects(teams.createTeam(admin, { name: 'x'.repeat(61) }), msg(ValidationError, 'The name must be 60 characters or fewer.'));
+  await assert.rejects(teams.updateTeam(admin, 999, { name: '', sort: 'x' }), msg(NotFoundError, 'Team not found.'));
+  await assert.rejects(teams.updateTeam(admin, band, { name: 'SOUND', sort: 'x' }), msg(ConflictError, 'A team with that name already exists.'));
+  await assert.rejects(teams.updateTeam(admin, band, { name: 'Worship', sort: 1.5 }), msg(ValidationError, 'Sort must be a whole number.'));
   assert.equal((await data.teams.findById(band)).name, 'Band', 'rename rolled back when sort was bad');
-  await assert.rejects(teams.createPosition(admin, 999, { name: '' }), msg(NotFoundError, 'Team not found'));
-  await assert.rejects(teams.createPosition(admin, band, { name: ' ' }), msg(ValidationError, 'Name must be 1 to 60 characters'));
-  await assert.rejects(teams.updatePosition(admin, 999, { sort: 'x' }), msg(NotFoundError, 'Position not found'));
-  await assert.rejects(teams.updatePosition(admin, p, { name: 'Keys', sort: 'x', teamId: 999 }), msg(ValidationError, 'Sort must be a whole number'));
-  await assert.rejects(teams.updatePosition(admin, p, { teamId: 'x' }), msg(ValidationError, 'That team does not exist'));
-  await assert.rejects(teams.setQualifications(admin, 999, 'x'), msg(NotFoundError, 'Person not found'));
-  await assert.rejects(teams.setQualifications(admin, memberId, undefined), msg(ValidationError, 'positionIds must be a list of position ids'));
+  await assert.rejects(teams.createPosition(admin, 999, { name: '' }), msg(NotFoundError, 'Team not found.'));
+  await assert.rejects(teams.createPosition(admin, band, { name: ' ' }), msg(ValidationError, 'Please type a name.'));
+  for (const blank of ['\u0000', '\u200b\u200b', '\u3164', ' \u00a0\u2060 ', '\u202e', '\t\n']) {
+    await assert.rejects(teams.createTeam(admin, { name: blank }), msg(ValidationError, 'Please type a name.'), JSON.stringify(blank));
+    await assert.rejects(teams.createPosition(admin, band, { name: blank }), msg(ValidationError, 'Please type a name.'), JSON.stringify(blank));
+  }
+  await assert.rejects(teams.createTeam(admin, { name: 'Ba\u0000nd' }), msg(ValidationError, 'The name cannot contain control characters.'));
+  await assert.rejects(teams.updatePosition(admin, p, { name: '\u200b' }), msg(ValidationError, 'Please type a name.'));
+  assert.equal((await teams.createTeam(admin, { name: 'Café 🎸' })).name, 'Café 🎸', 'accents and emoji are fine');
+  await assert.rejects(teams.updatePosition(admin, 999, { sort: 'x' }), msg(NotFoundError, 'Position not found.'));
+  await assert.rejects(teams.updatePosition(admin, p, { name: 'Keys', sort: 'x', teamId: 999 }), msg(ValidationError, 'Sort must be a whole number.'));
+  await assert.rejects(teams.updatePosition(admin, p, { teamId: 'x' }), msg(ValidationError, 'That team does not exist.'));
+  await assert.rejects(teams.setQualifications(admin, 999, 'x'), msg(NotFoundError, 'Person not found.'));
+  await assert.rejects(teams.setQualifications(admin, memberId, undefined), msg(ValidationError, 'positionIds must be a list of position ids.'));
   const actions = (await data.audit.list()).map((r) => r.action);
   assert.deepEqual(actions.filter((a) => a.endsWith('.update') || a === 'person.positions'), []);
 });

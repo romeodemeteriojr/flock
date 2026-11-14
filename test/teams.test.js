@@ -171,15 +171,15 @@ test('order of checks: not found before bad input; duplicate name before bad sor
     await call('POST', '/api/teams', 'admin', { name: 'Sound' });
     const pos = (await call('POST', `/api/teams/${band}/positions`, 'admin', { name: 'Drums' })).json.id;
     const cases = [
-      ['PATCH', '/api/teams/999', { name: '' }, 404, 'Team not found'],
-      ['PATCH', '/api/teams/999', { sort: 'x' }, 404, 'Team not found'],
-      ['POST', '/api/teams/999/positions', { name: '' }, 404, 'Team not found'],
-      ['PATCH', '/api/positions/999', { name: '', sort: 'x', teamId: 'x' }, 404, 'Position not found'],
-      ['PUT', '/api/people/999/positions', { positionIds: 'x' }, 404, 'Person not found'],
-      ['PATCH', `/api/teams/${band}`, { name: 'sound', sort: 'x' }, 409, 'A team with that name already exists'],
-      ['PATCH', `/api/teams/${band}`, { name: '', sort: 'x' }, 400, 'Name must be 1 to 60 characters'],
-      ['PATCH', `/api/teams/${band}`, { name: 'Worship', sort: 'x' }, 400, 'Sort must be a whole number'],
-      ['PATCH', `/api/positions/${pos}`, { sort: 'x', teamId: 999 }, 400, 'Sort must be a whole number'],
+      ['PATCH', '/api/teams/999', { name: '' }, 404, 'Team not found.'],
+      ['PATCH', '/api/teams/999', { sort: 'x' }, 404, 'Team not found.'],
+      ['POST', '/api/teams/999/positions', { name: '' }, 404, 'Team not found.'],
+      ['PATCH', '/api/positions/999', { name: '', sort: 'x', teamId: 'x' }, 404, 'Position not found.'],
+      ['PUT', '/api/people/999/positions', { positionIds: 'x' }, 404, 'Person not found.'],
+      ['PATCH', `/api/teams/${band}`, { name: 'sound', sort: 'x' }, 409, 'A team with that name already exists.'],
+      ['PATCH', `/api/teams/${band}`, { name: '', sort: 'x' }, 400, 'Please type a name.'],
+      ['PATCH', `/api/teams/${band}`, { name: 'Worship', sort: 'x' }, 400, 'Sort must be a whole number.'],
+      ['PATCH', `/api/positions/${pos}`, { sort: 'x', teamId: 999 }, 400, 'Sort must be a whole number.'],
     ];
     for (const [m, p, b, status, error] of cases) {
       const r = await call(m, p, 'admin', b);

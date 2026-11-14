@@ -2,12 +2,12 @@ import { DuplicateError } from '../errors.js';
 import { tx } from '../../db.js';
 import { translate, id as newId, changed, num } from './util.js';
 
-const TEAM_DUP = 'A team with that name already exists';
+const TEAM_DUP = 'A team with that name already exists.';
 const TEAM_IN_USE = 'Remove or reassign its positions first';
-const POS_DUP = 'That team already has a position with that name';
+const POS_DUP = 'That team already has a position with that name.';
 const POS_IN_USE = 'This position is used by a service slot, so it cannot be deleted';
-export const TEAM_RETIRED_DUP = 'A deleted team has that name. Add it as a new team to bring it back';
-export const POS_RETIRED_DUP = 'A deleted position has that name. Add it as a new position to bring it back';
+export const TEAM_RETIRED_DUP = 'A deleted team has that name. Add it as a new team to bring it back.';
+export const POS_RETIRED_DUP = 'A deleted position has that name. Add it as a new position to bring it back.';
 
 export const toPosition = (r) => ({ id: r.id, teamId: r.team_id, name: r.name, sort: r.sort });
 
@@ -125,7 +125,7 @@ export function positionsRepo({ db, run }) {
     findById: (positionId) => run(() => findPosition(db, positionId)),
 
     create: (teamId, { name, sort }) => run(() => {
-      if (!activeTeam(teamId)) throw new Error('That team does not exist');
+      if (!activeTeam(teamId)) throw new Error('That team does not exist.');
       const clash = nameClash(teamId, name);
       if (clash) throw clashError(clash);
       const s = sort ?? num(db.prepare('SELECT COALESCE(MAX(sort), 0) AS m FROM positions WHERE team_id = ?').get(teamId).m) + 1;
@@ -133,7 +133,7 @@ export function positionsRepo({ db, run }) {
       try {
         r = db.prepare('INSERT INTO positions (team_id, name, sort) VALUES (?, ?, ?)').run(teamId, name, s);
       } catch (e) {
-        throw translate(e, { unique: POS_DUP, missing: 'That team does not exist' });
+        throw translate(e, { unique: POS_DUP, missing: 'That team does not exist.' });
       }
       return findPosition(db, newId(r));
     }),
@@ -145,14 +145,14 @@ export function positionsRepo({ db, run }) {
       const sort = patch.sort ?? cur.sort;
       const teamId = patch.teamId ?? cur.teamId;
       if (teamId !== cur.teamId && !activeTeam(teamId)) {
-        throw new Error('That team does not exist');
+        throw new Error('That team does not exist.');
       }
       const clash = nameClash(teamId, name, positionId);
       if (clash) throw clashError(clash);
       try {
         db.prepare('UPDATE positions SET name = ?, sort = ?, team_id = ? WHERE id = ?').run(name, sort, teamId, positionId);
       } catch (e) {
-        throw translate(e, { unique: POS_DUP, missing: 'That team does not exist' });
+        throw translate(e, { unique: POS_DUP, missing: 'That team does not exist.' });
       }
       return findPosition(db, positionId);
     }),

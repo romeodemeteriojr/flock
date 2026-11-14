@@ -1,6 +1,6 @@
 // People (admin only): thin HTTP adapter over services.people.
 import { ValidationError } from '../errors.js';
-import { v, parse } from '../validate.js';
+import { v, parse, checkName } from '../validate.js';
 import { inviteLink } from '../services/auth-service.js';
 
 const isObj = (b) => b !== null && typeof b === 'object' && !Array.isArray(b);
@@ -29,12 +29,7 @@ function parseId(raw) {
   return Number(check(idSchema, String(raw), 'That person id is not valid.'));
 }
 
-function cleanName(value) {
-  const name = check(v.string(), value, 'Please enter a name.');
-  check(v.string({ pattern: /^[\s\S]{1,80}$/ }), name, 'The name must be 1 to 80 characters long.');
-  check(v.string({ pattern: /^[^\u0000-\u001f\u007f]*$/ }), name, 'The name cannot contain control characters.');
-  return name;
-}
+const cleanName = (value) => checkName(value, { max: 80 });
 
 function inviteOut(req, config, invite) {
   if (!invite) return null;

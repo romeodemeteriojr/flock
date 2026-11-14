@@ -67,6 +67,7 @@ export function createApp({ root, win = globalThis.window, api = createApi() }) 
   function setUser(user) {
     state.user = user;
     if (!user) {
+      takeReturn(); // logging out: the next person starts at home
       state.push = null; pushFor = null; state.accountOpen = false; state.installSteps = false; paintLayer();
       countsFor = null; state.counts = { answer: 0, gaps: 0 }; setAppBadge(win, 0);
       return;
@@ -174,7 +175,7 @@ export function createApp({ root, win = globalThis.window, api = createApi() }) 
 
   const ctx = {
     api, state, win, navigate, showError, showMessage, setUser, paintTop, rerender: () => render(),
-    openAccount, closeAccount, toggleAccount, setCounts, refreshCounts,
+    openAccount, closeAccount, toggleAccount, setCounts, refreshCounts, afterLogin: takeReturn,
     install, installer, canInstall: () => canInstall(installer, win),
   };
   account.mount(layer, ctx);
@@ -197,9 +198,25 @@ export function createApp({ root, win = globalThis.window, api = createApi() }) 
     })();
   }
 
+  // The page someone was on when they had to log in (their session ran out,
+  // or a saved link): logging in takes them back there, not to My schedule.
+  // Kept for the tab too, so a reload on the login page does not lose it.
+  const RETURN_KEY = 'flock-return-to';
+  function keepReturn(hash) {
+    const path = pathOf(hash);
+    if (!path || path === '/' || path === '/login' || resolve(hash, null).route) return; // home, or a page for logged-out people
+    try { win.sessionStorage?.setItem(RETURN_KEY, hash); } catch { /* private mode: just go home */ }
+  }
+  function takeReturn() {
+    let hash = null;
+    try { hash = win.sessionStorage?.getItem(RETURN_KEY) ?? null; win.sessionStorage?.removeItem(RETURN_KEY); } catch { /* none */ }
+    return typeof hash === 'string' && hash.startsWith('#/') ? hash : '#/';
+  }
+
   api.onUnauthorized = () => {
     if (!state.user) return;
     state.user = null;
+    keepReturn(win.location.hash);
     pending = { text: 'Please log in again.', kind: 'error' };
     navigate('#/login');
   };
@@ -210,6 +227,7 @@ export function createApp({ root, win = globalThis.window, api = createApi() }) 
       const r = resolve(hash, state.user);
       if (r.redirect) {
         if (hash !== r.redirect) {
+          if (!state.user) keepReturn(hash);
           win.history.replaceState(null, '', r.redirect);
           render();
           return;

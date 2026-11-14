@@ -9,7 +9,7 @@ import { ValidationError } from '../errors.js';
 export const EVERY_WEEKS_CHOICES = Object.freeze([0, 1, 2, 3, 4, 6, 8]);
 /** Used for anyone who has not chosen yet. */
 export const DEFAULT_EVERY_WEEKS = 2;
-export const EVERY_WEEKS_ERR = 'How often must be one of 0, 1, 2, 3, 4, 6 or 8 weeks';
+export const EVERY_WEEKS_ERR = 'How often must be one of 0, 1, 2, 3, 4, 6 or 8 weeks.';
 
 /** The JSON shape: { everyWeeks, isDefault, updatedAt }. */
 export function availabilityView(row) {
