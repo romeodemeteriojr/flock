@@ -6,22 +6,21 @@ import { toasts } from '../lib/toast.js';
 import { pageHead } from '../lib/ui.js';
 import { makeHost, isAlive } from '../lib/host.js';
 import * as push from '../lib/push.js';
+import { installKind } from '../lib/install.js';
+import { stepsList } from './install-steps.js';
 
 export const title = 'Notifications';
 
 const WHAT = "Get a notification on this device when you're asked to serve, and when a service you're on moves or is cancelled.";
 const ADMIN = "As a scheduler, you also hear when someone can't serve.";
 
-function iphoneSteps() {
+// An iPhone in the browser: install first, with the same steps as the install
+// sheet for this browser (Safari, Chrome…, or another app's browser).
+function iphoneSteps(kind) {
   return html`
-    <p>On an iPhone, Flock can only send notifications once it is on your Home Screen.</p>
-    <ol class="steps">
-      <li>Tap the <strong>Share</strong> button at the bottom of Safari (the square with an arrow).</li>
-      <li>Choose <strong>Add to Home Screen</strong>, then <strong>Add</strong>.</li>
-      <li>Open <strong>Flock</strong> from your Home Screen.</li>
-      <li>Log in.</li>
-      <li>Tap the bell at the top, then <strong>Turn on</strong>.</li>
-    </ol>`;
+    <p><strong>First, put Flock on your Home Screen.</strong> On an iPhone, Flock can only send notifications from there.</p>
+    ${stepsList(kind && kind.startsWith('ios-') ? kind : 'ios-safari')}
+    <p>Then, in Flock on your Home Screen: tap your initials, then <strong>Notifications</strong>, then <strong>Turn on</strong>.</p>`;
 }
 
 const BLOCKED = html`
@@ -36,7 +35,7 @@ const BLOCKED = html`
 function body(p, view, isAdmin) {
   if (!p) return html`<p class="hint">Loading…</p>`;
   if (!p.enabled) return html`<p>Notifications are not set up on this Flock yet. Your scheduler can turn them on.</p>`;
-  if (p.support === 'ios-install') return iphoneSteps();
+  if (p.support === 'ios-install') return iphoneSteps(view.installKind);
   if (p.support === 'ios-update') return html`<p>To get notifications, update your iPhone to iOS 16.4 or newer (Settings → General → Software Update), then come back.</p>`;
   if (p.support === 'unsupported') return html`<p>This browser cannot show notifications from Flock. Try Chrome, Edge or Firefox, or Safari on a Mac.</p>`;
   const busy = view.busy ? 'disabled' : '';
@@ -81,7 +80,7 @@ export async function turnOn(ctx) {
 
 export function mount(main, ctx) {
   const root = makeHost(main);
-  const view = {};
+  const view = { installKind: installKind(ctx.win) };
   const paint = () => { if (isAlive(root, main)) root.innerHTML = render(ctx.state, view); };
   const run = async (fn) => {
     view.busy = true; view.message = null; view.problem = null;
@@ -98,6 +97,7 @@ export function mount(main, ctx) {
   root.addEventListener('click', (e) => {
     const el = e.target?.closest?.('[data-action]');
     const action = el?.dataset?.action;
+    if (action === 'install-copy') return ctx.copyAppLink?.(el, root);
     if (action === 'push-on') return run(() => turnOn(ctx));
     if (action === 'push-off') {
       return run(async () => {

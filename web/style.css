@@ -1312,6 +1312,10 @@ html.viewer-open, html.viewer-open body { overflow: hidden; }
   color: var(--on-accent); background: var(--accent); font-size: var(--fs-sm); font-weight: 700;
 }
 .howto-text { flex: 1; min-width: 0; }
+/* "No Share button? Tap ••• first": the fallback for that step, on its own line. */
+.howto-text .hint { display: block; margin-top: 2px; }
+.howto-intro { margin: 0 0 var(--s-2); }
+.howto-copy { margin-top: var(--s-3); }
 .howto-icon { flex: none; width: 1.75rem; height: 1.75rem; color: var(--accent-text); }
 
 /* ---------- motion and touch ---------- */

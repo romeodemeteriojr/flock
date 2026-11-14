@@ -369,7 +369,9 @@ test('UAT 3 to 8: scheduler adds people, a team, positions, a service, assigns, 
   const openBefore = gapCount(page, 'open');
   assert.ok(openBefore >= 1, page.text());
   said(page, /Nobody yet/);
-  notSaid(page, /Door \(Ushers\)/); // a later service: folded to one line
+  // A later service starts folded to one line; the nearest starts open. Which one
+  // is nearest depends on today (SERVICE_DATE is two days out), so check only when folded.
+  if (!page.html().includes(`data-action="toggle-gaps" data-id="${SERVICE_DATE}T19:00" aria-expanded="true"`)) notSaid(page, /Door \(Ushers\)/);
   await tapOpen(page, 'toggle-gaps', `${SERVICE_DATE}T19:00`);
   said(page, /Door \(Ushers\)/);
   wellBuilt(page, 'gaps');

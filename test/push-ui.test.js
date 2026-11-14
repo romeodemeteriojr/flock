@@ -158,7 +158,7 @@ test('the My schedule invitation: only while off, on a device that can, until di
   const win = fakeWin({ storage });
   const p = (o) => ({ enabled: true, support: 'ok', status: 'off', ...o });
   assert.equal(push.showCard(p(), win), true);
-  assert.equal(push.showCard(p({ support: 'ios-install' }), win), true);
+  assert.equal(push.showCard(p({ support: 'ios-install' }), win), false, 'an iPhone in the browser installs first');
   for (const o of [{ enabled: false }, { status: 'on' }, { status: 'blocked' }, { support: 'ios-update' }, { support: 'unsupported' }]) {
     assert.equal(push.showCard(p(o), win), false, JSON.stringify(o));
   }
@@ -240,7 +240,10 @@ test('Notifications page: every state says what to do', () => {
   assert.match(t(null), /Loading/);
   assert.match(t({ enabled: false }), /not set up on this Flock yet/);
   const steps = t({ enabled: true, support: 'ios-install', status: 'off' });
-  for (const w of ['Share', 'Add to Home Screen', 'Open Flock from your Home Screen', 'Log in', 'Turn on']) assert.ok(steps.includes(w), w);
+  for (const w of ['First, put Flock on your Home Screen', 'Share', 'No Share button? Tap •••', 'Add to Home Screen', 'Open Flock from your Home Screen and log in', 'tap your initials, then Notifications, then Turn on']) assert.ok(steps.includes(w), w);
+  assert.doesNotMatch(steps, /bell/, 'the bell is not a button');
+  const inapp = textOf(page.render(state({ enabled: true, support: 'ios-install', status: 'off' }), { installKind: 'ios-inapp' }));
+  assert.match(inapp, /Open in Safari/);
   assert.match(t({ enabled: true, support: 'ios-update' }), /iOS 16.4 or newer/);
   assert.match(t({ enabled: true, support: 'unsupported' }), /cannot show notifications/);
   const off = page.render(state({ enabled: true, support: 'ok', status: 'off' }));
@@ -359,7 +362,7 @@ test('My schedule: the invitation appears once push is known, turns on, and Not 
   assert.doesNotMatch(c.root.innerHTML, /push-invite/, 'Not now is remembered on this device');
 
   const ios = await mountWith({ ...p(), support: 'ios-install' }, fakeWin({ ua: UA.iphone17, push: false }));
-  assert.match(ios.root.innerHTML, /href="#\/notifications">Show me how/);
+  assert.doesNotMatch(ios.root.innerHTML, /push-invite/, 'an iPhone in the browser: install first, notifications after');
   const off = await mountWith({ enabled: false, support: 'ok', status: 'off' }, fakeWin());
   assert.doesNotMatch(off.root.innerHTML, /push-invite/);
 });
